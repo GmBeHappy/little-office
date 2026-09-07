@@ -2,9 +2,9 @@
 
 A pixel-art office built with **Next.js, Elysia on Bun, PostgreSQL, Phaser, Better Auth, and LiveKit**.
 
-Walk with WASD/arrows and press Space to jump (or click the Space control on the map). Enable nearby audio to talk to people close by. Join the Studio or Library for a meeting, share your screen, wave, summon a teammate with their consent, or start an accepted direct call. Microphone and camera start off.
+Walk with WASD/arrows and press Space to jump (or click the Space control on the map). Nearby voice joins automatically; turn your microphone on to talk to people in range. The voice participant list shows who is connected nearby. Join the Studio or Library for a meeting, share your screen, wave, summon a teammate with their consent, or start an accepted direct call. Microphone and camera start off.
 
-The map fills the browser window. Navigation, people/rooms, and media controls float above it. Close the people panel for more map space, reopen it from People or Rooms, or use the expand button for browser fullscreen with all controls included.
+The map fills the browser window. Navigation, people/rooms, and media controls float above it. Press Z to nudge the closest person within 120 map pixels, or select a nearby person and choose Nudge. They receive a short chime and an in-app notification; Do Not Disturb blocks nudges, and a five-second cooldown prevents repeats. Close the people panel for more map space, reopen it from People or Rooms, or use the expand button for browser fullscreen with all controls included.
 
 Speaking activity appears as green highlights and animated sound bars on characters, the people list, and video tiles. Your microphone control also shows “Speaking” when it detects sound. Indicators follow your current conversation and nearby-audio range, and clear during silence, mute, or disconnection. Reduced-motion preferences keep the bars still.
 
@@ -66,7 +66,7 @@ Workspace owners can change the name and shared map under **Settings → Workspa
 | Camping         | Pine Camp                 | Summit Basecamp              |
 | Space           | Lunar Outpost             | Orbital Station              |
 
-Every map has two private meeting areas. Sizes describe the seating layout, rather than admission limits. Applying a different map ends calls and screen sharing, clears invitations and room locks, and moves everyone to a safe entrance with nearby audio off. Changing only the workspace name keeps conversations active.
+Every map has two private meeting areas. Sizes describe the seating layout, rather than admission limits. Applying a different map ends calls and screen sharing, clears invitations and room locks, and moves everyone to a safe entrance with nearby voice reconnected automatically. Changing only the workspace name keeps conversations active.
 
 After updating an existing installation, run `bun db:migrate` before restarting the API (production Compose runs migrations automatically).
 

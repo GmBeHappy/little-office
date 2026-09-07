@@ -2,6 +2,7 @@ import {
   AVATARS,
   WORLD,
   JUMP_DURATION,
+  NUDGE_RADIUS,
   ZONES,
   nearby,
   walkable,
@@ -58,12 +59,12 @@ export class Office {
         member.zone = "floor";
         member.conversation = "";
         member.room = "";
-        member.nearbyEnabled = false;
+        this.syncConversation(member);
         member.moving = false;
         member.input = { dx: 0, dy: 0, at: 0 };
         member.send({
           type: "notice",
-          message: `Welcome to ${getMap(next.mapId).name}. The workspace map has changed; turn nearby audio on when you're ready.`,
+          message: `Welcome to ${getMap(next.mapId).name}. Nearby voice reconnects automatically.`,
         });
       }
     }
@@ -129,7 +130,6 @@ export class Office {
       conversation: "",
       room: "",
       seq: 0,
-      nearbyEnabled: false,
       send,
       close,
       input: { dx: 0, dy: 0, at: 0 },
@@ -141,6 +141,7 @@ export class Office {
       expires,
     };
     this.members.set(user.id, member);
+    this.syncConversation(member);
     this.broadcast();
     return member;
   }
@@ -176,11 +177,7 @@ export class Office {
     if (m.conversation.startsWith("call:")) return;
     this.assign(
       m,
-      m.zone !== "floor"
-        ? `zone:${m.zone}`
-        : m.nearbyEnabled && m.status !== "dnd"
-          ? "floor"
-          : "",
+      m.zone !== "floor" ? `zone:${m.zone}` : m.status !== "dnd" ? "floor" : "",
     );
   }
   remove(id: string) {
@@ -287,10 +284,6 @@ export class Office {
         m.statusText = command.text;
         this.syncConversation(m);
         break;
-      case "nearby":
-        m.nearbyEnabled = command.enabled;
-        this.syncConversation(m);
-        break;
       case "zone":
         this.go(m, command.zone);
         break;
@@ -298,9 +291,48 @@ export class Office {
         if (m.zone !== "floor") this.go(m, "floor");
         else {
           this.assign(m, "");
-          m.nearbyEnabled = false;
+          this.syncConversation(m);
         }
         break;
+      case "nudge": {
+        const distance = (p: Member) => Math.hypot(m.x - p.x, m.y - p.y);
+        const target = command.target
+          ? this.members.get(command.target)
+          : [...this.members.values()]
+              .filter(
+                (p) =>
+                  p.id !== id &&
+                  p.zone === m.zone &&
+                  distance(p) <= NUDGE_RADIUS,
+              )
+              .sort(
+                (a, b) => distance(a) - distance(b) || a.id.localeCompare(b.id),
+              )[0];
+        if (
+          !target ||
+          target.id === id ||
+          target.zone !== m.zone ||
+          distance(target) > NUDGE_RADIUS
+        )
+          throw new Error("Move next to a teammate to nudge them.");
+        if (target.status === "dnd")
+          throw new Error("They have Do not disturb enabled.");
+        const senderKey = `nudge-from:${id}`,
+          targetKey = `nudge-to:${target.id}`;
+        if (
+          now <
+          Math.max(
+            this.cooldowns.get(senderKey) || 0,
+            this.cooldowns.get(targetKey) || 0,
+          )
+        )
+          throw new Error("Give them a moment before nudging again.");
+        this.cooldowns.set(senderKey, now + 5000);
+        this.cooldowns.set(targetKey, now + 5000);
+        target.send({ type: "nudge", from: id, name: m.name });
+        m.send({ type: "notice", message: `Nudged ${target.name}.` });
+        break;
+      }
       case "wave": {
         const target = this.members.get(command.target);
         if (!target) throw new Error("That person is offline.");
@@ -438,7 +470,7 @@ export class Office {
       }
       if (
         now - m.activity > 300000 &&
-        !m.conversation &&
+        (!m.conversation || m.conversation === "floor") &&
         m.manualStatus === "available"
       )
         m.status = "away";
@@ -495,7 +527,6 @@ export class Office {
         conversation,
         room,
         seq,
-        nearbyEnabled,
       }) => ({
         id,
         name,
@@ -510,7 +541,6 @@ export class Office {
         conversation,
         room,
         seq,
-        nearbyEnabled,
       }),
     );
   }

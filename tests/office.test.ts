@@ -19,6 +19,48 @@ function setup() {
   return { office, events, retired };
 }
 describe("office behavior", () => {
+  test("nudges choose the closest teammate and enforce distance, DND, and sender/recipient cooldowns", () => {
+    const { office, events } = setup();
+    const a = office.members.get("a")!,
+      b = office.members.get("b")!,
+      c = office.members.get("c")!;
+    b.x = a.x + 30;
+    c.x = a.x - 60;
+    const now = Date.now();
+    office.handle("a", { type: "nudge" }, now);
+    expect(events.b.filter((e) => e.type === "nudge")).toEqual([
+      { type: "nudge", from: "a", name: "a" },
+    ]);
+    expect(events.c.filter((e) => e.type === "nudge")).toHaveLength(0);
+    expect(() =>
+      office.handle("a", { type: "nudge", target: "c" }, now + 1),
+    ).toThrow("moment");
+    expect(() =>
+      office.handle("c", { type: "nudge", target: "b" }, now + 1),
+    ).toThrow("moment");
+    office.handle("a", { type: "nudge", target: "b" }, now + 5000);
+    expect(events.b.filter((e) => e.type === "nudge")).toHaveLength(2);
+    b.x = a.x + 121;
+    expect(() =>
+      office.handle("a", { type: "nudge", target: "b" }, now + 10000),
+    ).toThrow("Move next");
+    b.x = a.x;
+    b.zone = "studio";
+    expect(() =>
+      office.handle("a", { type: "nudge", target: "b" }, now + 10000),
+    ).toThrow("Move next");
+    b.zone = "floor";
+    b.status = "dnd";
+    expect(() =>
+      office.handle("a", { type: "nudge", target: "b" }, now + 10000),
+    ).toThrow("Do not disturb");
+    expect(() =>
+      office.handle("a", { type: "nudge", target: "a" }, now + 10000),
+    ).toThrow("Move next");
+    expect(() =>
+      office.handle("a", { type: "nudge", target: "offline" }, now + 10000),
+    ).toThrow("Move next");
+  });
   test("all six maps have the advertised seats and reachable safe entrances", () => {
     expect(MAPS.filter((map) => map.size === "small")).toHaveLength(3);
     expect(MAPS.filter((map) => map.size === "large")).toHaveLength(3);
@@ -81,15 +123,14 @@ describe("office behavior", () => {
     expect(office.presenters).toEqual({});
     expect(office.locks.studio).toBe(false);
     for (const person of office.people()) {
-      expect(person.room).toBe("");
+      expect(person.room).not.toBe("");
       expect(person.zone).toBe("floor");
-      expect(person.nearbyEnabled).toBe(false);
+      expect(person.conversation).toBe("floor");
       expect(
         walkable(person.x, person.y, mapBlocks(getMap("space-large"))),
       ).toBe(true);
     }
     expect(events.b.at(-1).workspace.mapId).toBe("space-large");
-    office.handle("a", { type: "nearby", enabled: true });
     const room = office.members.get("a")!.room;
     office.configureWorkspace({
       name: "Renamed",
@@ -146,16 +187,23 @@ describe("office behavior", () => {
       Command.safeParse({ type: "move", dx: 999, dy: 0, seq: 3 }).success,
     ).toBe(false);
   });
-  test("nearby audio is opt-in and DND removes it", () => {
+  test("nearby audio joins automatically, pauses for DND, and resumes after leaving meetings", () => {
     const { office } = setup();
-    expect(office.members.get("a")!.room).toBe("");
-    office.handle("a", { type: "nearby", enabled: true });
     expect(office.members.get("a")!.room).not.toBe("");
+    expect(office.audience("a").map((p) => p.id)).toEqual(["b", "c"]);
     office.handle("a", { type: "status", status: "dnd", text: "" });
     expect(office.members.get("a")!.room).toBe("");
     expect(() =>
       office.handle("b", { type: "invite", target: "a", kind: "summon" }),
     ).toThrow("Do not disturb");
+    office.handle("a", { type: "status", status: "available", text: "" });
+    expect(office.members.get("a")!.conversation).toBe("floor");
+    office.handle("a", { type: "zone", zone: "studio" });
+    office.handle("a", { type: "leave" });
+    expect(office.members.get("a")!.conversation).toBe("floor");
+    expect(Command.safeParse({ type: "nearby", enabled: false }).success).toBe(
+      false,
+    );
   });
   test("summons require acceptance, expire, and cannot be replayed or accepted by another member", () => {
     const { office } = setup();
@@ -213,7 +261,7 @@ describe("office behavior", () => {
   test("a direct call requires consent and ends for both when either leaves", () => {
     const { office } = setup();
     office.handle("a", { type: "invite", target: "b", kind: "call" });
-    expect(office.members.get("a")!.conversation).toBe("");
+    expect(office.members.get("a")!.conversation).toBe("floor");
     office.handle("b", {
       type: "respond",
       id: [...office.invites.keys()][0],
@@ -222,7 +270,7 @@ describe("office behavior", () => {
     expect(office.members.get("a")!.conversation).toStartWith("call:");
     expect(office.members.get("a")!.room).toBe(office.members.get("b")!.room);
     office.handle("a", { type: "leave" });
-    expect(office.members.get("b")!.conversation).toBe("");
+    expect(office.members.get("b")!.conversation).toBe("floor");
   });
   test("duplicate office tabs cannot replace a live session", () => {
     const { office } = setup();

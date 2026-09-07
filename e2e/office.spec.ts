@@ -146,9 +146,6 @@ test("two teammates can wave, summon, enter rooms, publish media, and leave", as
   await a.keyboard.press("Space");
   await expect.poll(() => jumps.get(b)).toBe(2);
   for (const page of [a, b]) {
-    await page
-      .getByRole("button", { name: "Nearby audio", exact: true })
-      .click();
     await expect(page.locator(".controlbar")).toHaveAttribute(
       "data-media-connected",
       "true",

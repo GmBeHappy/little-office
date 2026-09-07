@@ -37,6 +37,10 @@ export function useOfficeMedia(
   const [camera, setCamera] = useState(false);
   const [speaking, setSpeaking] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [attempt, retry] = useState(0);
+  const [playbackBlocked, setPlaybackBlocked] = useState(false);
+  const [chimeBlocked, setChimeBlocked] = useState(false);
+  const chime = useRef<HTMLAudioElement | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [choices, setChoices] = useState<DeviceChoices>(defaultDevices);
   const preferences = useRef<DeviceChoices>(defaultDevices);
@@ -82,8 +86,11 @@ export function useOfficeMedia(
     );
     const changed = () => void enumerate(false, true);
     navigator.mediaDevices?.addEventListener("devicechange", changed);
-    return () =>
+    return () => {
       navigator.mediaDevices?.removeEventListener("devicechange", changed);
+      chime.current?.pause();
+      chime.current = null;
+    };
   }, [userId]);
   function cancelShare() {
     for (const track of pendingScreen.current) track.stop();
@@ -98,6 +105,7 @@ export function useOfficeMedia(
     setConnecting(!!roomId);
     setSpeaking([]);
     setError("");
+    setPlaybackBlocked(false);
     setRoom(null);
     setMic(false);
     setCamera(false);
@@ -141,6 +149,9 @@ export function useOfficeMedia(
           },
         });
         current.current = next;
+        next.on(RoomEvent.AudioPlaybackStatusChanged, () =>
+          setPlaybackBlocked(!next!.canPlaybackAudio),
+        );
         next.on(RoomEvent.ActiveSpeakersChanged, (participants) =>
           setSpeaking(participants.map((p) => p.identity)),
         );
@@ -211,7 +222,7 @@ export function useOfficeMedia(
         void next.disconnect();
       }
     };
-  }, [roomId, userId]);
+  }, [roomId, userId, attempt]);
   useEffect(() => {
     if (!room || !self) return;
     for (const p of room.remoteParticipants.values()) {
@@ -375,6 +386,30 @@ export function useOfficeMedia(
       notify(`Speaker selection was not completed: ${(e as Error).message}`);
     }
   }
+  async function playNudge() {
+    chime.current?.pause();
+    const sound = new Audio("/sounds/nudge.wav");
+    sound.volume = 0.5;
+    chime.current = sound;
+    try {
+      if (preferences.current.audiooutput && "setSinkId" in sound)
+        await sound.setSinkId(preferences.current.audiooutput);
+      await sound.play();
+      setChimeBlocked(false);
+    } catch {
+      setChimeBlocked(true);
+    }
+  }
+  async function enableSound() {
+    try {
+      await current.current?.startAudio();
+      if (chimeBlocked && chime.current) await chime.current.play();
+      setChimeBlocked(false);
+      setPlaybackBlocked(false);
+    } catch {
+      notify("Sound could not start. Check your browser's audio permission.");
+    }
+  }
   return {
     room,
     connected,
@@ -394,6 +429,10 @@ export function useOfficeMedia(
           })
         : [],
     error,
+    retry: () => retry((v) => v + 1),
+    playNudge,
+    enableSound,
+    soundBlocked: playbackBlocked || chimeBlocked,
     toggle,
     share,
     prepareShare,

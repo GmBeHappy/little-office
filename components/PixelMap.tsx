@@ -114,6 +114,11 @@ export default function PixelMap(props: Props) {
               document.querySelector('[role="dialog"]'))
           )
             return;
+          if (e.code === "KeyZ" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            if (!e.repeat) live.current.send({ type: "nudge" });
+            return;
+          }
           if (e.code === "Space") {
             // Only Tab navigation gives controls ownership of Space. A room
             // button can retain focus after a click without owning game input.

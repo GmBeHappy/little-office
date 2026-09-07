@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   ArrowUpRight,
+  BellRing,
   Check,
   ChevronDown,
   ChevronRight,
@@ -37,6 +38,7 @@ import {
 import { api, type User, type AppConfig } from "@/lib/api";
 import {
   JUMP_DURATION,
+  NUDGE_RADIUS,
   ZONES,
   nearby,
   type Invitation,
@@ -187,6 +189,9 @@ export default function OfficeApp() {
             ),
             [message.from]: now,
           }));
+        } else if (message.type === "nudge") {
+          notify(`${message.name} nudged you. They're nearby!`);
+          void mediaRef.current.playNudge();
         } else if (message.type === "invitation")
           setInvites((v) => [...v, message.invitation]);
         else if (message.type === "invitation-ended")
@@ -254,6 +259,9 @@ export default function OfficeApp() {
     p.name.toLowerCase().includes(search.toLowerCase()),
   );
   const chosen = people.find((p) => p.id === selected);
+  const voicePeople = media.connected
+    ? audience.filter((p) => media.room?.remoteParticipants.has(p.id))
+    : [];
 
   if (loading)
     return (
@@ -453,6 +461,15 @@ export default function OfficeApp() {
                   Space
                 </button>
                 <span>to jump</span>
+                <button
+                  className="key"
+                  aria-label="Nudge nearest teammate"
+                  title="Nudge nearest teammate (Z)"
+                  onClick={() => send({ type: "nudge" })}
+                >
+                  Z
+                </button>
+                <span>to nudge</span>
               </div>
               <div className="map-weather">
                 {getMap(workspace.mapId).theme === "space" ? "✦" : "☀"}{" "}
@@ -471,9 +488,9 @@ export default function OfficeApp() {
                   ? "Private call"
                   : self?.zone !== "floor"
                     ? "Meeting room audio"
-                    : self?.nearbyEnabled
-                      ? "Nearby audio on"
-                      : "Nearby audio off"}
+                    : self?.status === "dnd"
+                      ? "Do not disturb · audio paused"
+                      : "Nearby voice · automatic"}
                 <span className="muted">
                   {" "}
                   ·{" "}
@@ -487,20 +504,77 @@ export default function OfficeApp() {
               </button>
             </div>
           </div>
+          {self?.conversation && (
+            <section
+              className="voice-roster"
+              aria-label={
+                self.conversation === "floor"
+                  ? "Nearby voice"
+                  : "Conversation participants"
+              }
+            >
+              <div className="voice-roster-heading">
+                <Headphones size={14} />
+                <strong>
+                  {self.conversation === "floor"
+                    ? "Nearby voice"
+                    : "In this conversation"}
+                </strong>
+                <span>
+                  {media.connected
+                    ? `${voicePeople.length + 1} joined`
+                    : media.error
+                      ? "Audio unavailable"
+                      : "Connecting…"}
+                </span>
+              </div>
+              <div className="voice-roster-people">
+                {media.connected && (
+                  <span
+                    className="voice-person"
+                    title={
+                      media.mic
+                        ? "Your microphone is on"
+                        : "Your microphone is muted"
+                    }
+                  >
+                    {media.mic ? <Mic size={12} /> : <MicOff size={12} />}You
+                  </span>
+                )}
+                {voicePeople.map((p) => (
+                  <button
+                    className="voice-person"
+                    key={p.id}
+                    data-speaking={media.speaking.includes(p.id)}
+                    onClick={() => {
+                      setSelected(p.id);
+                      setPanel("people");
+                      setSidebarOpen(true);
+                    }}
+                  >
+                    {media.speaking.includes(p.id) ? (
+                      <SpeakingIndicator />
+                    ) : (
+                      <Headphones size={12} />
+                    )}
+                    {p.name}
+                  </button>
+                ))}
+                {media.connected && !voicePeople.length && (
+                  <span className="muted">
+                    {self.conversation === "floor"
+                      ? "Move closer to a teammate to talk."
+                      : "Waiting for someone to join."}
+                  </span>
+                )}
+              </div>
+            </section>
+          )}
           {media.error && (
             <div className="media-error">
               <Headphones size={16} />
               <span>Media connection: {media.error}</span>
-              <button
-                onClick={() => {
-                  send({ type: "leave" });
-                  notify(
-                    "Leave and rejoin nearby audio or the meeting room to retry.",
-                  );
-                }}
-              >
-                Dismiss
-              </button>
+              <button onClick={media.retry}>Retry audio</button>
             </div>
           )}
         </main>
@@ -569,6 +643,9 @@ export default function OfficeApp() {
                         key={p.id}
                         className={`person ${selected === p.id ? "person-selected" : ""}`}
                         data-speaking={media.speaking.includes(p.id)}
+                        data-in-voice={voicePeople.some(
+                          (person) => person.id === p.id,
+                        )}
                         onClick={() =>
                           setSelected(selected === p.id ? "" : p.id)
                         }
@@ -585,6 +662,12 @@ export default function OfficeApp() {
                         </div>
                         {media.speaking.includes(p.id) ? (
                           <SpeakingIndicator />
+                        ) : voicePeople.some((person) => person.id === p.id) ? (
+                          <Headphones
+                            size={15}
+                            aria-label="In your voice conversation"
+                            className="in-voice-icon"
+                          />
                         ) : p.conversation ? (
                           <Headphones size={15} className="muted" />
                         ) : (
@@ -609,6 +692,20 @@ export default function OfficeApp() {
                           }
                         >
                           <Hand size={16} /> Wave
+                        </button>
+                        <button
+                          disabled={
+                            !self ||
+                            self.zone !== chosen.zone ||
+                            Math.hypot(self.x - chosen.x, self.y - chosen.y) >
+                              NUDGE_RADIUS ||
+                            chosen.status === "dnd"
+                          }
+                          onClick={() =>
+                            send({ type: "nudge", target: chosen.id })
+                          }
+                        >
+                          <BellRing size={16} /> Nudge
                         </button>
                         <button
                           onClick={() =>
@@ -748,18 +845,15 @@ export default function OfficeApp() {
           />
         </div>
         <div className="audio-control">
-          <button
-            className={`nearby-button ${self?.nearbyEnabled ? "enabled" : ""}`}
-            onClick={() =>
-              send({ type: "nearby", enabled: !self?.nearbyEnabled })
-            }
-            aria-pressed={!!self?.nearbyEnabled}
-          >
-            <Headphones size={17} />
-            <span>Nearby audio</span>
-            <span className={`toggle ${self?.nearbyEnabled ? "on" : ""}`} />
-          </button>
-          {self?.conversation && (
+          {media.soundBlocked && (
+            <button
+              className="secondary enable-sound"
+              onClick={() => void media.enableSound()}
+            >
+              Enable sound
+            </button>
+          )}
+          {self?.conversation && self.conversation !== "floor" && (
             <button
               className="icon-button leave-call"
               aria-label="Leave conversation"
@@ -845,8 +939,9 @@ export default function OfficeApp() {
                 <div className="help-grid">
                   <p>
                     <strong>Walk & talk</strong>Use WASD or the arrow keys.
-                    Press Space to jump. Turn on nearby audio, then enable your
-                    mic to talk with people close by.
+                    Press Space to jump. Nearby voice joins automatically;
+                    enable your mic to talk. The nearby voice list shows who can
+                    hear you.
                   </p>
                   <p>
                     <strong>Make some room</strong>Join the Studio or Library
@@ -854,8 +949,10 @@ export default function OfficeApp() {
                     summon others in.
                   </p>
                   <p>
-                    <strong>A friendly nudge</strong>Select a teammate to wave,
-                    summon, or call. They choose whether to accept.
+                    <strong>A friendly nudge</strong>Press Z to nudge the
+                    closest teammate, or select someone next to you and choose
+                    Nudge. They'll hear a chime and see your name. Summons and
+                    calls still need acceptance.
                   </p>
                   <p>
                     <strong>Your space, your choice</strong>Mic and camera start

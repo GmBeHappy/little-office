@@ -916,7 +916,8 @@ p {
   font-weight: 500;
 }
 .person-actions > div {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 5px;
   margin-top: 12px;
 }
@@ -1555,6 +1556,77 @@ p {
 }
 .with-screen .video-tile:not(.screen-tile) {
   width: 110px;
+}
+.voice-roster {
+  position: absolute;
+  left: 104px;
+  bottom: 110px;
+  z-index: 12;
+  width: min(390px, calc(100% - 136px));
+  padding: 12px;
+  background: #fafcf3f5;
+  border: 1px solid #e4ead8;
+  border-radius: 14px;
+  box-shadow: 0 4px 16px #31442a18;
+  pointer-events: auto;
+}
+.voice-roster-heading,
+.voice-roster-people,
+.voice-person {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.voice-roster-heading {
+  font-size: 11px;
+  color: #55734e;
+  margin-bottom: 8px;
+}
+.voice-roster-heading > span {
+  margin-left: auto;
+  font-size: 10px;
+}
+.voice-roster-people {
+  flex-wrap: wrap;
+  max-height: 90px;
+  overflow: auto;
+  font-size: 11px;
+}
+.voice-person {
+  padding: 5px 8px;
+  border: 1px solid #e3e9da;
+  background: white;
+  border-radius: 8px;
+  font-size: 11px;
+}
+.voice-person[data-speaking="true"] {
+  background: #dff4e7;
+  border-color: #49a873;
+  color: #28794f;
+}
+.voice-person .speaking-indicator {
+  height: 15px;
+  width: 16px;
+}
+.voice-person .speaking-indicator i {
+  max-height: 14px;
+}
+.in-voice-icon {
+  color: #28794f;
+}
+.enable-sound {
+  font-size: 11px;
+  padding: 8px;
+}
+@media (max-width: 700px) {
+  .voice-roster {
+    left: 8px;
+    bottom: 145px;
+    width: calc(100% - 16px);
+  }
+  .panel-open .voice-roster {
+    display: none;
+  }
 }
 .audio-tracks {
   display: none;

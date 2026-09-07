@@ -56,9 +56,6 @@ test("speaking indicators follow live microphone activity and clear on mute or l
         .fill(accounts[i].password);
       await pages[i].getByRole("button", { name: "Enter the office" }).click();
       await expect(pages[i].locator(".pixel-map canvas")).toBeVisible();
-      await pages[i]
-        .getByRole("button", { name: "Nearby audio", exact: true })
-        .click();
       await expect(pages[i].locator(".controlbar")).toHaveAttribute(
         "data-media-connected",
         "true",

@@ -1,5 +1,6 @@
 export const WORLD = { width: 1120, height: 720, spawn: { x: 740, y: 350 } };
 export const JUMP_DURATION = 650;
+export const NUDGE_RADIUS = 120;
 export type ZoneId = "floor" | "studio" | "library";
 export type Availability = "available" | "busy" | "dnd" | "away";
 export const AVATARS = [
@@ -121,7 +122,6 @@ export type Person = {
   conversation: string;
   room: string;
   seq: number;
-  nearbyEnabled: boolean;
 };
 export type Invitation = {
   id: string;

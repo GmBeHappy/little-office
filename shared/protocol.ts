@@ -27,7 +27,10 @@ export const Command = z.discriminatedUnion("type", [
     type: z.literal("zone"),
     zone: z.enum(["floor", "studio", "library"]),
   }),
-  z.object({ type: z.literal("nearby"), enabled: z.boolean() }),
+  z.object({
+    type: z.literal("nudge"),
+    target: z.string().min(1).max(80).optional(),
+  }),
   z.object({ type: z.literal("leave") }),
   z.object({ type: z.literal("present"), enabled: z.boolean() }),
   z.object({
