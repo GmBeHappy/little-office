@@ -1,4 +1,5 @@
 "use client";
+import { useI18n, LanguageToggle } from "@/lib/i18n";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -12,6 +13,7 @@ import {
   Hand,
   Headphones,
   HelpCircle,
+  CodeXml,
   Home,
   Leaf,
   Lock,
@@ -61,12 +63,7 @@ import {
 } from "@/shared/maps";
 const PixelMap = dynamic(() => import("./PixelMap"), {
   ssr: false,
-  loading: () => (
-    <div className="map-loading">
-      <Leaf />
-      Growing your little office…
-    </div>
-  ),
+  loading: MapLoading,
 });
 const statusLabel = {
   available: "Available",
@@ -83,6 +80,7 @@ type AdminUser = {
 };
 
 export default function OfficeApp() {
+  const { t } = useI18n();
   const [config, setConfig] = useState<AppConfig | null>(null),
     [user, setUser] = useState<User | null>(null),
     [loading, setLoading] = useState(true);
@@ -267,7 +265,7 @@ export default function OfficeApp() {
     return (
       <main className="loading-page">
         <Brand />
-        <span>Opening the office…</span>
+        <span>{t("Opening the office…")}</span>
       </main>
     );
   if (!user)
@@ -282,18 +280,22 @@ export default function OfficeApp() {
   if (!user.approved)
     return (
       <main className="login-page">
+        <div className="login-language">
+          <LanguageToggle />
+        </div>
         <div className="login-card">
           <Brand />
-          <h1>Almost home.</h1>
+          <h1>{t("Almost home.")}</h1>
           <p>
-            Your SSO account is ready. An office owner needs to approve your
-            membership.
+            {t(
+              "Your SSO account is ready. An office owner needs to approve your membership.",
+            )}
           </p>
           <button className="primary" onClick={refresh}>
-            Check approval
+            {t("Check approval")}
           </button>
           <button className="text-button" onClick={logout}>
-            Sign out
+            {t("Sign out")}
           </button>
         </div>
       </main>
@@ -311,12 +313,44 @@ export default function OfficeApp() {
             className={`connection ${connection === "Connected" ? "good" : ""}`}
           >
             <i />
-            {connection}
+            {t(connection)}
           </span>
           <span className="header-divider" />
+          <LanguageToggle />
+          <button
+            className="icon-button nav-fullscreen"
+            aria-label={
+              fullscreen ? t("Exit fullscreen") : t("Enter fullscreen")
+            }
+            onClick={() => {
+              const el = document.querySelector(".app-shell");
+              const action = document.fullscreenElement
+                ? document.exitFullscreen()
+                : el?.requestFullscreen?.();
+              if (action)
+                void action.catch(() =>
+                  notify(
+                    "Fullscreen is unavailable in this browser. The map already fills the window.",
+                  ),
+                );
+            }}
+          >
+            {fullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+          </button>
+          <a
+            className="icon-button github-link"
+            href="https://github.com/GmBeHappy/little-office"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={t("GitHub repository")}
+            title={t("GitHub repository")}
+          >
+            <CodeXml size={21} />
+            <span className="visually-hidden">GitHub</span>
+          </a>
           <button
             className="icon-button"
-            aria-label="Help"
+            aria-label={t("Help")}
             onClick={() => setModal("help")}
           >
             <HelpCircle size={19} />
@@ -324,28 +358,28 @@ export default function OfficeApp() {
           <button
             className="header-avatar"
             onClick={() => setModal("profile")}
-            aria-label="Your profile"
+            aria-label={t("Your profile")}
           >
             <Avatar color={user.avatar} />
           </button>
         </div>
       </header>
       <div className="body-shell">
-        <nav className="rail" aria-label="Office navigation">
+        <nav className="rail" aria-label={t("Office navigation")}>
           <button
             className="rail-item active"
-            aria-label="Office"
+            aria-label={t("Office")}
             onClick={() => {
               setSidebarOpen(false);
               setSelected("");
             }}
           >
             <Home size={22} />
-            <span>Office</span>
+            <span>{t("Office")}</span>
           </button>
           <button
             className={`rail-item ${panel === "rooms" ? "sub-active" : ""}`}
-            aria-label="Rooms"
+            aria-label={t("Rooms")}
             aria-expanded={sidebarOpen && panel === "rooms"}
             onClick={() => {
               setSidebarOpen(!sidebarOpen || panel !== "rooms");
@@ -353,11 +387,11 @@ export default function OfficeApp() {
             }}
           >
             <DoorOpen size={22} />
-            <span>Rooms</span>
+            <span>{t("Rooms")}</span>
           </button>
           <button
             className="rail-item"
-            aria-label="People"
+            aria-label={t("People")}
             aria-expanded={sidebarOpen && panel === "people"}
             onClick={() => {
               setSidebarOpen(!sidebarOpen || panel !== "people");
@@ -365,7 +399,7 @@ export default function OfficeApp() {
             }}
           >
             <Users size={22} />
-            <span>People</span>
+            <span>{t("People")}</span>
           </button>
           <div className="rail-bottom">
             <button
@@ -374,63 +408,111 @@ export default function OfficeApp() {
                 setSettingsTab("workspace");
                 setModal("settings");
               }}
-              aria-label="Settings"
+              aria-label={t("Settings")}
             >
               <Settings size={21} />
-              <span>Settings</span>
+              <span>{t("Settings")}</span>
             </button>
             <button
               className="rail-item"
               onClick={logout}
-              aria-label="Sign out"
+              aria-label={t("Sign out")}
             >
               <LogOut size={20} />
-              <span>Leave</span>
+              <span>{t("Leave")}</span>
             </button>
           </div>
         </nav>
         <main className="office-main">
-          <h1 className="visually-hidden">{workspace.name} virtual office</h1>
+          <h1 className="visually-hidden">
+            {t("{workspace} virtual office", { workspace: workspace.name })}
+          </h1>
           <div className="map-card">
-            <div className="map-topline">
-              <div>
-                <span className="map-icon">
-                  <Leaf size={15} />
-                </span>
-                <strong>{currentZone.name}</strong>
-                <span className="room-tag">
-                  {self?.zone === "floor" ? "OPEN SPACE" : "MEETING ROOM"}
-                </span>
+            <div className="location-card">
+              <div className="map-topline">
+                <div>
+                  <span className="map-icon">
+                    <Leaf size={15} />
+                  </span>
+                  <strong>{t(currentZone.name)}</strong>
+                  <span className="room-tag">
+                    {self?.zone === "floor"
+                      ? t("OPEN SPACE")
+                      : t("MEETING ROOM")}
+                  </span>
+                </div>
+                <div className="map-top-actions">
+                  <span>
+                    <Users size={14} />{" "}
+                    {t("{count} here", { count: people.length })}
+                  </span>
+                </div>
               </div>
-              <div className="map-top-actions">
-                <span>
-                  <Users size={14} /> {people.length} here
-                </span>
-                <button
-                  className="icon-button"
+              {self?.conversation && (
+                <section
+                  className="voice-roster"
                   aria-label={
-                    fullscreen ? "Exit fullscreen" : "Enter fullscreen"
+                    self.conversation === "floor"
+                      ? t("Nearby voice")
+                      : t("Conversation participants")
                   }
-                  onClick={() => {
-                    const el = document.querySelector(".app-shell");
-                    const action = document.fullscreenElement
-                      ? document.exitFullscreen()
-                      : el?.requestFullscreen?.();
-                    if (action)
-                      void action.catch(() =>
-                        notify(
-                          "Fullscreen is unavailable in this browser. The map already fills the window.",
-                        ),
-                      );
-                  }}
                 >
-                  {fullscreen ? (
-                    <Minimize2 size={15} />
-                  ) : (
-                    <Maximize2 size={15} />
-                  )}
-                </button>
-              </div>
+                  <div className="voice-roster-heading">
+                    <Headphones size={14} />
+                    <strong>
+                      {self.conversation === "floor"
+                        ? t("Nearby voice")
+                        : t("In this conversation")}
+                    </strong>
+                    <span>
+                      {media.connected
+                        ? t("{count} joined", { count: voicePeople.length + 1 })
+                        : media.error
+                          ? t("Audio unavailable")
+                          : t("Connecting…")}
+                    </span>
+                  </div>
+                  <div className="voice-roster-people">
+                    {media.connected && (
+                      <span
+                        className="voice-person"
+                        title={
+                          media.mic
+                            ? t("Your microphone is on")
+                            : t("Your microphone is muted")
+                        }
+                      >
+                        <Avatar color={self.avatar} />
+                        <span>{t("You")}</span>
+                        {media.mic ? <Mic size={12} /> : <MicOff size={12} />}
+                      </span>
+                    )}
+                    {voicePeople.map((p) => (
+                      <button
+                        className="voice-person"
+                        key={p.id}
+                        data-speaking={media.speaking.includes(p.id)}
+                        onClick={() => {
+                          setSelected(p.id);
+                          setPanel("people");
+                          setSidebarOpen(true);
+                        }}
+                      >
+                        <Avatar color={p.avatar} />
+                        <span>{p.name}</span>
+                        {media.speaking.includes(p.id) && <SpeakingIndicator />}
+                      </button>
+                    ))}
+                    {media.connected && !voicePeople.length && (
+                      <span className="muted">
+                        {self.conversation === "floor"
+                          ? t("Move closer to a teammate to talk.")
+                          : t("Waiting for someone to join.")}
+                      </span>
+                    )}
+                  </div>
+                </section>
+              )}
             </div>
             <div className="map-stage">
               <PixelMap
@@ -452,29 +534,29 @@ export default function OfficeApp() {
                 <span className="key keyboard-walk-hint">A</span>
                 <span className="key keyboard-walk-hint">S</span>
                 <span className="key keyboard-walk-hint">D</span>
-                <span className="keyboard-walk-hint">to move ·</span>
-                <span className="touch-walk-hint">Drag to walk ·</span>
+                <span className="keyboard-walk-hint">{t("to move ·")}</span>
+                <span className="touch-walk-hint">{t("Drag to walk ·")}</span>
                 <button
                   className="key"
-                  aria-label="Jump"
+                  aria-label={t("Jump")}
                   onClick={() => send({ type: "jump" })}
                 >
                   Space
                 </button>
-                <span>to jump</span>
+                <span>{t("to jump")}</span>
                 <button
                   className="key"
-                  aria-label="Nudge nearest teammate"
-                  title="Nudge nearest teammate (Z)"
+                  aria-label={t("Nudge nearest teammate")}
+                  title={t("Nudge nearest teammate (Z)")}
                   onClick={() => send({ type: "nudge" })}
                 >
                   Z
                 </button>
-                <span>to nudge</span>
+                <span>{t("to nudge")}</span>
               </div>
               <div className="map-weather">
                 {getMap(workspace.mapId).theme === "space" ? "✦" : "☀"}{" "}
-                <span>{getMap(workspace.mapId).name}</span>
+                <span>{t(getMap(workspace.mapId).name)}</span>
               </div>
               <MediaTracks
                 room={media.room}
@@ -486,117 +568,58 @@ export default function OfficeApp() {
               <span>
                 <i className="green-dot" />
                 {self?.conversation.startsWith("call:")
-                  ? "Private call"
+                  ? t("Private call")
                   : self?.zone !== "floor"
-                    ? "Meeting room audio"
+                    ? t("Meeting room audio")
                     : self?.status === "dnd"
-                      ? "Do not disturb · audio paused"
-                      : "Nearby voice · automatic"}
+                      ? t("Do not disturb · audio paused")
+                      : t("Nearby voice · automatic")}
                 <span className="muted">
                   {" "}
                   ·{" "}
                   {audience.length
-                    ? `${audience.length} in your conversation`
-                    : "a little room to focus"}
+                    ? t("{count} in your conversation", {
+                        count: audience.length,
+                      })
+                    : t("a little room to focus")}
                 </span>
               </span>
               <button className="text-button" onClick={() => setModal("help")}>
-                How it works <ArrowUpRight size={13} />
+                {t("How it works")}
+                <ArrowUpRight size={13} />
               </button>
             </div>
           </div>
-          {self?.conversation && (
-            <section
-              className="voice-roster"
-              aria-label={
-                self.conversation === "floor"
-                  ? "Nearby voice"
-                  : "Conversation participants"
-              }
-            >
-              <div className="voice-roster-heading">
-                <Headphones size={14} />
-                <strong>
-                  {self.conversation === "floor"
-                    ? "Nearby voice"
-                    : "In this conversation"}
-                </strong>
-                <span>
-                  {media.connected
-                    ? `${voicePeople.length + 1} joined`
-                    : media.error
-                      ? "Audio unavailable"
-                      : "Connecting…"}
-                </span>
-              </div>
-              <div className="voice-roster-people">
-                {media.connected && (
-                  <span
-                    className="voice-person"
-                    title={
-                      media.mic
-                        ? "Your microphone is on"
-                        : "Your microphone is muted"
-                    }
-                  >
-                    {media.mic ? <Mic size={12} /> : <MicOff size={12} />}You
-                  </span>
-                )}
-                {voicePeople.map((p) => (
-                  <button
-                    className="voice-person"
-                    key={p.id}
-                    data-speaking={media.speaking.includes(p.id)}
-                    onClick={() => {
-                      setSelected(p.id);
-                      setPanel("people");
-                      setSidebarOpen(true);
-                    }}
-                  >
-                    {media.speaking.includes(p.id) ? (
-                      <SpeakingIndicator />
-                    ) : (
-                      <Headphones size={12} />
-                    )}
-                    {p.name}
-                  </button>
-                ))}
-                {media.connected && !voicePeople.length && (
-                  <span className="muted">
-                    {self.conversation === "floor"
-                      ? "Move closer to a teammate to talk."
-                      : "Waiting for someone to join."}
-                  </span>
-                )}
-              </div>
-            </section>
-          )}
           {media.error && (
             <div className="media-error">
               <Headphones size={16} />
-              <span>Media connection: {media.error}</span>
-              <button onClick={media.retry}>Retry audio</button>
+              <span>
+                {t("Media connection:")}
+                {t(media.error)}
+              </span>
+              <button onClick={media.retry}>{t("Retry audio")}</button>
             </div>
           )}
         </main>
         {sidebarOpen && (
-          <aside className="sidebar" aria-label="People and rooms">
+          <aside className="sidebar" aria-label={t("People and rooms")}>
             <div className="sidebar-tabs">
               <button
                 className={panel === "people" ? "selected" : ""}
                 onClick={() => setPanel("people")}
               >
-                People <span>{people.length}</span>
+                {t("People")}
+                <span>{people.length}</span>
               </button>
               <button
                 className={panel === "rooms" ? "selected" : ""}
                 onClick={() => setPanel("rooms")}
               >
-                Rooms
+                {t("Rooms")}
               </button>
               <button
                 className="icon-button"
-                aria-label="Office settings"
+                aria-label={t("Office settings")}
                 onClick={() => {
                   setSettingsTab("workspace");
                   setModal("settings");
@@ -606,7 +629,7 @@ export default function OfficeApp() {
               </button>
               <button
                 className="icon-button"
-                aria-label="Close people and rooms"
+                aria-label={t("Close people and rooms")}
                 onClick={() => setSidebarOpen(false)}
               >
                 <X size={18} />
@@ -620,7 +643,8 @@ export default function OfficeApp() {
                   setModal("settings");
                 }}
               >
-                <Plus size={16} /> Invite teammate
+                <Plus size={16} />
+                {t("Invite teammate")}
               </button>
             )}
             <div className="sidebar-content">
@@ -629,14 +653,15 @@ export default function OfficeApp() {
                   <label className="search">
                     <Search size={16} />
                     <input
-                      aria-label="Find your people"
-                      placeholder="Find your people"
+                      aria-label={t("Find your people")}
+                      placeholder={t("Find your people")}
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                     />
                   </label>
                   <div className="section-title">
-                    IN THE OFFICE <span>{filtered.length}</span>
+                    {t("IN THE OFFICE")}
+                    <span>{filtered.length}</span>
                   </div>
                   <div className="people-list">
                     {filtered.map((p) => (
@@ -657,16 +682,19 @@ export default function OfficeApp() {
                         </div>
                         <div className="person-copy">
                           <strong>
-                            {p.name} {p.id === user.id && <small>(you)</small>}
+                            {p.name}{" "}
+                            {p.id === user.id && <small>{t("(you)")}</small>}
                           </strong>
-                          <span>{p.statusText || statusLabel[p.status]}</span>
+                          <span>
+                            {p.statusText || t(statusLabel[p.status])}
+                          </span>
                         </div>
                         {media.speaking.includes(p.id) ? (
                           <SpeakingIndicator />
                         ) : voicePeople.some((person) => person.id === p.id) ? (
                           <Headphones
                             size={15}
-                            aria-label="In your voice conversation"
+                            aria-label={t("In your voice conversation")}
                             className="in-voice-icon"
                           />
                         ) : p.conversation ? (
@@ -674,10 +702,10 @@ export default function OfficeApp() {
                         ) : (
                           <span className="person-room">
                             {p.zone === "floor"
-                              ? "Commons"
+                              ? t("Commons")
                               : p.zone === "studio"
-                                ? "Studio"
-                                : "Library"}
+                                ? t("Studio")
+                                : t("Library")}
                           </span>
                         )}
                       </button>
@@ -685,14 +713,19 @@ export default function OfficeApp() {
                   </div>
                   {chosen && chosen.id !== user.id && (
                     <div className="person-actions">
-                      <strong>Say hello to {chosen.name.split(" ")[0]}</strong>
+                      <strong>
+                        {t("Say hello to {name}", {
+                          name: chosen.name.split(" ")[0],
+                        })}
+                      </strong>
                       <div>
                         <button
                           onClick={() =>
                             send({ type: "wave", target: chosen.id })
                           }
                         >
-                          <Hand size={16} /> Wave
+                          <Hand size={16} />
+                          {t("Wave")}
                         </button>
                         <button
                           disabled={
@@ -706,7 +739,8 @@ export default function OfficeApp() {
                             send({ type: "nudge", target: chosen.id })
                           }
                         >
-                          <BellRing size={16} /> Nudge
+                          <BellRing size={16} />
+                          {t("Nudge")}
                         </button>
                         <button
                           onClick={() =>
@@ -717,7 +751,8 @@ export default function OfficeApp() {
                             })
                           }
                         >
-                          <ArrowUpRight size={16} /> Summon
+                          <ArrowUpRight size={16} />
+                          {t("Summon")}
                         </button>
                         <button
                           onClick={() =>
@@ -728,16 +763,21 @@ export default function OfficeApp() {
                             })
                           }
                         >
-                          <Video size={16} /> Call
+                          <Video size={16} />
+                          {t("Call")}
                         </button>
                       </div>
                     </div>
                   )}
                   {!people.length && (
-                    <p className="empty-note">Connecting you to the office…</p>
+                    <p className="empty-note">
+                      {t("Connecting you to the office…")}
+                    </p>
                   )}
                   <div className="sidebar-divider" />
-                  <div className="section-title">A SPACE FOR EVERY MOMENT</div>
+                  <div className="section-title">
+                    {t("A SPACE FOR EVERY MOMENT")}
+                  </div>
                   <RoomCards
                     people={people}
                     self={self}
@@ -748,11 +788,12 @@ export default function OfficeApp() {
               ) : (
                 <>
                   <div className="section-title room-list-title">
-                    FIND YOUR SPACE
+                    {t("FIND YOUR SPACE")}
                   </div>
                   <p className="sidebar-note">
-                    Walk into a room, or join from here. Your conversation
-                    follows you.
+                    {t(
+                      "Walk into a room, or join from here. Your conversation follows you.",
+                    )}
                   </p>
                   <RoomCards
                     people={people}
@@ -764,8 +805,8 @@ export default function OfficeApp() {
                     className="commons-button"
                     onClick={() => send({ type: "zone", zone: "floor" })}
                   >
-                    <Leaf size={17} /> Back to the commons{" "}
-                    <ArrowRight size={14} />
+                    <Leaf size={17} />
+                    {t("Back to the commons")} <ArrowRight size={14} />
                   </button>
                 </>
               )}
@@ -782,7 +823,7 @@ export default function OfficeApp() {
               <i
                 className={`status-dot-inline ${self?.status || "available"}`}
               />
-              {statusLabel[self?.status || "available"]}
+              {t(statusLabel[self?.status || "available"])}
             </span>
           </div>
           <ChevronDown size={15} />
@@ -798,20 +839,20 @@ export default function OfficeApp() {
                 <MicOff />
               )
             }
-            label="Microphone"
+            label={t("Microphone")}
             speaking={media.speaking.includes(user.id)}
             on={media.mic}
             onClick={() => void media.toggle("mic")}
           />
           <Control
             icon={media.camera ? <Video /> : <VideoOff />}
-            label="Camera"
+            label={t("Camera")}
             on={media.camera}
             onClick={() => void media.toggle("camera")}
           />
           <Control
             icon={<MonitorUp />}
-            label={isSharing ? "Stop sharing" : "Share screen"}
+            label={isSharing ? t("Stop sharing") : t("Share screen")}
             on={isSharing}
             onClick={() => {
               if (isSharing) {
@@ -829,7 +870,7 @@ export default function OfficeApp() {
           <span className="control-divider" />
           <Control
             icon={<Hand />}
-            label="Wave"
+            label={t("Wave")}
             onClick={() => {
               if (selected && selected !== user.id)
                 send({ type: "wave", target: selected });
@@ -841,7 +882,7 @@ export default function OfficeApp() {
           />
           <Control
             icon={<Smile />}
-            label="Status"
+            label={t("Status")}
             onClick={() => setModal("profile")}
           />
         </div>
@@ -851,13 +892,13 @@ export default function OfficeApp() {
               className="secondary enable-sound"
               onClick={() => void media.enableSound()}
             >
-              Enable sound
+              {t("Enable sound")}
             </button>
           )}
           {self?.conversation && self.conversation !== "floor" && (
             <button
               className="icon-button leave-call"
-              aria-label="Leave conversation"
+              aria-label={t("Leave conversation")}
               onClick={() => send({ type: "leave" })}
             >
               <LogOut size={17} />
@@ -871,21 +912,28 @@ export default function OfficeApp() {
           className="invitation-card"
           role="dialog"
           aria-modal="true"
-          aria-label="Conversation invitation"
+          aria-label={t("Conversation invitation")}
         >
           <div className="invitation-icon">
             {invites[0].kind === "summon" ? <Hand /> : <Video />}
           </div>
           <h3>
             {invites[0].fromName}{" "}
-            {invites[0].kind === "summon" ? "is waving you over" : "is calling"}
+            {invites[0].kind === "summon"
+              ? t("is waving you over")
+              : t("is calling")}
           </h3>
           <p>
             {invites[0].kind === "summon"
-              ? `Join them in ${ZONES.find((z) => z.id === invites[0].destination)?.name}.`
-              : "A little face-to-face time?"}{" "}
+              ? t("Join them in {room}.", {
+                  room: t(
+                    ZONES.find((z) => z.id === invites[0].destination)?.name ||
+                      "The commons",
+                  ),
+                })
+              : t("A little face-to-face time?")}{" "}
             {self?.conversation &&
-              "Accepting changes your current conversation."}
+              t("Accepting changes your current conversation.")}
           </p>
           <div>
             <button
@@ -894,7 +942,7 @@ export default function OfficeApp() {
                 send({ type: "respond", id: invites[0].id, accept: false })
               }
             >
-              Not now
+              {t("Not now")}
             </button>
             <button
               className="primary"
@@ -902,7 +950,8 @@ export default function OfficeApp() {
                 send({ type: "respond", id: invites[0].id, accept: true })
               }
             >
-              Join them <ArrowRight size={15} />
+              {t("Join them")}
+              <ArrowRight size={15} />
             </button>
           </div>
         </div>
@@ -920,46 +969,49 @@ export default function OfficeApp() {
             aria-modal="true"
             aria-label={
               modal === "settings"
-                ? "Office settings"
+                ? t("Office settings")
                 : modal === "profile"
-                  ? "Your profile"
-                  : "Office guide"
+                  ? t("Your profile")
+                  : t("Office guide")
             }
           >
             <button
               className="modal-close icon-button"
               onClick={() => setModal(null)}
-              aria-label="Close dialog"
+              aria-label={t("Close dialog")}
             >
               <X size={19} />
             </button>
             {modal === "help" ? (
               <>
-                <div className="eyebrow">WELCOME TO YOUR LITTLE OFFICE</div>
-                <h2>Make yourself at home.</h2>
+                <div className="eyebrow">
+                  {t("WELCOME TO YOUR LITTLE OFFICE")}
+                </div>
+                <h2>{t("Make yourself at home.")}</h2>
                 <div className="help-grid">
                   <p>
-                    <strong>Walk & talk</strong>Use WASD or the arrow keys. On
-                    mobile, touch and drag the map to walk; release to stop.
-                    Press Space to jump. Nearby voice joins automatically;
-                    enable your mic to talk. The nearby voice list shows who can
-                    hear you.
+                    <strong>{t("Walk & talk")}</strong>
+                    {t(
+                      "Use WASD or the arrow keys. On mobile, touch and drag the map to walk; release to stop. Press Space to jump. Nearby voice joins automatically; enable your mic to talk. The nearby voice list shows who can hear you.",
+                    )}
                   </p>
                   <p>
-                    <strong>Make some room</strong>Join the Studio or Library
-                    for a meeting. Lock a room from its card; people inside can
-                    summon others in.
+                    <strong>{t("Make some room")}</strong>
+                    {t(
+                      "Join the Studio or Library for a meeting. Lock a room from its card; people inside can summon others in.",
+                    )}
                   </p>
                   <p>
-                    <strong>A friendly nudge</strong>Press Z to nudge the
-                    closest teammate, or select someone next to you and choose
-                    Nudge. They'll hear a chime and see your name. Summons and
-                    calls still need acceptance.
+                    <strong>{t("A friendly nudge")}</strong>
+                    {t(
+                      "Press Z to nudge the closest teammate, or select someone next to you and choose Nudge. They'll hear a chime and see your name. Summons and calls still need acceptance.",
+                    )}
                   </p>
                   <p>
-                    <strong>Your space, your choice</strong>Mic and camera start
-                    off. Do not disturb quiets interruptions. Open-floor audio
-                    is public; use a meeting room for private conversations.
+                    <strong>{t("Your space, your choice")}</strong>
+                    {t(
+                      "Mic and camera start off. Do not disturb quiets interruptions. Open-floor audio is public; use a meeting room for private conversations.",
+                    )}
                   </p>
                 </div>
               </>
@@ -1046,25 +1098,27 @@ function Control({
   onClick: () => void;
   speaking?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <button
       className={`control ${on ? "control-on" : ""}`}
       onClick={onClick}
       aria-pressed={on}
-      aria-label={label}
+      aria-label={t(label)}
       data-speaking={speaking}
     >
       <span>{icon}</span>
-      <small>{speaking ? "Speaking" : label}</small>
+      <small>{speaking ? t("Speaking") : t(label)}</small>
     </button>
   );
 }
 function Toast({ text, close }: { text: string; close: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="toast" role="status">
       <Leaf size={17} />
-      <span>{text}</span>
-      <button onClick={close} aria-label="Dismiss">
+      <span>{t(text)}</span>
+      <button onClick={close} aria-label={t("Dismiss")}>
         <X size={16} />
       </button>
     </div>
@@ -1081,6 +1135,7 @@ function RoomCards({
   locks: Record<string, boolean>;
   send: (c: Command) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="room-cards">
       {ZONES.filter((z) => z.id !== "floor").map((z) => (
@@ -1095,16 +1150,20 @@ function RoomCards({
             <div className="mini-plant" />
           </div>
           <div className="room-card-copy">
-            <strong>{z.name}</strong>
+            <strong>{t(z.name)}</strong>
             <span>
-              {people.filter((p) => p.zone === z.id).length} here ·{" "}
-              {z.id === "studio" ? "8" : "6"} seats
+              {t("{count} here · {seats} seats", {
+                count: people.filter((p) => p.zone === z.id).length,
+                seats: z.id === "studio" ? 8 : 6,
+              })}
             </span>
           </div>
           {self?.zone === z.id ? (
             <button
               className="icon-button"
-              aria-label={`${locks[z.id] ? "Unlock" : "Lock"} ${z.name}`}
+              aria-label={t(locks[z.id] ? "Unlock {room}" : "Lock {room}", {
+                room: t(z.name),
+              })}
               onClick={() =>
                 send({
                   type: "lock",
@@ -1118,7 +1177,7 @@ function RoomCards({
           ) : (
             <button
               className="icon-button"
-              aria-label={`Join ${z.name}`}
+              aria-label={t("Join {room}", { room: t(z.name) })}
               onClick={() => send({ type: "zone", zone: z.id })}
             >
               {locks[z.id] ? <Lock size={16} /> : <ChevronRight size={16} />}
@@ -1138,6 +1197,7 @@ function Login({
   refresh: () => Promise<void>;
   notify: (s: string) => void;
 }) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   async function login(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -1157,6 +1217,9 @@ function Login({
   }
   return (
     <main className="login-page">
+      <div className="login-language">
+        <LanguageToggle />
+      </div>
       <div className="login-art">
         <div className="login-sun" />
         <div className="login-window">
@@ -1171,58 +1234,58 @@ function Login({
         </div>
         <div className="login-plant">✿</div>
         <div className="login-art-copy">
-          <span>YOUR PEOPLE. YOUR PLACE.</span>
+          <span>{t("YOUR PEOPLE. YOUR PLACE.")}</span>
           <h2>
-            A little closer.
+            {t("A little closer.")}
             <br />
-            Even from afar.
+            {t("Even from afar.")}
           </h2>
           <p>
-            A cozy corner of the internet
+            {t("A cozy corner of the internet")}
             <br />
-            to do good work, together.
+            {t("to do good work, together.")}
           </p>
         </div>
       </div>
       <div className="login-card">
         <Brand />
-        <div className="eyebrow">MAKE YOURSELF AT HOME</div>
+        <div className="eyebrow">{t("MAKE YOURSELF AT HOME")}</div>
         <h1>
-          Your office,
+          {t("Your office,")}
           <br />
-          wherever you are.
+          {t("wherever you are.")}
         </h1>
-        <p>Step inside. Your people are just a few pixels away.</p>
+        <p>{t("Step inside. Your people are just a few pixels away.")}</p>
         {config?.password && (
           <form onSubmit={login}>
             <label>
-              Username
+              {t("Username")}
               <input
                 name="username"
                 autoComplete="username"
                 required
-                placeholder="Your username"
+                placeholder={t("Your username")}
               />
             </label>
             <label>
-              Password
+              {t("Password")}
               <input
                 name="password"
                 type="password"
                 autoComplete="current-password"
                 required
-                placeholder="Your password"
+                placeholder={t("Your password")}
               />
             </label>
             <button className="primary" disabled={busy}>
-              {busy ? "Opening the door…" : "Enter the office"}
+              {busy ? t("Opening the door…") : t("Enter the office")}
               <ArrowRight size={17} />
             </button>
           </form>
         )}
         {config?.sso && (
           <>
-            <div className="login-or">{config.password ? "or" : ""}</div>
+            <div className="login-or">{config.password ? t("or") : ""}</div>
             <button
               className="secondary sso-button"
               onClick={async () => {
@@ -1237,20 +1300,22 @@ function Login({
                 }
               }}
             >
-              <Shield size={17} /> Sign in with SSO
+              <Shield size={17} />
+              {t("Sign in with SSO")}
             </button>
           </>
         )}
         {!config && (
           <p className="error-text">
-            The office server is unavailable. Start the API and database, then
-            reload.
+            {t(
+              "The office server is unavailable. Start the API and database, then reload.",
+            )}
           </p>
         )}
         <p className="login-footnote">
-          A private space for your team.
+          {t("A private space for your team.")}
           <br />
-          Need an account? Ask your office owner.
+          {t("Need an account? Ask your office owner.")}
         </p>
       </div>
     </main>
@@ -1263,9 +1328,13 @@ function PasswordChange({
   onDone: () => Promise<void>;
   notify: (s: string) => void;
 }) {
+  const { t } = useI18n();
   const [error, setError] = useState("");
   return (
     <main className="login-page">
+      <div className="login-language">
+        <LanguageToggle />
+      </div>
       <form
         className="login-card"
         onSubmit={async (e) => {
@@ -1284,10 +1353,12 @@ function PasswordChange({
         }}
       >
         <Brand />
-        <h1>Make it yours.</h1>
-        <p>Replace your temporary password before entering the office.</p>
+        <h1>{t("Make it yours.")}</h1>
+        <p>
+          {t("Replace your temporary password before entering the office.")}
+        </p>
         <label>
-          Temporary password
+          {t("Temporary password")}
           <input
             name="current"
             type="password"
@@ -1296,7 +1367,7 @@ function PasswordChange({
           />
         </label>
         <label>
-          New password
+          {t("New password")}
           <input
             name="next"
             type="password"
@@ -1306,9 +1377,10 @@ function PasswordChange({
             required
           />
         </label>
-        {error && <p className="error-text">{error}</p>}
+        {error && <p className="error-text">{t(error)}</p>}
         <button className="primary">
-          Save password <ArrowRight size={16} />
+          {t("Save password")}
+          <ArrowRight size={16} />
         </button>
       </form>
     </main>
@@ -1327,6 +1399,7 @@ function Profile({
   notify: (s: string) => void;
   saved: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [avatar, setAvatar] = useState(user.avatar),
     [status, setStatus] = useState<Availability>(self?.status || "available");
   return (
@@ -1347,63 +1420,68 @@ function Profile({
         }
       }}
     >
-      <div className="eyebrow">A LITTLE BIT OF YOU</div>
-      <h2>Your office self.</h2>
+      <div className="eyebrow">{t("A LITTLE BIT OF YOU")}</div>
+      <h2>{t("Your office self.")}</h2>
       <div className="character-preview">
         <Avatar color={avatar} />
         <div>
-          <span className="eyebrow">YOUR CHARACTER</span>
-          <h3>{characterLook(avatar).name}</h3>
-          <p>{characterLook(avatar).description}</p>
+          <span className="eyebrow">{t("YOUR CHARACTER")}</span>
+          <h3>{t(characterLook(avatar).name)}</h3>
+          <p>{t(characterLook(avatar).description)}</p>
         </div>
       </div>
       <p className="character-picker-label">
-        Choose your look. Save to wear it in the office.
+        {t("Choose your look. Save to wear it in the office.")}
       </p>
-      <div className="avatar-picker" role="group" aria-label="Character skins">
+      <div
+        className="avatar-picker"
+        role="group"
+        aria-label={t("Character skins")}
+      >
         {CHARACTER_LOOKS.map((look) => (
           <button
             type="button"
             key={look.id}
             className={avatar === look.id ? "picked" : ""}
-            aria-label={`${look.name} skin`}
+            aria-label={t("{name} skin", { name: t(look.name) })}
             aria-pressed={avatar === look.id}
             onClick={() => setAvatar(look.id)}
           >
             <Avatar color={look.id} />
-            <span>{look.name}</span>
+            <span>{t(look.name)}</span>
             {avatar === look.id && <Check className="skin-check" size={13} />}
           </button>
         ))}
       </div>
       <label>
-        Your name
+        {t("Your name")}
         <input name="name" defaultValue={user.name} maxLength={40} required />
       </label>
       <label>
-        Availability
+        {t("Availability")}
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value as Availability)}
         >
           {Object.entries(statusLabel).map(([value, text]) => (
             <option value={value} key={value}>
-              {text}
+              {t(text)}
             </option>
           ))}
         </select>
       </label>
       <label>
-        A little status
+        {t("A little status")}
         <input
           name="statusText"
-          placeholder="Making something good…"
+          placeholder={t("Making something good…")}
           defaultValue={self?.statusText || ""}
           maxLength={80}
         />
       </label>
       <button className="primary">
-        Save changes <Check size={16} />
+        {t("Save changes")}
+        <Check size={16} />
       </button>
     </form>
   );
@@ -1425,6 +1503,7 @@ function SettingsPanel({
   notify: (s: string) => void;
   media: ReturnType<typeof useOfficeMedia>;
 }) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<"audio" | "auth" | "members" | "workspace">(
       user.role === "owner" ? initialTab : "audio",
     ),
@@ -1462,22 +1541,22 @@ function SettingsPanel({
   }
   return (
     <>
-      <div className="eyebrow">KEEP THINGS FEELING RIGHT</div>
-      <h2>Office settings.</h2>
+      <div className="eyebrow">{t("KEEP THINGS FEELING RIGHT")}</div>
+      <h2>{t("Office settings.")}</h2>
       <div className="settings-tabs">
         {user.role === "owner" && (
           <button
             className={tab === "workspace" ? "active" : ""}
             onClick={() => setTab("workspace")}
           >
-            Workspace
+            {t("Workspace")}
           </button>
         )}
         <button
           className={tab === "audio" ? "active" : ""}
           onClick={() => setTab("audio")}
         >
-          Devices
+          {t("Devices")}
         </button>
         {user.role === "owner" && (
           <>
@@ -1485,13 +1564,13 @@ function SettingsPanel({
               className={tab === "members" ? "active" : ""}
               onClick={() => setTab("members")}
             >
-              Members
+              {t("Members")}
             </button>
             <button
               className={tab === "auth" ? "active" : ""}
               onClick={() => setTab("auth")}
             >
-              Authentication
+              {t("Authentication")}
             </button>
           </>
         )}
@@ -1506,35 +1585,39 @@ function SettingsPanel({
       {tab === "audio" && (
         <div>
           <p className="muted">
-            Choose your microphone and speakers before or during a conversation.
-            Choices are saved for your account on this browser.
+            {t(
+              "Choose your microphone and speakers before or during a conversation. Choices are saved for your account on this browser.",
+            )}
           </p>
           <button
             className="secondary"
             disabled={media.deviceBusy}
             onClick={() => void media.enumerate(true)}
           >
-            Allow microphone access & refresh devices
+            {t("Allow microphone access & refresh devices")}
           </button>
           <p className="muted">
-            This reveals device names without turning your call microphone on.
+            {t(
+              "This reveals device names without turning your call microphone on.",
+            )}
           </p>
           <label>
-            Microphone
+            {t("Microphone")}
             <select
+              aria-label={t("Microphone")}
               value={media.input}
               disabled={media.deviceBusy}
               onChange={(e) =>
                 void media.switchDevice("audioinput", e.target.value)
               }
             >
-              <option value="">System default</option>
+              <option value="">{t("System default")}</option>
               {media.input &&
                 !media.devices.some(
                   (d) => d.kind === "audioinput" && d.deviceId === media.input,
                 ) && (
                   <option value={media.input}>
-                    Saved microphone · allow access or reconnect it
+                    {t("Saved microphone · allow access or reconnect it")}
                   </option>
                 )}
               {media.devices
@@ -1546,28 +1629,29 @@ function SettingsPanel({
                 )
                 .map((d, i) => (
                   <option key={d.deviceId || i} value={d.deviceId}>
-                    {d.label || `Microphone ${i + 1}`}
+                    {d.label || t("Microphone {number}", { number: i + 1 })}
                   </option>
                 ))}
             </select>
           </label>
           <label>
-            Speakers / headphones
+            {t("Speakers / headphones")}
             <select
+              aria-label={t("Speakers / headphones")}
               value={media.output}
               disabled={!media.outputSupported || media.deviceBusy}
               onChange={(e) =>
                 void media.switchDevice("audiooutput", e.target.value)
               }
             >
-              <option value="">System default</option>
+              <option value="">{t("System default")}</option>
               {media.output &&
                 !media.devices.some(
                   (d) =>
                     d.kind === "audiooutput" && d.deviceId === media.output,
                 ) && (
                   <option value={media.output}>
-                    Saved speaker · allow access or reconnect it
+                    {t("Saved speaker · allow access or reconnect it")}
                   </option>
                 )}
               {media.devices
@@ -1579,15 +1663,16 @@ function SettingsPanel({
                 )
                 .map((d, i) => (
                   <option key={d.deviceId} value={d.deviceId}>
-                    {d.label || `Speaker ${i + 1}`}
+                    {d.label || t("Speaker {number}", { number: i + 1 })}
                   </option>
                 ))}
             </select>
           </label>
           {!media.outputSupported && (
             <p className="muted">
-              This browser uses your system output. Select your speakers or
-              headphones in your system sound settings.
+              {t(
+                "This browser uses your system output. Select your speakers or headphones in your system sound settings.",
+              )}
             </p>
           )}
           {media.outputSupported && media.outputPickerSupported && (
@@ -1596,26 +1681,27 @@ function SettingsPanel({
               disabled={media.deviceBusy}
               onClick={() => void media.chooseOutput()}
             >
-              Choose another speaker…
+              {t("Choose another speaker…")}
             </button>
           )}
           <label>
-            Camera
+            {t("Camera")}
             <select
+              aria-label={t("Camera")}
               value={media.videoInput}
               disabled={media.deviceBusy}
               onChange={(e) =>
                 void media.switchDevice("videoinput", e.target.value)
               }
             >
-              <option value="">System default</option>
+              <option value="">{t("System default")}</option>
               {media.videoInput &&
                 !media.devices.some(
                   (d) =>
                     d.kind === "videoinput" && d.deviceId === media.videoInput,
                 ) && (
                   <option value={media.videoInput}>
-                    Saved camera · allow access or reconnect it
+                    {t("Saved camera · allow access or reconnect it")}
                   </option>
                 )}
               {media.devices
@@ -1627,7 +1713,7 @@ function SettingsPanel({
                 )
                 .map((d, i) => (
                   <option key={d.deviceId || i} value={d.deviceId}>
-                    {d.label || `Camera ${i + 1}`}
+                    {d.label || t("Camera {number}", { number: i + 1 })}
                   </option>
                 ))}
             </select>
@@ -1647,7 +1733,8 @@ function SettingsPanel({
                 }
               }}
             >
-              <Shield size={16} /> Link your SSO account
+              <Shield size={16} />
+              {t("Link your SSO account")}
             </button>
           )}
         </div>
@@ -1655,29 +1742,36 @@ function SettingsPanel({
       {tab === "auth" && (
         <>
           <p className="muted">
-            Choose how your team enters the office. Disabled methods also end
-            their existing sessions.
+            {t(
+              "Choose how your team enters the office. Disabled methods also end their existing sessions.",
+            )}
           </p>
           {(["password", "sso"] as const).map((method) => (
             <div className="setting-row" key={method}>
               <div>
                 <strong>
                   {method === "password"
-                    ? "Username & password"
-                    : "OIDC single sign-on"}
+                    ? t("Username & password")
+                    : t("OIDC single sign-on")}
                 </strong>
                 <p>
                   {method === "password"
-                    ? "Local accounts for your team."
+                    ? t("Local accounts for your team.")
                     : config.ssoConfigured
-                      ? "Your identity provider is configured."
-                      : "Add your OIDC issuer and client credentials to the server first."}
+                      ? t("Your identity provider is configured.")
+                      : t(
+                          "Add your OIDC issuer and client credentials to the server first.",
+                        )}
                 </p>
               </div>
               <button
                 className={`toggle ${config[method] ? "on" : ""}`}
                 role="switch"
-                aria-label={`Enable ${method === "password" ? "username/password" : "OIDC SSO"} login`}
+                aria-label={t(
+                  method === "password"
+                    ? "Enable username/password login"
+                    : "Enable OIDC SSO login",
+                )}
                 aria-checked={config[method]}
                 disabled={busy || (method === "sso" && !config.ssoConfigured)}
                 onClick={() => void toggle(method)}
@@ -1687,8 +1781,9 @@ function SettingsPanel({
           <div className="settings-note">
             <Shield size={17} />
             <p>
-              Sign in as an owner through SSO before switching passwords off. At
-              least one working owner login stays enabled.
+              {t(
+                "Sign in as an owner through SSO before switching passwords off. At least one working owner login stays enabled.",
+              )}
             </p>
           </div>
         </>
@@ -1702,7 +1797,7 @@ function SettingsPanel({
                 <span>
                   <strong>{u.name}</strong>
                   <small>
-                    {u.username || "SSO account"} · {u.role}
+                    {u.username || t("SSO account")} · {t(u.role)}
                   </small>
                 </span>
                 {u.id !== user.id && (
@@ -1721,7 +1816,7 @@ function SettingsPanel({
                       }
                     }}
                   >
-                    {u.approved ? "Disable" : "Approve"}
+                    {u.approved ? t("Disable") : t("Approve")}
                   </button>
                 )}
               </div>
@@ -1729,7 +1824,8 @@ function SettingsPanel({
           </div>
           <details className="add-member">
             <summary>
-              <Plus size={16} /> Add a teammate
+              <Plus size={16} />
+              {t("Add a teammate")}
             </summary>
             <form
               onSubmit={async (e) => {
@@ -1756,15 +1852,15 @@ function SettingsPanel({
               }}
             >
               <label>
-                Name
+                {t("Name")}
                 <input name="name" required maxLength={40} />
               </label>
               <label>
-                Username
+                {t("Username")}
                 <input name="username" required pattern="[a-zA-Z0-9_]{3,30}" />
               </label>
               <label>
-                Temporary password
+                {t("Temporary password")}
                 <input
                   name="password"
                   type="password"
@@ -1775,12 +1871,23 @@ function SettingsPanel({
                 />
               </label>
               <button className="primary" disabled={busy || !config.password}>
-                Create account <Plus size={16} />
+                {t("Create account")}
+                <Plus size={16} />
               </button>
             </form>
           </details>
         </>
       )}
     </>
+  );
+}
+
+function MapLoading() {
+  const { t } = useI18n();
+  return (
+    <div className="map-loading">
+      <Leaf />
+      {t("Growing your little office…")}
+    </div>
   );
 }

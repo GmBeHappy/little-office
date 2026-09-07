@@ -1,4 +1,9 @@
 import OfficeApp from "@/components/OfficeApp";
+import { I18nProvider } from "@/lib/i18n";
 export default function Page() {
-  return <OfficeApp />;
+  return (
+    <I18nProvider>
+      <OfficeApp />
+    </I18nProvider>
+  );
 }

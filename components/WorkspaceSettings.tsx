@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "@/lib/i18n";
 import { useState } from "react";
 import { Check, Leaf, Tent, Rocket } from "lucide-react";
 import { api } from "@/lib/api";
@@ -44,6 +45,7 @@ export function WorkspaceSettings({
   refresh: () => Promise<void>;
   notify: (message: string) => void;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState(workspace.name);
   const [selected, setSelected] = useState(workspace.mapId);
   const [size, setSize] = useState<"small" | "large">(
@@ -74,7 +76,7 @@ export function WorkspaceSettings({
       }}
     >
       <label>
-        Workspace name
+        {t("Workspace name")}
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}
@@ -84,27 +86,29 @@ export function WorkspaceSettings({
       </label>
       <div className="map-selection-heading">
         <div>
-          <h3>A change of scenery.</h3>
-          <p>Six places to make your team feel at home.</p>
+          <h3>{t("A change of scenery.")}</h3>
+          <p>{t("Six places to make your team feel at home.")}</p>
         </div>
       </div>
-      <div className="map-size-tabs" role="group" aria-label="Map size">
+      <div className="map-size-tabs" role="group" aria-label={t("Map size")}>
         <button
           type="button"
           aria-pressed={size === "small"}
           onClick={() => setSize("small")}
         >
-          4–8 people <span>3 maps · 8 work seats</span>
+          {t("4–8 people")}
+          <span>{t("3 maps · 8 work seats")}</span>
         </button>
         <button
           type="button"
           aria-pressed={size === "large"}
           onClick={() => setSize("large")}
         >
-          10–12 people <span>3 maps · 12 work seats</span>
+          {t("10–12 people")}
+          <span>{t("3 maps · 12 work seats")}</span>
         </button>
       </div>
-      <div className="map-picker" role="group" aria-label="Workspace maps">
+      <div className="map-picker" role="group" aria-label={t("Workspace maps")}>
         {MAPS.filter((option) => option.size === size).map((option) => {
           const Icon =
             option.theme === "nature"
@@ -117,7 +121,7 @@ export function WorkspaceSettings({
               type="button"
               className={selected === option.id ? "selected" : ""}
               key={option.id}
-              aria-label={`${option.name} map`}
+              aria-label={t("{name} map", { name: t(option.name) })}
               aria-pressed={selected === option.id}
               onClick={() => setSelected(option.id)}
             >
@@ -125,13 +129,15 @@ export function WorkspaceSettings({
               <span className="map-option-copy">
                 <span className="map-option-name">
                   <Icon size={15} />
-                  <strong>{option.name}</strong>
+                  <strong>{t(option.name)}</strong>
                   {selected === option.id && <Check size={16} />}
                 </span>
-                <span>{option.description}</span>
+                <span>{t(option.description)}</span>
                 <small>
-                  {workspace.mapId === option.id ? "CURRENT MAP · " : ""}
-                  {option.people} people · 2 meeting areas
+                  {workspace.mapId === option.id ? t("CURRENT MAP · ") : ""}
+                  {t("{count} people · 2 meeting areas", {
+                    count: option.people,
+                  })}
                 </small>
               </span>
             </button>
@@ -139,16 +145,18 @@ export function WorkspaceSettings({
         })}
       </div>
       <div className="map-apply-summary">
-        <strong>Selected: {map.name}</strong>
+        <strong>{t("Selected: {name}", { name: t(map.name) })}</strong>
         <span>
-          Designed for {map.people} people. Layout sizes are recommendations,
-          not sign-in limits.
+          {t(
+            "Designed for {count} people. Layout sizes are recommendations, not sign-in limits.",
+            { count: map.people },
+          )}
         </span>
         {changedMap && (
           <p>
-            Applying this map ends current calls and screen sharing, clears
-            meeting invitations and locks, and moves everyone to the new
-            entrance.
+            {t(
+              "Applying this map ends current calls and screen sharing, clears meeting invitations and locks, and moves everyone to the new entrance.",
+            )}
           </p>
         )}
       </div>
@@ -157,10 +165,10 @@ export function WorkspaceSettings({
         disabled={saving || (!changedMap && name.trim() === workspace.name)}
       >
         {saving
-          ? "Applying…"
+          ? t("Applying…")
           : changedMap
-            ? "Apply map to workspace"
-            : "Save workspace"}
+            ? t("Apply map to workspace")
+            : t("Save workspace")}
         <Check size={16} />
       </button>
     </form>

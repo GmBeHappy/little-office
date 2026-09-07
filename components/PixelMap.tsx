@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "@/lib/i18n";
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import { WORLD, ZONES, JUMP_DURATION, type Person } from "@/shared/world";
@@ -16,6 +17,7 @@ type Props = {
   select: (id: string) => void;
 };
 export default function PixelMap(props: Props) {
+  const { t, locale } = useI18n();
   const host = useRef<HTMLDivElement>(null);
   const live = useRef(props);
   live.current = props;
@@ -35,7 +37,7 @@ export default function PixelMap(props: Props) {
     joystick.setAttribute("aria-hidden", "true");
     const thumb = joystick.appendChild(document.createElement("i"));
     parent.appendChild(joystick);
-    let game: Phaser.Game;
+    let game: Phaser.Game | undefined;
     let disposed = false;
     let cleanupInput = () => {};
     class OfficeScene extends Phaser.Scene {
@@ -88,11 +90,14 @@ export default function PixelMap(props: Props) {
           },
           (text, x, y, size, color) => {
             this.add
-              .text(x, y, text, {
-                fontFamily: "monospace",
+              .text(x, y, t(text), {
+                fontFamily:
+                  locale === "th"
+                    ? '"IBM Plex Sans Thai", sans-serif'
+                    : "monospace",
                 fontSize: size + "px",
                 color,
-                letterSpacing: 1,
+                letterSpacing: locale === "th" ? 0 : 1,
                 resolution: 4,
               })
               .setOrigin(0.5);
@@ -312,7 +317,10 @@ export default function PixelMap(props: Props) {
             const body = this.add.graphics();
             const label = this.add
               .text(0, -51, p.name, {
-                fontFamily: "sans-serif",
+                fontFamily:
+                  locale === "th"
+                    ? '"IBM Plex Sans Thai", sans-serif'
+                    : "sans-serif",
                 fontSize: "12px",
                 fontStyle: "bold",
                 color: "#3b4839",
@@ -363,7 +371,9 @@ export default function PixelMap(props: Props) {
               : 0;
           a.label.y = -57 - height;
           a.wave.y = -54 - height;
-          a.label.setText(p.id === state.self ? `${p.name} · you` : p.name);
+          a.label.setText(
+            p.id === state.self ? t("{name} · you", { name: p.name }) : p.name,
+          );
           const g = a.body;
           g.clear();
           const r = (x: number, y: number, w: number, h: number, c: number) => {
@@ -428,29 +438,38 @@ export default function PixelMap(props: Props) {
         }
       }
     }
-    game = new Phaser.Game({
-      type: Phaser.AUTO,
-      parent,
-      backgroundColor: "#e2ddd0",
-      antialias: true,
-      scene: OfficeScene,
-      scale: {
-        width: Math.round(parent.clientWidth * density),
-        height: Math.round(parent.clientHeight * density),
-        zoom: 1 / density,
-      },
-      audio: { noAudio: true },
-      banner: false,
-    });
+    const start = () => {
+      if (disposed) return;
+      game = new Phaser.Game({
+        type: Phaser.AUTO,
+        parent,
+        backgroundColor: "#e2ddd0",
+        antialias: true,
+        scene: OfficeScene,
+        scale: {
+          width: Math.round(parent.clientWidth * density),
+          height: Math.round(parent.clientHeight * density),
+          zoom: 1 / density,
+        },
+        audio: { noAudio: true },
+        banner: false,
+      });
+    };
+    if (locale === "th") {
+      void Promise.all([
+        document.fonts.load('400 12px "IBM Plex Sans Thai"'),
+        document.fonts.load('700 12px "IBM Plex Sans Thai"'),
+      ]).then(start, start);
+    } else start();
     return () => {
       // Phaser destruction does not emit shutdown. Release global input now,
       // including React's trial mount and workspace map changes.
       disposed = true;
       cleanupInput();
-      game.destroy(true);
+      game?.destroy(true);
       parent.remove();
     };
-  }, [props.mapId]);
+  }, [props.mapId, locale]);
   return (
     <div
       ref={host}
@@ -461,7 +480,9 @@ export default function PixelMap(props: Props) {
       }
       data-map-id={props.mapId}
       role="img"
-      aria-label="Interactive pixel office. Move with WASD or arrow keys, or touch and drag to walk. Release to stop. Press Space to jump. Tap a person or meeting room to interact, or use the Rooms list for keyboard-accessible navigation."
+      aria-label={t(
+        "Interactive pixel office. Move with WASD or arrow keys, or touch and drag to walk. Release to stop. Press Space to jump. Tap a person or meeting room to interact, or use the Rooms list for keyboard-accessible navigation.",
+      )}
     />
   );
 }

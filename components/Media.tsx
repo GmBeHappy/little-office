@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   Room,
@@ -451,12 +452,13 @@ export function useOfficeMedia(
   };
 }
 export function SpeakingIndicator() {
+  const { t } = useI18n();
   return (
     <span
       className="speaking-indicator"
       role="img"
-      aria-label="Speaking"
-      title="Speaking"
+      aria-label={t("Speaking")}
+      title={t("Speaking")}
     >
       <i />
       <i />
@@ -473,6 +475,7 @@ export function MediaTracks({
   revision: number;
   speaking: string[];
 }) {
+  const { t: translate } = useI18n();
   const tracks: {
     pub: TrackPublication;
     name: string;
@@ -488,7 +491,7 @@ export function MediaTracks({
         if (pub.track && !pub.isMuted)
           tracks.push({
             pub,
-            name: participant.name || "Teammate",
+            name: participant.name || translate("Teammate"),
             identity: participant.identity,
             local: participant === room.localParticipant,
           });
@@ -518,9 +521,9 @@ export function MediaTracks({
               <span className="video-caption">
                 {speaking.includes(t.identity) && <SpeakingIndicator />}
                 {t.name}
-                {t.local ? " · you" : ""}
+                {t.local ? translate(" · you") : ""}
                 {t.pub.source === Track.Source.ScreenShare
-                  ? " · presenting"
+                  ? translate(" · presenting")
                   : ""}
               </span>
             </div>
