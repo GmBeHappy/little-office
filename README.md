@@ -92,27 +92,99 @@ The provider ID includes a hash of the issuer, so changing issuer cannot acciden
 
 SSO sign-in needs the provider's `openid`, `profile`, and `email` claims. Provider groups, SCIM provisioning, and back-channel logout are not implemented in this release. Provider disablement is not immediate application-session revocation; owner account disablement in this app revokes access. Sessions expire after eight hours. A separately authorized local password can still log in while that method is enabled.
 
+## Container images and GitHub Actions
+
+[Publish container images](.github/workflows/publish-images.yml) builds and publishes two images for **Linux AMD64 and ARM64**:
+
+| Image                                   | Used by                                                       |
+| --------------------------------------- | ------------------------------------------------------------- |
+| `ghcr.io/gmbehappy/little-office`       | Next.js web, Elysia API, migrations, and account provisioning |
+| `ghcr.io/gmbehappy/little-office-caddy` | Caddy with the layer-4 module for HTTPS and TURN/TLS          |
+
+The workflow runs on pushes to `main`, tags matching `v*`, and **Actions → Publish container images → Run workflow**. The app build runs the backend tests and production Next.js build before publishing. Buildx caches layers between runs.
+
+| Tag                     | Published when             |
+| ----------------------- | -------------------------- |
+| `latest`                | A build of `main` succeeds |
+| `sha-<full-commit-SHA>` | Every successful build     |
+| `v1.0.0` (example)      | That Git tag is pushed     |
+
+Both images use the same tagging scheme. Wait for **both jobs** to finish successfully before deploying. Use a matching commit tag for reproducible deployments; `latest` moves as new commits build.
+
+The workflow uses GitHub's automatic `GITHUB_TOKEN` with `contents: read` and `packages: write`; no Docker Hub account or repository secret is needed. If organization policy restricts Actions or package creation, an administrator must allow the workflow and these permissions. See [GitHub's container publishing guide](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images).
+
+New GHCR packages are private by default. Either keep them private and log in on the VM with a personal access token (classic) granting `read:packages`, or change **each package's** visibility to public for anonymous pulls. Package visibility is separate from repository visibility. See [GitHub's Container Registry documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+
 ## Deploy to the Linux VM
 
-The production Compose file uses Linux host networking. Install Docker with Compose, and arrange three DNS A records pointing at the VM's public IP:
+### 1. Prepare the VM and DNS
+
+Install Git, OpenSSL, Docker Engine, and the Docker Compose plugin on a Linux AMD64 or ARM64 VM. Bun and Node.js are included in the image. The production Compose file uses Linux host networking.
+
+Point three DNS A records at the VM's public IP:
 
 - `office.example.com` — app
 - `rtc.example.com` — LiveKit signaling
 - `turn.example.com` — TURN/TLS
 
-Use DNS-only records for RTC/TURN when your DNS provider also offers an HTTP proxy. The VM must allow WebRTC traffic directly.
+Use DNS-only records for RTC/TURN when your DNS provider also offers an HTTP proxy. Configure the firewall listed below before starting the containers. The VM must allow WebRTC traffic directly.
+
+### 2. Download the configuration and images
+
+Wait for the repository's **Publish container images** workflow to succeed, then run on the VM:
 
 ```sh
+git clone https://github.com/GmBeHappy/little-office.git
+cd little-office
 cp deploy/production.env.example .env
-# Set actual domains and independently generated secrets in .env.
-bun deploy:configure
-docker compose build
-docker compose run --rm caddy caddy validate --config /etc/caddy/caddy.json
-docker compose up -d
+chmod 600 .env
+```
+
+For private packages, log in before pulling. Enter your personal access token at the password prompt:
+
+```sh
+docker login ghcr.io -u YOUR_GITHUB_USERNAME
+```
+
+Edit `.env` with your domains and secrets. Run `openssl rand -hex 32` separately for `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, and `LIVEKIT_API_SECRET`; use `openssl rand -hex 16` for `LIVEKIT_API_KEY`. Put the same PostgreSQL password into `DATABASE_URL`. Set `APP_URL=https://<office-domain>` and `LIVEKIT_URL=wss://<rtc-domain>`. Leave OIDC fields blank until you configure your provider.
+
+`OFFICE_IMAGE` and `CADDY_IMAGE` default to `latest`. To pin a build, set both to the corresponding `sha-<full-commit-SHA>` tag from Actions, or their individual image digests. Keep the repository checkout and image version from the same commit/release when upgrading deployment configuration.
+
+```sh
+docker compose pull
+```
+
+If pulling reports `denied`, check package access and your GHCR login. If it reports `manifest unknown`, check that both publish jobs succeeded and that the configured tag exists.
+
+### 3. Generate proxy and media configuration
+
+Run the configuration generator inside the published app image:
+
+```sh
+mkdir -p deploy/generated
+chmod 700 deploy/generated
+docker compose run --rm --no-deps --user "$(id -u):$(id -g)" \
+  --volume "$PWD/deploy/generated:/app/deploy/generated" \
+  api bun scripts/configure-deploy.ts
+docker compose run --rm --no-deps caddy \
+  caddy validate --config /etc/caddy/caddy.json
+```
+
+This generates secret-containing files under ignored `deploy/generated/` with restrictive permissions and validates domains and secrets. Caddy includes its layer-4 module to share TCP 443 between HTTPS and TURN/TLS, obtaining trusted certificates automatically. PROXY protocol preserves client IPs between the layer-4 router and HTTPS listener.
+
+### 4. Start the app and create the owner
+
+```sh
+docker compose up -d --no-build
+docker compose ps -a
 docker compose exec api bun scripts/create-user.ts owner "Your name" --owner
 ```
 
-`deploy:configure` generates secret-containing files under ignored `deploy/generated/` with restrictive permissions. It validates the domain and secret configuration. Caddy includes its layer-4 module to share TCP 443 between HTTPS and TURN/TLS, obtaining trusted certificates automatically. PROXY protocol preserves client IPs between the layer-4 router and HTTPS listener.
+Compose waits for PostgreSQL, runs migrations, then starts the API and web app. The one-shot `migrate` container should show `Exited (0)`. The owner command prompts for a password. Open your configured `https://office...` URL, sign in, and add teammates under **Settings → Members**. Configure OIDC under **Authentication** when your provider is ready.
+
+If startup fails, inspect `docker compose logs --tail=100 migrate api web caddy livekit`. If the API is still starting, wait until it is healthy before creating the owner.
+
+### Firewall and media checks
 
 Use the following firewall policy on both the VM and its cloud security group:
 
@@ -126,9 +198,40 @@ Use the following firewall policy on both the VM and its cloud security group:
 
 Restrict SSH to your administrator address. Block public access to 3000, 3001, 5432, 5349, 7880, 8443, and Caddy's admin port 2019. Application and database listeners use loopback; LiveKit's internal listeners additionally rely on this firewall. **Do not use the development Compose file on a public VM.**
 
-Validate a call from separate networks and force TURN relay before treating deployment as ready. Production TLS, TURN traversal, Docker image builds, and VM capacity must be verified on the actual host. The VM's specs, DNS, and access have not been supplied yet.
+Validate a call from separate networks and force TURN relay before treating deployment as ready. Production TLS, TURN traversal, and VM capacity must be verified on the actual host. The VM's specs, DNS, and access have not been supplied yet.
 
-Pin the built application and Caddy images by digest for repeatable rollouts. Caddy and its layer-4 module are version-pinned; the PostgreSQL major tag receives patch updates. Rebuild and retest when upgrading images.
+Caddy and its layer-4 module are version-pinned; the PostgreSQL major tag receives patch updates. Retest media connections when upgrading images.
+
+### Update an existing VM
+
+Schedule a short interruption for active calls. Back up the database first, then update the checkout and the two image references in `.env` together:
+
+```sh
+docker compose exec -T postgres pg_dump -U office office > office-backup.sql
+git pull --ff-only
+# If using pinned tags, update OFFICE_IMAGE and CADDY_IMAGE in .env now.
+docker compose pull
+docker compose stop web api
+docker compose up --no-deps --force-recreate --exit-code-from migrate migrate
+# Continue only if migrations exited successfully (exit code 0).
+docker compose up -d --no-build
+docker compose ps -a
+```
+
+Repeat the configuration-generation and validation commands before startup if domains, LiveKit keys, or proxy/media configuration changed. The `postgres`, `caddy_data`, and `caddy_config` volumes retain data across container updates. Do not use `docker compose down -v` unless you intend to delete that data. Rolling back images does not roll back database migrations; restore a compatible backup if a migration requires it.
+
+### Build on the VM instead (optional)
+
+The same Compose file retains local build definitions. Use local tags to avoid confusion with downloaded images:
+
+```sh
+# Set these in .env:
+# OFFICE_IMAGE=little-office:local
+# CADDY_IMAGE=little-office-caddy:local
+docker compose build
+```
+
+Then follow configuration generation, validation, and startup above; skip `docker compose pull` for these local tags. The published-image path is the default.
 
 ### Operations
 

@@ -6,7 +6,7 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN bun --bun next build
+RUN bun test tests && bun --bun next build
 
 FROM node:24-bookworm-slim
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun

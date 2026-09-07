@@ -17,7 +17,7 @@ services:
       retries: 10
     restart: unless-stopped
   migrate:
-    image: little-office:local
+    image: ${OFFICE_IMAGE:-ghcr.io/gmbehappy/little-office:latest}
     build: .
     network_mode: host
     env_file: .env
@@ -25,7 +25,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
   api:
-    image: little-office:local
+    image: ${OFFICE_IMAGE:-ghcr.io/gmbehappy/little-office:latest}
     network_mode: host
     env_file: .env
     environment:
@@ -46,7 +46,7 @@ services:
       retries: 3
     restart: unless-stopped
   web:
-    image: little-office:local
+    image: ${OFFICE_IMAGE:-ghcr.io/gmbehappy/little-office:latest}
     network_mode: host
     env_file: .env
     depends_on:
@@ -60,6 +60,7 @@ services:
       - ./deploy/generated/livekit.yaml:/etc/livekit.yaml:ro
     restart: unless-stopped
   caddy:
+    image: ${CADDY_IMAGE:-ghcr.io/gmbehappy/little-office-caddy:latest}
     build:
       context: .
       dockerfile: deploy/Caddy.Dockerfile
