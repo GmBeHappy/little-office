@@ -1,4 +1,5 @@
-import { BLOCKS, DESKS } from "./world";
+import { BLOCKS, DESKS, ZONES } from "./world";
+import { ZEN_ZONES, ZEN_DESKS, ZEN_BLOCKS, drawZenGarden } from "./zen-garden";
 
 export const MAPS = [
   {
@@ -24,6 +25,15 @@ export const MAPS = [
     size: "small",
     people: "4–8",
     description: "A moon base with glowing consoles and private crew pods.",
+  },
+  {
+    id: "zen-small",
+    name: "Sakura Garden",
+    theme: "zen",
+    size: "small",
+    people: "4–8",
+    description:
+      "A Japanese zen garden with sakura trees, a koi pond, and tea-house meeting rooms.",
   },
   {
     id: "nature-large",
@@ -65,12 +75,17 @@ export const DEFAULT_WORKSPACE: WorkspaceSettings = {
 export function getMap(id: string): OfficeMap {
   return MAPS.find((map) => map.id === id) || MAPS[0];
 }
+export function mapZones(map: OfficeMap) {
+  return map.theme === "zen" ? ZEN_ZONES : ZONES;
+}
 export function mapDesks(map: OfficeMap) {
+  if (map.theme === "zen") return ZEN_DESKS;
   return map.size === "small"
     ? DESKS
     : [110, 330, 550].flatMap((x) => [175, 405].map((y) => ({ x, y })));
 }
 export function mapBlocks(map: OfficeMap) {
+  if (map.theme === "zen") return ZEN_BLOCKS;
   return [
     ...mapDesks(map).map((desk) => ({ ...desk, w: 116, h: 58 })),
     ...mapDesks(map).map(({ x, y }) =>
@@ -104,6 +119,7 @@ export function drawOfficeMap(
     color: string,
   ) => void,
 ) {
+  if (map.theme === "zen") return drawZenGarden(rect, label);
   const space = map.theme === "space",
     camp = map.theme === "camping";
   const palette = space

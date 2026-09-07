@@ -86,9 +86,9 @@ export function walkable(x: number, y: number, blocks = BLOCKS) {
     )
   );
 }
-export function zoneAt(x: number, y: number): ZoneId {
+export function zoneAt(x: number, y: number, zones = ZONES): ZoneId {
   return (
-    ZONES.find(
+    zones.find(
       (z) =>
         z.id !== "floor" &&
         x >= z.x - 4 &&

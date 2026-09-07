@@ -25,7 +25,7 @@ async function login(page: Page, index: number) {
 test("two teammates can wave, summon, enter rooms, publish media, and leave", async ({
   browser,
 }) => {
-  test.setTimeout(90000); // Fullscreen, media, five skins, and six map changes in two browsers.
+  test.setTimeout(90000); // Fullscreen, media, five skins, and all map changes in two browsers.
   const errors: string[] = [];
   const contextA = await browser.newContext({
       permissions: ["microphone", "camera"],
@@ -145,6 +145,17 @@ test("two teammates can wave, summon, enter rooms, publish media, and leave", as
   await a.getByRole("button", { name: "Jump", exact: true }).focus();
   await a.keyboard.press("Space");
   await expect.poll(() => jumps.get(b)).toBe(2);
+  // Re-establish nearby positions after the fullscreen, movement, and profile checks.
+  for (const page of [a, b]) {
+    await page
+      .getByRole("button", { name: "Join The Library", exact: true })
+      .click();
+    await expect(page.locator(".map-topline")).toContainText("The Library");
+    await page
+      .getByRole("button", { name: "Leave conversation", exact: true })
+      .click();
+    await expect(page.locator(".map-topline")).toContainText("The commons");
+  }
   for (const page of [a, b]) {
     await expect(page.locator(".controlbar")).toHaveAttribute(
       "data-media-connected",
@@ -273,7 +284,7 @@ test("two teammates can wave, summon, enter rooms, publish media, and leave", as
       await a.getByRole("button", { name: new RegExp(map.people) }).click();
       await expect(
         a.getByRole("group", { name: "Workspace maps" }).getByRole("button"),
-      ).toHaveCount(3);
+      ).toHaveCount(MAPS.filter((option) => option.size === map.size).length);
       await a
         .getByRole("button", { name: `${map.name} map`, exact: true })
         .click();

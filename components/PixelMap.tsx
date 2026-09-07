@@ -2,8 +2,8 @@
 import { useI18n } from "@/lib/i18n";
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
-import { WORLD, ZONES, JUMP_DURATION, type Person } from "@/shared/world";
-import { drawOfficeMap, getMap, type MapId } from "@/shared/maps";
+import { WORLD, JUMP_DURATION, type Person } from "@/shared/world";
+import { drawOfficeMap, getMap, mapZones, type MapId } from "@/shared/maps";
 import { drawCharacter } from "@/shared/avatars";
 import type { Command } from "@/shared/protocol";
 type Props = {
@@ -103,7 +103,9 @@ export default function PixelMap(props: Props) {
               .setOrigin(0.5);
           },
         );
-        for (const room of ZONES.filter((zone) => zone.id !== "floor")) {
+        for (const room of mapZones(getMap(props.mapId)).filter(
+          (zone) => zone.id !== "floor",
+        )) {
           this.add
             .zone(room.x, room.y, room.w, room.h)
             .setOrigin(0)

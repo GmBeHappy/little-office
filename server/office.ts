@@ -3,7 +3,6 @@ import {
   WORLD,
   JUMP_DURATION,
   NUDGE_RADIUS,
-  ZONES,
   nearby,
   walkable,
   zoneAt,
@@ -17,6 +16,7 @@ import {
   DEFAULT_WORKSPACE,
   getMap,
   mapBlocks,
+  mapZones,
   type WorkspaceSettings,
 } from "../shared/maps";
 type Member = Person & {
@@ -33,12 +33,14 @@ type Member = Person & {
 export class Office {
   workspace: WorkspaceSettings = { ...DEFAULT_WORKSPACE };
   blocks = mapBlocks(getMap(DEFAULT_WORKSPACE.mapId));
+  zones = mapZones(getMap(DEFAULT_WORKSPACE.mapId));
   configureWorkspace(next: WorkspaceSettings) {
     if (next.revision <= this.workspace.revision) return;
     const changedMap = next.mapId !== this.workspace.mapId;
     this.workspace = { ...next };
     if (changedMap) {
       this.blocks = mapBlocks(getMap(next.mapId));
+      this.zones = mapZones(getMap(next.mapId));
       for (const room of new Set(
         [...this.members.values()].map((m) => m.room).filter(Boolean),
       ))
@@ -221,7 +223,7 @@ export class Office {
         (zone === "studio" ? 8 : 6)
     )
       throw new Error("This meeting room is full.");
-    const target = ZONES.find((z) => z.id === zone)!;
+    const target = this.zones.find((z) => z.id === zone)!;
     const arrival = [
       [0, 0],
       [36, 0],
@@ -237,7 +239,7 @@ export class Office {
       .find(
         (p) =>
           walkable(p.x, p.y, this.blocks) &&
-          zoneAt(p.x, p.y) === zone &&
+          zoneAt(p.x, p.y, this.zones) === zone &&
           ![...this.members.values()].some(
             (other) =>
               other.id !== m.id &&
@@ -470,7 +472,7 @@ export class Office {
         y = m.y + dy * scale;
       if (!walkable(x, m.y, this.blocks)) x = m.x;
       if (!walkable(x, y, this.blocks)) y = m.y;
-      const zone = zoneAt(x, y);
+      const zone = zoneAt(x, y, this.zones);
       if (
         zone !== m.zone &&
         zone !== "floor" &&
@@ -484,7 +486,7 @@ export class Office {
       m.direction = dx < 0 ? "left" : dx > 0 ? "right" : dy < 0 ? "up" : "down";
       m.x = x;
       m.y = y;
-      m.zone = zoneAt(x, y);
+      m.zone = zoneAt(x, y, this.zones);
       this.syncConversation(m);
       this.dirty = true;
     }

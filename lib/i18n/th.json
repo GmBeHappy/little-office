@@ -360,5 +360,14 @@
   "Camera grid": "ตารางกล้อง",
   "{count} cameras": "กล้อง {count} ตัว",
   "Shared screen": "หน้าจอที่แชร์",
-  "Browser fullscreen is unavailable. You can still use this expanded view.": "เบราว์เซอร์ไม่รองรับเต็มหน้าจอ คุณยังใช้มุมมองแบบขยายนี้ได้"
+  "Browser fullscreen is unavailable. You can still use this expanded view.": "เบราว์เซอร์ไม่รองรับเต็มหน้าจอ คุณยังใช้มุมมองแบบขยายนี้ได้",
+  "Sakura Garden": "สวนซากุระ",
+  "SAKURA GARDEN": "สวนซากุระ",
+  "A Japanese zen garden with sakura trees, a koi pond, and tea-house meeting rooms.": "สวนเซนญี่ปุ่นพร้อมต้นซากุระ บ่อปลาคาร์ป และห้องประชุมสไตล์เรือนน้ำชา",
+  "TEA HOUSE": "เรือนน้ำชา",
+  "THE ZEN GARDEN": "สวนหินเซน",
+  "THE KOI POND": "บ่อปลาคาร์ป",
+  "Find a place to make your team feel at home.": "เลือกสถานที่ที่ทำให้ทีมของคุณรู้สึกเหมือนอยู่บ้าน",
+  "{count} maps · 8 work seats": "{count} แผนที่ · 8 ที่นั่งทำงาน",
+  "{count} maps · 12 work seats": "{count} แผนที่ · 12 ที่นั่งทำงาน"
 }

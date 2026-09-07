@@ -1,7 +1,7 @@
 "use client";
 import { useI18n } from "@/lib/i18n";
 import { useState } from "react";
-import { Check, Leaf, Tent, Rocket } from "lucide-react";
+import { Check, Leaf, Tent, Rocket, Flower2 } from "lucide-react";
 import { api } from "@/lib/api";
 import {
   MAPS,
@@ -87,7 +87,7 @@ export function WorkspaceSettings({
       <div className="map-selection-heading">
         <div>
           <h3>{t("A change of scenery.")}</h3>
-          <p>{t("Six places to make your team feel at home.")}</p>
+          <p>{t("Find a place to make your team feel at home.")}</p>
         </div>
       </div>
       <div className="map-size-tabs" role="group" aria-label={t("Map size")}>
@@ -97,7 +97,11 @@ export function WorkspaceSettings({
           onClick={() => setSize("small")}
         >
           {t("4–8 people")}
-          <span>{t("3 maps · 8 work seats")}</span>
+          <span>
+            {t("{count} maps · 8 work seats", {
+              count: MAPS.filter((m) => m.size === "small").length,
+            })}
+          </span>
         </button>
         <button
           type="button"
@@ -105,17 +109,23 @@ export function WorkspaceSettings({
           onClick={() => setSize("large")}
         >
           {t("10–12 people")}
-          <span>{t("3 maps · 12 work seats")}</span>
+          <span>
+            {t("{count} maps · 12 work seats", {
+              count: MAPS.filter((m) => m.size === "large").length,
+            })}
+          </span>
         </button>
       </div>
       <div className="map-picker" role="group" aria-label={t("Workspace maps")}>
         {MAPS.filter((option) => option.size === size).map((option) => {
           const Icon =
-            option.theme === "nature"
-              ? Leaf
-              : option.theme === "camping"
-                ? Tent
-                : Rocket;
+            option.theme === "zen"
+              ? Flower2
+              : option.theme === "nature"
+                ? Leaf
+                : option.theme === "camping"
+                  ? Tent
+                  : Rocket;
           return (
             <button
               type="button"
