@@ -1,5 +1,15 @@
 import { BLOCKS, DESKS, ZONES } from "./world";
 import { ZEN_ZONES, ZEN_DESKS, ZEN_BLOCKS, drawZenGarden } from "./zen-garden";
+import {
+  TEMPLE_ZONES,
+  TEMPLE_DESKS,
+  TEMPLE_BLOCKS,
+  BEACH_ZONES,
+  BEACH_DESKS,
+  BEACH_BLOCKS,
+  drawTemple,
+  drawBeach,
+} from "./holiday-maps";
 
 export const MAPS = [
   {
@@ -34,6 +44,24 @@ export const MAPS = [
     people: "4–8",
     description:
       "A Japanese zen garden with sakura trees, a koi pond, and tea-house meeting rooms.",
+  },
+  {
+    id: "temple-small",
+    name: "Siam Courtyard",
+    theme: "temple",
+    size: "small",
+    people: "4–8",
+    description:
+      "A Thai temple courtyard with golden roofs, a lotus pond, and a garden sala.",
+  },
+  {
+    id: "beach-small",
+    name: "Summer Cove",
+    theme: "beach",
+    size: "small",
+    people: "4–8",
+    description:
+      "A sunny beach with coconut palms, colourful parasols, and workstations on a wooden pier.",
   },
   {
     id: "nature-large",
@@ -76,15 +104,21 @@ export function getMap(id: string): OfficeMap {
   return MAPS.find((map) => map.id === id) || MAPS[0];
 }
 export function mapZones(map: OfficeMap) {
+  if (map.theme === "temple") return TEMPLE_ZONES;
+  if (map.theme === "beach") return BEACH_ZONES;
   return map.theme === "zen" ? ZEN_ZONES : ZONES;
 }
 export function mapDesks(map: OfficeMap) {
+  if (map.theme === "temple") return TEMPLE_DESKS;
+  if (map.theme === "beach") return BEACH_DESKS;
   if (map.theme === "zen") return ZEN_DESKS;
   return map.size === "small"
     ? DESKS
     : [110, 330, 550].flatMap((x) => [175, 405].map((y) => ({ x, y })));
 }
 export function mapBlocks(map: OfficeMap) {
+  if (map.theme === "temple") return TEMPLE_BLOCKS;
+  if (map.theme === "beach") return BEACH_BLOCKS;
   if (map.theme === "zen") return ZEN_BLOCKS;
   return [
     ...mapDesks(map).map((desk) => ({ ...desk, w: 116, h: 58 })),
@@ -119,6 +153,8 @@ export function drawOfficeMap(
     color: string,
   ) => void,
 ) {
+  if (map.theme === "temple") return drawTemple(rect, label);
+  if (map.theme === "beach") return drawBeach(rect, label);
   if (map.theme === "zen") return drawZenGarden(rect, label);
   const space = map.theme === "space",
     camp = map.theme === "camping";

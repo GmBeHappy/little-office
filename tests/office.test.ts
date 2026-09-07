@@ -59,10 +59,29 @@ describe("office behavior", () => {
     ).toThrow("Move next");
   });
   test("all maps have the advertised seats and reachable safe entrances", () => {
-    expect(MAPS.filter((map) => map.size === "small")).toHaveLength(4);
+    expect(MAPS.filter((map) => map.size === "small")).toHaveLength(6);
     expect(MAPS.filter((map) => map.size === "large")).toHaveLength(3);
     for (const map of MAPS) {
       const blocks = mapBlocks(map);
+      const office = new Office();
+      office.configureWorkspace({ name: map.name, mapId: map.id, revision: 1 });
+      const member = office.add(
+        { id: "walker", name: "Walker", role: "member" },
+        "test",
+        Date.now() + 60000,
+        () => {},
+        () => {},
+      );
+      for (const zone of mapZones(map)) {
+        office.go(member, zone.id);
+        expect(zoneAt(member.x, member.y, office.zones)).toBe(zone.id);
+      }
+      for (let i = 0; i < 16; i++) {
+        const x = WORLD.spawn.x + (i % 2) * 32;
+        const y = WORLD.spawn.y + Math.floor(i / 2) * 32;
+        expect(walkable(x, y, blocks)).toBe(true);
+        expect(zoneAt(x, y, mapZones(map))).toBe("floor");
+      }
       expect(mapDesks(map).length * 2).toBe(map.size === "small" ? 8 : 12);
       expect(walkable(WORLD.spawn.x, WORLD.spawn.y, blocks)).toBe(true);
       for (const zone of mapZones(map))

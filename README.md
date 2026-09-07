@@ -70,8 +70,12 @@ Workspace owners can change the name and shared map under **Settings → Workspa
 | Camping         | Pine Camp                 | Summit Basecamp              |
 | Space           | Lunar Outpost             | Orbital Station              |
 | Japanese zen    | Sakura Garden             | —                            |
+| Thai temple     | Siam Courtyard            | —                            |
+| Summer beach    | Summer Cove               | —                            |
 
 Sakura Garden has a distinct layout: two tea-house meeting rooms across the north, four work areas around a raked sand garden and koi pond, a walkable wooden bridge, pink sakura trees, and stone lanterns. Choose **4–8 people → Sakura Garden** to select it.
+
+Siam Courtyard places a golden hall north of an open chedi courtyard and a garden sala to the southwest. Summer Cove connects a surf club, beach workstations, and a pier lounge around turquoise water. Both have eight work seats and their own room entrances and paths.
 
 Every map has two private meeting areas. Sizes describe the seating layout, rather than admission limits. Applying a different map ends calls and screen sharing, clears invitations and room locks, and moves everyone to a safe entrance with nearby voice reconnected automatically. Changing only the workspace name keeps conversations active.
 

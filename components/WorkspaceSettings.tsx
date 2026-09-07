@@ -1,7 +1,15 @@
 "use client";
 import { useI18n } from "@/lib/i18n";
 import { useState } from "react";
-import { Check, Leaf, Tent, Rocket, Flower2 } from "lucide-react";
+import {
+  Check,
+  Leaf,
+  Tent,
+  Rocket,
+  Flower2,
+  Landmark,
+  Palmtree,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import {
   MAPS,
@@ -119,13 +127,17 @@ export function WorkspaceSettings({
       <div className="map-picker" role="group" aria-label={t("Workspace maps")}>
         {MAPS.filter((option) => option.size === size).map((option) => {
           const Icon =
-            option.theme === "zen"
-              ? Flower2
-              : option.theme === "nature"
-                ? Leaf
-                : option.theme === "camping"
-                  ? Tent
-                  : Rocket;
+            option.theme === "temple"
+              ? Landmark
+              : option.theme === "beach"
+                ? Palmtree
+                : option.theme === "zen"
+                  ? Flower2
+                  : option.theme === "nature"
+                    ? Leaf
+                    : option.theme === "camping"
+                      ? Tent
+                      : Rocket;
           return (
             <button
               type="button"
