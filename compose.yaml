@@ -1,0 +1,77 @@
+# Linux VM deployment. All application/database listeners are loopback-only.
+name: little-office
+services:
+  postgres:
+    image: postgres:17
+    network_mode: host
+    command: ["postgres", "-c", "listen_addresses=127.0.0.1"]
+    environment:
+      POSTGRES_USER: office
+      POSTGRES_DB: office
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U office -d office"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+  migrate:
+    image: little-office:local
+    build: .
+    network_mode: host
+    env_file: .env
+    command: ["bun", "scripts/migrate.ts"]
+    depends_on:
+      postgres: { condition: service_healthy }
+  api:
+    image: little-office:local
+    network_mode: host
+    env_file: .env
+    environment:
+      API_HOST: 127.0.0.1
+    command: ["bun", "server/index.ts"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+  web:
+    image: little-office:local
+    network_mode: host
+    env_file: .env
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+  livekit:
+    image: livekit/livekit-server:v1.13.6
+    network_mode: host
+    command: ["--config", "/etc/livekit.yaml"]
+    volumes:
+      - ./deploy/generated/livekit.yaml:/etc/livekit.yaml:ro
+    restart: unless-stopped
+  caddy:
+    build:
+      context: .
+      dockerfile: deploy/Caddy.Dockerfile
+    network_mode: host
+    command: ["caddy", "run", "--config", "/etc/caddy/caddy.json"]
+    volumes:
+      - ./deploy/generated/caddy.json:/etc/caddy/caddy.json:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web, api, livekit]
+    restart: unless-stopped
+volumes:
+  postgres:
+  caddy_data:
+  caddy_config:

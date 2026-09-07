@@ -1,0 +1,321 @@
+"use client";
+import { useEffect, useRef } from "react";
+import Phaser from "phaser";
+import { WORLD, ZONES, JUMP_DURATION, type Person } from "@/shared/world";
+import { drawOfficeMap, getMap, type MapId } from "@/shared/maps";
+import { drawCharacter } from "@/shared/avatars";
+import type { Command } from "@/shared/protocol";
+type Props = {
+  mapId: MapId;
+  people: Person[];
+  self: string;
+  speaking: string[];
+  waves: Record<string, number>;
+  jumps: Record<string, number>;
+  send: (c: Command) => void;
+  select: (id: string) => void;
+};
+export default function PixelMap(props: Props) {
+  const host = useRef<HTMLDivElement>(null);
+  const live = useRef(props);
+  live.current = props;
+  useEffect(() => {
+    // Render at display density; the office artwork stays in world coordinates.
+    const density = Math.min(window.devicePixelRatio || 1, 2);
+    // Each React effect owns its mount, including Strict Mode's trial mount.
+    const parent = document.createElement("div");
+    parent.style.cssText = "width:100%;height:100%;position:absolute;inset:0";
+    host.current!.appendChild(parent);
+    let game: Phaser.Game;
+    class OfficeScene extends Phaser.Scene {
+      avatars = new Map<
+        string,
+        {
+          container: Phaser.GameObjects.Container;
+          body: Phaser.GameObjects.Graphics;
+          label: Phaser.GameObjects.Text;
+          wave: Phaser.GameObjects.Text;
+          color: string;
+          walkTime: number;
+        }
+      >();
+      keys = new Set<string>();
+      seq = 0;
+      lastInput = 0;
+      constructor() {
+        super("office");
+      }
+      create() {
+        const g = this.add.graphics();
+        drawOfficeMap(
+          getMap(props.mapId),
+          (x, y, w, h, color) => {
+            g.fillStyle(color);
+            g.fillRect(x, y, w, h);
+          },
+          (text, x, y, size, color) => {
+            this.add
+              .text(x, y, text, {
+                fontFamily: "monospace",
+                fontSize: size + "px",
+                color,
+                letterSpacing: 1,
+                resolution: 4,
+              })
+              .setOrigin(0.5);
+          },
+        );
+        for (const room of ZONES.filter((zone) => zone.id !== "floor")) {
+          this.add
+            .zone(room.x, room.y, room.w, room.h)
+            .setOrigin(0)
+            .setInteractive({ useHandCursor: true })
+            .on("pointerdown", () => {
+              live.current.send({ type: "zone", zone: room.id });
+            });
+        }
+        let active = true;
+        const resize = () => {
+          if (!active || !this.sys.isActive()) return;
+          this.scale.resize(
+            Math.round(parent.clientWidth * density),
+            Math.round(parent.clientHeight * density),
+          );
+          this.cameras.main.setBounds(0, 0, 1120, 720);
+          this.cameras.main.setZoom(
+            density *
+              Math.max(parent.clientWidth / 1120, parent.clientHeight / 720),
+          );
+          const self = live.current.people.find(
+            (p) => p.id === live.current.self,
+          );
+          this.cameras.main.centerOn(self?.x || 560, self?.y || 360);
+        };
+        resize();
+        const observer = new ResizeObserver(resize);
+        observer.observe(parent);
+        let keyboardNavigation = false;
+        const pointer = () => {
+          keyboardNavigation = false;
+        };
+        const down = (e: KeyboardEvent) => {
+          if (e.key === "Tab") {
+            keyboardNavigation = true;
+            return;
+          }
+          if (
+            e.target instanceof HTMLElement &&
+            (e.target.closest(
+              'input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="dialog"]',
+            ) ||
+              document.querySelector('[role="dialog"]'))
+          )
+            return;
+          if (e.code === "Space") {
+            // Only Tab navigation gives controls ownership of Space. A room
+            // button can retain focus after a click without owning game input.
+            if (
+              keyboardNavigation &&
+              e.target instanceof HTMLElement &&
+              e.target.closest('button,a,[role="button"],[role="checkbox"]')
+            )
+              return;
+            e.preventDefault();
+            host.current?.focus({ preventScroll: true });
+            if (!e.repeat) live.current.send({ type: "jump" });
+            return;
+          }
+          if (
+            [
+              "ArrowUp",
+              "ArrowDown",
+              "ArrowLeft",
+              "ArrowRight",
+              "w",
+              "a",
+              "s",
+              "d",
+            ].includes(e.key)
+          ) {
+            e.preventDefault();
+            // Walking resumes map controls after using a room or toolbar button.
+            keyboardNavigation = false;
+            host.current?.focus({ preventScroll: true });
+            this.keys.add(e.key);
+          }
+        };
+        const up = (e: KeyboardEvent) => this.keys.delete(e.key);
+        const blur = () => this.keys.clear();
+        window.addEventListener("keydown", down);
+        window.addEventListener("keyup", up);
+        window.addEventListener("blur", blur);
+        window.addEventListener("pointerdown", pointer, true);
+        this.events.once("shutdown", () => {
+          active = false;
+          observer.disconnect();
+          window.removeEventListener("keydown", down);
+          window.removeEventListener("keyup", up);
+          window.removeEventListener("blur", blur);
+          window.removeEventListener("pointerdown", pointer, true);
+        });
+      }
+      update(time: number, delta: number) {
+        const state = live.current;
+        if (time - this.lastInput > 80) {
+          const dx =
+            (this.keys.has("d") || this.keys.has("ArrowRight") ? 1 : 0) -
+            (this.keys.has("a") || this.keys.has("ArrowLeft") ? 1 : 0);
+          const dy =
+            (this.keys.has("s") || this.keys.has("ArrowDown") ? 1 : 0) -
+            (this.keys.has("w") || this.keys.has("ArrowUp") ? 1 : 0);
+          this.seq = Math.max(
+            this.seq,
+            state.people.find((person) => person.id === state.self)?.seq || 0,
+          );
+          state.send({ type: "move", dx, dy, seq: ++this.seq });
+          this.lastInput = time;
+        }
+        const ids = new Set(state.people.map((p) => p.id));
+        for (const [id, a] of this.avatars)
+          if (!ids.has(id)) {
+            a.container.destroy();
+            this.avatars.delete(id);
+          }
+        for (const p of state.people) {
+          let a = this.avatars.get(p.id);
+          if (!a) {
+            const body = this.add.graphics();
+            const label = this.add
+              .text(0, -51, p.name, {
+                fontFamily: "sans-serif",
+                fontSize: "12px",
+                fontStyle: "bold",
+                color: "#3b4839",
+                backgroundColor: "#faf7e9",
+                padding: { x: 6, y: 4 },
+                resolution: 4,
+              })
+              .setOrigin(0.5);
+            const wave = this.add.text(17, -48, "", {
+              fontSize: "22px",
+              resolution: 4,
+            });
+            const container = this.add.container(p.x, p.y, [body, label, wave]);
+            container
+              .setSize(44, 65)
+              .setInteractive()
+              .on("pointerdown", () => state.select(p.id));
+            a = { container, body, label, wave, color: "", walkTime: 0 };
+            this.avatars.set(p.id, a);
+          }
+          a.container.x = Phaser.Math.Linear(
+            a.container.x,
+            p.x,
+            Math.min(1, delta / 65),
+          );
+          a.container.y = Phaser.Math.Linear(
+            a.container.y,
+            p.y,
+            Math.min(1, delta / 65),
+          );
+          a.container.setDepth(1000 + p.y);
+          const jumpStart = state.jumps[p.id];
+          const elapsed =
+            jumpStart === undefined
+              ? JUMP_DURATION
+              : performance.now() - jumpStart;
+          const airborne = elapsed >= 0 && elapsed < 520;
+          const height = airborne
+            ? 28 * 4 * (elapsed / 520) * (1 - elapsed / 520)
+            : 0;
+          const squash =
+            elapsed >= 520 && elapsed < JUMP_DURATION
+              ? 0.16 *
+                Math.sin(((elapsed - 520) / (JUMP_DURATION - 520)) * Math.PI)
+              : 0;
+          a.label.y = -57 - height;
+          a.wave.y = -54 - height;
+          a.label.setText(p.id === state.self ? `${p.name} · you` : p.name);
+          const g = a.body;
+          g.clear();
+          const r = (x: number, y: number, w: number, h: number, c: number) => {
+            g.fillStyle(c);
+            g.fillRect(x, y, w, h);
+          };
+          g.fillStyle(0x5c6551, 0.18 - height / 400);
+          g.fillEllipse(0, 4, 31 - height * 0.3, 12 - height * 0.1);
+          if (p.id === state.self) {
+            g.lineStyle(2, 0xfaf6d7, 0.9);
+            g.strokeEllipse(0, 3, 37, 17);
+          }
+          if (state.speaking.includes(p.id)) {
+            g.lineStyle(3, 0x729e68);
+            g.strokeCircle(0, -13 - height, 28);
+          }
+          a.walkTime = p.moving ? a.walkTime + Math.min(delta, 50) : 0;
+          const frame = Math.floor(a.walkTime / 110) % 4;
+          const stride = airborne ? 3 : [0, 4, 0, -4][frame];
+          const bob = airborne ? 0 : frame % 2 ? -1 : 0;
+          // Mirror only the side-facing sprite, keeping names and waves upright.
+          const pixel = (
+            x: number,
+            y: number,
+            w: number,
+            h: number,
+            c: number,
+          ) =>
+            r(
+              (p.direction === "left" ? -x - w : x) * (1 + squash / 2),
+              8 + (y + bob - 8) * (1 - squash) - height,
+              w * (1 + squash / 2),
+              h * (1 - squash),
+              c,
+            );
+          drawCharacter(p.avatar, p.direction, stride, pixel);
+          a.wave.setText(
+            (state.waves[p.id] || 0) > Date.now()
+              ? "👋"
+              : p.status === "dnd"
+                ? "⏾"
+                : p.status === "away"
+                  ? "z"
+                  : "",
+          );
+          if (p.id === state.self)
+            this.cameras.main.centerOn(a.container.x, a.container.y);
+        }
+      }
+    }
+    game = new Phaser.Game({
+      type: Phaser.AUTO,
+      parent,
+      backgroundColor: "#e2ddd0",
+      antialias: true,
+      scene: OfficeScene,
+      scale: {
+        width: Math.round(parent.clientWidth * density),
+        height: Math.round(parent.clientHeight * density),
+        zoom: 1 / density,
+      },
+      audio: { noAudio: true },
+      banner: false,
+    });
+    return () => {
+      game.destroy(true);
+      parent.remove();
+    };
+  }, [props.mapId]);
+  return (
+    <div
+      ref={host}
+      className="pixel-map"
+      tabIndex={0}
+      onPointerDown={(event) =>
+        event.currentTarget.focus({ preventScroll: true })
+      }
+      data-map-id={props.mapId}
+      role="img"
+      aria-label="Interactive pixel office. Move with WASD or arrow keys. Press Space to jump. Click a meeting room to enter, or use the Rooms list for keyboard-accessible navigation."
+    />
+  );
+}

@@ -1,0 +1,4 @@
+FROM caddy:2.11.4-builder AS builder
+RUN xcaddy build v2.11.4 --with github.com/mholt/caddy-l4@v0.1.2
+FROM caddy:2.11.4
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy

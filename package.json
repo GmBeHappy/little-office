@@ -1,0 +1,45 @@
+{
+  "name": "pixel-office",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun scripts/dev.ts",
+    "dev:web": "bun --bun next dev --hostname 0.0.0.0",
+    "dev:api": "bun --watch server/index.ts",
+    "build": "bun --bun next build",
+    "start": "bun --bun next start --hostname 0.0.0.0",
+    "start:api": "bun server/index.ts",
+    "db:migrate": "bun scripts/migrate.ts",
+    "user:create": "bun scripts/create-user.ts",
+    "test": "bun test tests",
+    "typecheck": "tsc --noEmit",
+    "dev:db": "bun scripts/local-db.ts",
+    "format": "prettier --write app components lib server shared scripts tests next.config.ts *.json deploy README.md",
+    "deploy:configure": "bun scripts/configure-deploy.ts"
+  },
+  "dependencies": {
+    "next": "16.3.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "elysia": "1.4.30",
+    "better-auth": "1.7.3",
+    "pg": "8.23.0",
+    "phaser": "4.2.1",
+    "livekit-client": "2.22.2",
+    "livekit-server-sdk": "2.18.0",
+    "lucide-react": "1.42.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@electric-sql/pglite-socket": "0.2.11",
+    "@playwright/test": "1.63.0",
+    "@types/bun": "1.4.1",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "prettier": "3.9.6",
+    "typescript": "7.0.2"
+  }
+}
