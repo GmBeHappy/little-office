@@ -22,6 +22,9 @@ export default function PixelMap(props: Props) {
   useEffect(() => {
     // Render at display density; the office artwork stays in world coordinates.
     const density = Math.min(window.devicePixelRatio || 1, 2);
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
     // Each React effect owns its mount, including Strict Mode's trial mount.
     const parent = document.createElement("div");
     parent.style.cssText = "width:100%;height:100%;position:absolute;inset:0";
@@ -248,9 +251,23 @@ export default function PixelMap(props: Props) {
             g.lineStyle(2, 0xfaf6d7, 0.9);
             g.strokeEllipse(0, 3, 37, 17);
           }
-          if (state.speaking.includes(p.id)) {
-            g.lineStyle(3, 0x729e68);
-            g.strokeCircle(0, -13 - height, 28);
+          const isSpeaking = state.speaking.includes(p.id);
+          const labelBackground = isSpeaking ? "#28794f" : "#faf7e9";
+          if (a.label.style.backgroundColor !== labelBackground) {
+            a.label.setBackgroundColor(labelBackground);
+            a.label.setColor(isSpeaking ? "#ffffff" : "#3b4839");
+          }
+          if (isSpeaking) {
+            const pulse = reducedMotion ? 0 : Math.sin(time / 150);
+            g.lineStyle(3, 0x40ba78, 0.85);
+            g.strokeCircle(0, -13 - height, 29 + pulse * 2);
+            r(25, -39 - height, 21, 23, 0x28794f);
+            for (let bar = 0; bar < 3; bar++) {
+              const h = reducedMotion
+                ? 7 + (bar % 2) * 7
+                : 5 + Math.round((Math.sin(time / 100 + bar * 2) + 1) * 6);
+              r(29 + bar * 5, -20 - height - h, 3, h, 0xffffff);
+            }
           }
           a.walkTime = p.moving ? a.walkTime + Math.min(delta, 50) : 0;
           const frame = Math.floor(a.walkTime / 110) % 4;

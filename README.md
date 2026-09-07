@@ -6,6 +6,8 @@ Walk with WASD/arrows and press Space to jump (or click the Space control on the
 
 The map fills the browser window. Navigation, people/rooms, and media controls float above it. Close the people panel for more map space, reopen it from People or Rooms, or use the expand button for browser fullscreen with all controls included.
 
+Speaking activity appears as green highlights and animated sound bars on characters, the people list, and video tiles. Your microphone control also shows “Speaking” when it detects sound. Indicators follow your current conversation and nearby-audio range, and clear during silence, mute, or disconnection. Reduced-motion preferences keep the bars still.
+
 ## Run locally
 
 Install Bun 1.4.2+ and Node.js 24+. From the repository:

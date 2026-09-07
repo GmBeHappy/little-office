@@ -31,7 +31,6 @@ import {
   Users,
   Video,
   VideoOff,
-  Volume2,
   VolumeX,
   X,
 } from "lucide-react";
@@ -51,7 +50,7 @@ import {
   drawCharacter,
 } from "@/shared/avatars";
 import type { Command } from "@/shared/protocol";
-import { MediaTracks, useOfficeMedia } from "./Media";
+import { MediaTracks, SpeakingIndicator, useOfficeMedia } from "./Media";
 import { WorkspaceSettings } from "./WorkspaceSettings";
 import {
   DEFAULT_WORKSPACE,
@@ -459,7 +458,11 @@ export default function OfficeApp() {
                 {getMap(workspace.mapId).theme === "space" ? "✦" : "☀"}{" "}
                 <span>{getMap(workspace.mapId).name}</span>
               </div>
-              <MediaTracks room={media.room} revision={media.revision} />
+              <MediaTracks
+                room={media.room}
+                revision={media.revision}
+                speaking={media.speaking}
+              />
             </div>
             <div className="map-bottomline">
               <span>
@@ -565,6 +568,7 @@ export default function OfficeApp() {
                       <button
                         key={p.id}
                         className={`person ${selected === p.id ? "person-selected" : ""}`}
+                        data-speaking={media.speaking.includes(p.id)}
                         onClick={() =>
                           setSelected(selected === p.id ? "" : p.id)
                         }
@@ -580,7 +584,7 @@ export default function OfficeApp() {
                           <span>{p.statusText || statusLabel[p.status]}</span>
                         </div>
                         {media.speaking.includes(p.id) ? (
-                          <Volume2 className="speaker-icon" size={17} />
+                          <SpeakingIndicator />
                         ) : p.conversation ? (
                           <Headphones size={15} className="muted" />
                         ) : (
@@ -687,8 +691,17 @@ export default function OfficeApp() {
         </button>
         <div className="media-controls">
           <Control
-            icon={media.mic ? <Mic /> : <MicOff />}
+            icon={
+              media.speaking.includes(user.id) ? (
+                <SpeakingIndicator />
+              ) : media.mic ? (
+                <Mic />
+              ) : (
+                <MicOff />
+              )
+            }
             label="Microphone"
+            speaking={media.speaking.includes(user.id)}
             on={media.mic}
             onClick={() => void media.toggle("mic")}
           />
@@ -926,20 +939,24 @@ function Control({
   label,
   on,
   onClick,
+  speaking = false,
 }: {
   icon: React.ReactNode;
   label: string;
   on?: boolean;
   onClick: () => void;
+  speaking?: boolean;
 }) {
   return (
     <button
       className={`control ${on ? "control-on" : ""}`}
       onClick={onClick}
       aria-pressed={on}
+      aria-label={label}
+      data-speaking={speaking}
     >
       <span>{icon}</span>
-      <small>{label}</small>
+      <small>{speaking ? "Speaking" : label}</small>
     </button>
   );
 }

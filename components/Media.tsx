@@ -76,10 +76,14 @@ export function useOfficeMedia(
           RoomEvent.TrackUnmuted,
         ])
           next.on(event, () => bump((v) => v + 1));
-        next.on(RoomEvent.Reconnecting, () => setConnected(false));
+        next.on(RoomEvent.Reconnecting, () => {
+          setConnected(false);
+          setSpeaking([]);
+        });
         next.on(RoomEvent.Reconnected, () => setConnected(true));
         next.on(RoomEvent.Disconnected, () => {
           setConnected(false);
+          setSpeaking([]);
           setMic(false);
           setCamera(false);
         });
@@ -225,7 +229,19 @@ export function useOfficeMedia(
     connected,
     mic,
     camera,
-    speaking,
+    speaking:
+      connected && room?.name === roomId && self
+        ? speaking.filter((id) => {
+            if (id === self.id) return mic;
+            const person = people.find((p) => p.id === id);
+            return (
+              !!person &&
+              !!room.remoteParticipants.get(id)?.isMicrophoneEnabled &&
+              person.conversation === self.conversation &&
+              (self.conversation !== "floor" || nearby(self, person, 190))
+            );
+          })
+        : [],
     error,
     toggle,
     share,
@@ -239,14 +255,35 @@ export function useOfficeMedia(
     videoInput,
   };
 }
+export function SpeakingIndicator() {
+  return (
+    <span
+      className="speaking-indicator"
+      role="img"
+      aria-label="Speaking"
+      title="Speaking"
+    >
+      <i />
+      <i />
+      <i />
+    </span>
+  );
+}
 export function MediaTracks({
   room,
   revision,
+  speaking,
 }: {
   room: Room | null;
   revision: number;
+  speaking: string[];
 }) {
-  const tracks: { pub: TrackPublication; name: string; local: boolean }[] = [];
+  const tracks: {
+    pub: TrackPublication;
+    name: string;
+    local: boolean;
+    identity: string;
+  }[] = [];
   if (room) {
     for (const participant of [
       room.localParticipant,
@@ -257,6 +294,7 @@ export function MediaTracks({
           tracks.push({
             pub,
             name: participant.name || "Teammate",
+            identity: participant.identity,
             local: participant === room.localParticipant,
           });
   }
@@ -278,10 +316,12 @@ export function MediaTracks({
           {[...screens, ...cameras].map((t) => (
             <div
               className={`video-tile ${t.pub.source === Track.Source.ScreenShare ? "screen-tile" : ""}`}
+              data-speaking={speaking.includes(t.identity)}
               key={t.pub.trackSid}
             >
               <AttachedTrack pub={t.pub} local={t.local} />
-              <span>
+              <span className="video-caption">
+                {speaking.includes(t.identity) && <SpeakingIndicator />}
                 {t.name}
                 {t.local ? " · you" : ""}
                 {t.pub.source === Track.Source.ScreenShare

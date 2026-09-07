@@ -721,8 +721,71 @@ p {
 .person > svg {
   margin-left: auto;
 }
-.speaker-icon {
-  color: #8f9f73;
+.speaking-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 23px;
+  height: 22px;
+  flex-shrink: 0;
+  color: #28794f;
+}
+.speaking-indicator i {
+  width: 3px;
+  height: 15px;
+  border-radius: 2px;
+  background: currentColor;
+  animation: speaking-bars 650ms ease-in-out infinite alternate;
+}
+.speaking-indicator i:nth-child(2) {
+  animation-delay: -220ms;
+  height: 20px;
+}
+.speaking-indicator i:nth-child(3) {
+  animation-delay: -440ms;
+  height: 11px;
+}
+.person > .speaking-indicator {
+  margin-left: auto;
+}
+.person[data-speaking="true"] {
+  background: #e6f3e9;
+}
+.person[data-speaking="true"] .avatar-wrap {
+  box-shadow: 0 0 0 2px #40a66d;
+}
+.control[data-speaking="true"] > span {
+  background: #d8f3e1;
+  border-color: #40a66d;
+}
+.control[data-speaking="true"] small {
+  color: #28794f;
+}
+.video-tile[data-speaking="true"] {
+  border-color: #40ba78;
+  box-shadow: 0 0 0 2px #28794f;
+}
+.video-caption .speaking-indicator {
+  color: #8df2b5;
+  width: 17px;
+  height: 17px;
+}
+.video-caption .speaking-indicator i {
+  max-height: 14px;
+}
+@keyframes speaking-bars {
+  from {
+    transform: scaleY(0.35);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .speaking-indicator i {
+    animation: none;
+  }
 }
 .sidebar-divider {
   height: 1px;
@@ -1456,7 +1519,10 @@ p {
   box-shadow: 0 2px 9px #37403133;
   pointer-events: auto;
 }
-.video-tile span {
+.video-tile > .video-caption {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   position: absolute;
   bottom: 5px;
   left: 7px;
