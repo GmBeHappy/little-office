@@ -1,6 +1,14 @@
 "use client";
 import { useI18n } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import {
+  ArrowLeft,
+  Grid2X2,
+  Maximize2,
+  Minimize2,
+  Monitor,
+} from "lucide-react";
 import {
   Room,
   RoomEvent,
@@ -475,7 +483,13 @@ export function MediaTracks({
   revision: number;
   speaking: string[];
 }) {
-  const { t: translate } = useI18n();
+  const { t } = useI18n();
+  const [view, setView] = useState<"grid" | "screen" | null>(null);
+  const [screenId, setScreenId] = useState("");
+  const [fullscreen, setFullscreen] = useState(false);
+  const [fullscreenError, setFullscreenError] = useState(false);
+  const back = useRef<HTMLButtonElement>(null);
+  const ownsFullscreen = useRef(false);
   const tracks: {
     pub: TrackPublication;
     name: string;
@@ -491,45 +505,239 @@ export function MediaTracks({
         if (pub.track && !pub.isMuted)
           tracks.push({
             pub,
-            name: participant.name || translate("Teammate"),
+            name: participant.name || t("Teammate"),
             identity: participant.identity,
             local: participant === room.localParticipant,
           });
   }
   const screens = tracks.filter(
-    (t) => t.pub.source === Track.Source.ScreenShare,
+    (item) => item.pub.source === Track.Source.ScreenShare,
   );
-  const cameras = tracks.filter((t) => t.pub.source === Track.Source.Camera);
+  const cameras = tracks.filter(
+    (item) => item.pub.source === Track.Source.Camera,
+  );
+  const screen =
+    screens.find((item) => item.pub.trackSid === screenId) || screens[0];
+  function closeView() {
+    setView(null);
+    if (ownsFullscreen.current && document.fullscreenElement) {
+      ownsFullscreen.current = false;
+      void document.exitFullscreen().catch(() => {});
+    }
+  }
+  useEffect(() => {
+    closeView();
+  }, [room]);
+  useEffect(() => {
+    if (view === "screen" && !screen) setView(cameras.length ? "grid" : null);
+    else if (view === "grid" && !cameras.length)
+      setView(screens.length ? "screen" : null);
+  }, [view, !!screen, cameras.length, screens.length]);
+  const expanded = view !== null;
+  useEffect(() => {
+    if (!expanded) return;
+    const previous = document.activeElement;
+    back.current?.focus();
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !document.querySelector('[role="dialog"]'))
+        closeView();
+    };
+    const changed = () => {
+      setFullscreen(!!document.fullscreenElement);
+      if (!document.fullscreenElement) ownsFullscreen.current = false;
+    };
+    changed();
+    window.addEventListener("keydown", escape);
+    document.addEventListener("fullscreenchange", changed);
+    return () => {
+      if (ownsFullscreen.current && document.fullscreenElement) {
+        ownsFullscreen.current = false;
+        void document.exitFullscreen().catch(() => {});
+      }
+      window.removeEventListener("keydown", escape);
+      document.removeEventListener("fullscreenchange", changed);
+      if (previous instanceof HTMLElement && previous.isConnected)
+        previous.focus();
+      else
+        document
+          .querySelector<HTMLElement>("[data-video-expand], .pixel-map")
+          ?.focus({ preventScroll: true });
+    };
+  }, [expanded]);
+  async function toggleFullscreen() {
+    setFullscreenError(false);
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else {
+        const shell = document.querySelector<HTMLElement>(".app-shell");
+        if (!shell?.requestFullscreen)
+          throw new Error("Unsupported fullscreen");
+        await shell.requestFullscreen();
+        ownsFullscreen.current = true;
+      }
+    } catch {
+      setFullscreenError(true);
+    }
+  }
+  function openScreen(id: string) {
+    setScreenId(id);
+    setView("screen");
+  }
+  function tile(item: (typeof tracks)[number], expandable = false) {
+    const shared = item.pub.source === Track.Source.ScreenShare;
+    return (
+      <div
+        className={`video-tile ${shared ? "screen-tile" : ""}`}
+        data-speaking={speaking.includes(item.identity)}
+        key={item.pub.trackSid}
+      >
+        <AttachedTrack pub={item.pub} local={item.local} />
+        <span className="video-caption">
+          {speaking.includes(item.identity) && <SpeakingIndicator />}
+          {item.name}
+          {item.local ? t(" · you") : ""}
+          {shared ? t(" · presenting") : ""}
+        </span>
+        {expandable && (
+          <button
+            className="video-expand"
+            data-video-expand
+            aria-label={
+              shared ? t("Expand shared screen") : t("Open camera grid")
+            }
+            title={shared ? t("Expand shared screen") : t("Open camera grid")}
+            onClick={() =>
+              shared ? openScreen(item.pub.trackSid) : setView("grid")
+            }
+          >
+            {shared ? <Maximize2 size={17} /> : <Grid2X2 size={17} />}
+          </button>
+        )}
+      </div>
+    );
+  }
   return (
     <>
       <div className="audio-tracks" aria-hidden="true">
         {tracks
-          .filter((t) => t.pub.kind === Track.Kind.Audio && !t.local)
-          .map((t) => (
-            <AttachedTrack key={t.pub.trackSid} pub={t.pub} local={false} />
+          .filter((item) => item.pub.kind === Track.Kind.Audio && !item.local)
+          .map((item) => (
+            <AttachedTrack
+              key={item.pub.trackSid}
+              pub={item.pub}
+              local={false}
+            />
           ))}
       </div>
-      {!!(screens.length || cameras.length) && (
+      {!expanded && !!(screens.length || cameras.length) && (
         <div className={`video-strip ${screens.length ? "with-screen" : ""}`}>
-          {[...screens, ...cameras].map((t) => (
-            <div
-              className={`video-tile ${t.pub.source === Track.Source.ScreenShare ? "screen-tile" : ""}`}
-              data-speaking={speaking.includes(t.identity)}
-              key={t.pub.trackSid}
-            >
-              <AttachedTrack pub={t.pub} local={t.local} />
-              <span className="video-caption">
-                {speaking.includes(t.identity) && <SpeakingIndicator />}
-                {t.name}
-                {t.local ? translate(" · you") : ""}
-                {t.pub.source === Track.Source.ScreenShare
-                  ? translate(" · presenting")
-                  : ""}
-              </span>
-            </div>
-          ))}
+          {[...screens, ...cameras].map((item) => tile(item, true))}
         </div>
       )}
+      {expanded &&
+        createPortal(
+          <section
+            className="media-expanded"
+            role="region"
+            aria-label={t("Expanded video")}
+          >
+            <header className="media-view-header">
+              <button
+                ref={back}
+                className="media-view-button"
+                onClick={closeView}
+              >
+                <ArrowLeft size={18} />
+                {t("Back to map")}
+              </button>
+              <div className="media-view-title">
+                <h2>
+                  {view === "screen" && screen
+                    ? t("{name}'s screen", { name: screen.name })
+                    : t("Camera grid")}
+                </h2>
+                <span>{t("{count} cameras", { count: cameras.length })}</span>
+              </div>
+              <div className="media-view-actions">
+                {!!cameras.length && (
+                  <button
+                    className="media-view-button"
+                    aria-pressed={view === "grid"}
+                    onClick={() => setView("grid")}
+                  >
+                    <Grid2X2 size={18} />
+                    <span>{t("Camera grid")}</span>
+                  </button>
+                )}
+                {!!screens.length && (
+                  <button
+                    className="media-view-button"
+                    aria-pressed={view === "screen"}
+                    onClick={() => openScreen(screens[0].pub.trackSid)}
+                  >
+                    <Monitor size={18} />
+                    <span>{t("Shared screen")}</span>
+                  </button>
+                )}
+                <button
+                  className="media-view-button"
+                  aria-label={
+                    fullscreen ? t("Exit fullscreen") : t("Enter fullscreen")
+                  }
+                  title={
+                    fullscreen ? t("Exit fullscreen") : t("Enter fullscreen")
+                  }
+                  onClick={() => void toggleFullscreen()}
+                >
+                  {fullscreen ? (
+                    <Minimize2 size={19} />
+                  ) : (
+                    <Maximize2 size={19} />
+                  )}
+                </button>
+              </div>
+            </header>
+            {fullscreenError && (
+              <p className="media-view-message" role="status">
+                {t(
+                  "Browser fullscreen is unavailable. You can still use this expanded view.",
+                )}
+              </p>
+            )}
+            {view === "screen" && screen ? (
+              <div
+                className={`media-screen-stage ${cameras.length ? "has-cameras" : ""}`}
+              >
+                <div className="media-spotlight">{tile(screen)}</div>
+                {!!cameras.length && (
+                  <div className="media-camera-rail">
+                    {cameras.map((item) => tile(item))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                className="media-grid"
+                style={
+                  {
+                    "--video-columns":
+                      cameras.length <= 1
+                        ? 1
+                        : cameras.length <= 4
+                          ? 2
+                          : cameras.length <= 9
+                            ? 3
+                            : 4,
+                    "--mobile-columns": cameras.length <= 2 ? 1 : 2,
+                  } as React.CSSProperties
+                }
+              >
+                {cameras.map((item) => tile(item))}
+              </div>
+            )}
+          </section>,
+          document.querySelector(".app-shell") || document.body,
+        )}
     </>
   );
 }

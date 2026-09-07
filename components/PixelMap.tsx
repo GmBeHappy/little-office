@@ -125,7 +125,7 @@ export default function PixelMap(props: Props) {
             if (
               !pointer.wasTouch ||
               this.touch ||
-              document.querySelector('[role="dialog"]')
+              document.querySelector('[role="dialog"], .media-expanded')
             )
               return;
             this.touch = {
@@ -215,7 +215,7 @@ export default function PixelMap(props: Props) {
             (e.target.closest(
               'input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="dialog"]',
             ) ||
-              document.querySelector('[role="dialog"]'))
+              document.querySelector('[role="dialog"], .media-expanded'))
           )
             return;
           if (e.code === "KeyZ" && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -285,7 +285,7 @@ export default function PixelMap(props: Props) {
       }
       update(time: number, delta: number) {
         const state = live.current;
-        if (document.querySelector('[role="dialog"]')) {
+        if (document.querySelector('[role="dialog"], .media-expanded')) {
           this.keys.clear();
           this.stopTouch();
         }

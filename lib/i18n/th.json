@@ -351,5 +351,14 @@
   "Password is too short": "รหัสผ่านสั้นเกินไป",
   "Password is too long": "รหัสผ่านยาวเกินไป",
   "Failed to fetch": "เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ",
-  "NetworkError when attempting to fetch resource.": "เชื่อมต่อเครือข่ายไม่สำเร็จ"
+  "NetworkError when attempting to fetch resource.": "เชื่อมต่อเครือข่ายไม่สำเร็จ",
+  "Open camera grid": "เปิดมุมมองกล้องแบบตาราง",
+  "Expand shared screen": "ขยายหน้าจอที่แชร์",
+  "Expanded video": "มุมมองวิดีโอแบบขยาย",
+  "Back to map": "กลับแผนที่",
+  "{name}'s screen": "หน้าจอของ {name}",
+  "Camera grid": "ตารางกล้อง",
+  "{count} cameras": "กล้อง {count} ตัว",
+  "Shared screen": "หน้าจอที่แชร์",
+  "Browser fullscreen is unavailable. You can still use this expanded view.": "เบราว์เซอร์ไม่รองรับเต็มหน้าจอ คุณยังใช้มุมมองแบบขยายนี้ได้"
 }
