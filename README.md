@@ -101,7 +101,7 @@ SSO sign-in needs the provider's `openid`, `profile`, and `email` claims. Provid
 | `ghcr.io/gmbehappy/little-office`       | Next.js web, Elysia API, migrations, and account provisioning |
 | `ghcr.io/gmbehappy/little-office-caddy` | Caddy with the layer-4 module for HTTPS and TURN/TLS          |
 
-The workflow runs on pushes to `main`, tags matching `v*`, and **Actions → Publish container images → Run workflow**. The app build runs the backend tests and production Next.js build before publishing. Buildx caches layers between runs.
+The workflow runs on pushes to `main`, tags matching `v*`, and **Actions → Publish container images → Run workflow**. Backend tests run on a native runner before either image is published; each app image also runs a production Next.js build. Buildx caches layers between runs. A newer run on the same branch cancels an older unfinished run.
 
 | Tag                     | Published when             |
 | ----------------------- | -------------------------- |
