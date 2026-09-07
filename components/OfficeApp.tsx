@@ -448,11 +448,12 @@ export default function OfficeApp() {
                 }}
               />
               <div className="map-hint">
-                <span className="key">W</span>
-                <span className="key">A</span>
-                <span className="key">S</span>
-                <span className="key">D</span>
-                <span>to move ·</span>
+                <span className="key keyboard-walk-hint">W</span>
+                <span className="key keyboard-walk-hint">A</span>
+                <span className="key keyboard-walk-hint">S</span>
+                <span className="key keyboard-walk-hint">D</span>
+                <span className="keyboard-walk-hint">to move ·</span>
+                <span className="touch-walk-hint">Drag to walk ·</span>
                 <button
                   className="key"
                   aria-label="Jump"
@@ -938,7 +939,8 @@ export default function OfficeApp() {
                 <h2>Make yourself at home.</h2>
                 <div className="help-grid">
                   <p>
-                    <strong>Walk & talk</strong>Use WASD or the arrow keys.
+                    <strong>Walk & talk</strong>Use WASD or the arrow keys. On
+                    mobile, touch and drag the map to walk; release to stop.
                     Press Space to jump. Nearby voice joins automatically;
                     enable your mic to talk. The nearby voice list shows who can
                     hear you.

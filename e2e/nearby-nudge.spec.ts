@@ -84,8 +84,7 @@ test("automatic nearby voice shows participants and Z nudges with a chime withou
       )
       .toBeGreaterThan(0);
     await a.keyboard.press("z");
-    await expect(a.getByRole("status")).toContainText("Give them a moment");
-    expect(nudges).toHaveLength(1);
+    await expect.poll(() => nudges.length).toBe(2);
     await b.screenshot({ path: "test-results/nearby-nudge.png" });
     await b
       .getByRole("button", { name: "Join The Studio", exact: true })

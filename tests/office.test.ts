@@ -19,7 +19,7 @@ function setup() {
   return { office, events, retired };
 }
 describe("office behavior", () => {
-  test("nudges choose the closest teammate and enforce distance, DND, and sender/recipient cooldowns", () => {
+  test("nudges choose the closest teammate and enforce distance, DND, with no cooldown", () => {
     const { office, events } = setup();
     const a = office.members.get("a")!,
       b = office.members.get("b")!,
@@ -32,14 +32,11 @@ describe("office behavior", () => {
       { type: "nudge", from: "a", name: "a" },
     ]);
     expect(events.c.filter((e) => e.type === "nudge")).toHaveLength(0);
-    expect(() =>
-      office.handle("a", { type: "nudge", target: "c" }, now + 1),
-    ).toThrow("moment");
-    expect(() =>
-      office.handle("c", { type: "nudge", target: "b" }, now + 1),
-    ).toThrow("moment");
-    office.handle("a", { type: "nudge", target: "b" }, now + 5000);
-    expect(events.b.filter((e) => e.type === "nudge")).toHaveLength(2);
+    office.handle("a", { type: "nudge", target: "c" }, now);
+    office.handle("c", { type: "nudge", target: "b" }, now);
+    office.handle("a", { type: "nudge", target: "b" }, now);
+    expect(events.b.filter((e) => e.type === "nudge")).toHaveLength(3);
+    expect(events.c.filter((e) => e.type === "nudge")).toHaveLength(1);
     b.x = a.x + 121;
     expect(() =>
       office.handle("a", { type: "nudge", target: "b" }, now + 10000),

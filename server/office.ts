@@ -317,18 +317,6 @@ export class Office {
           throw new Error("Move next to a teammate to nudge them.");
         if (target.status === "dnd")
           throw new Error("They have Do not disturb enabled.");
-        const senderKey = `nudge-from:${id}`,
-          targetKey = `nudge-to:${target.id}`;
-        if (
-          now <
-          Math.max(
-            this.cooldowns.get(senderKey) || 0,
-            this.cooldowns.get(targetKey) || 0,
-          )
-        )
-          throw new Error("Give them a moment before nudging again.");
-        this.cooldowns.set(senderKey, now + 5000);
-        this.cooldowns.set(targetKey, now + 5000);
         target.send({ type: "nudge", from: id, name: m.name });
         m.send({ type: "notice", message: `Nudged ${target.name}.` });
         break;

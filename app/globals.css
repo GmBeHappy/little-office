@@ -420,6 +420,37 @@ p {
   width: 100%;
   position: absolute;
   inset: 0;
+  touch-action: none;
+}
+.touch-joystick {
+  position: absolute;
+  z-index: 1;
+  width: 112px;
+  height: 112px;
+  margin: -56px;
+  border: 2px solid #faf7e9cc;
+  border-radius: 50%;
+  background: #34483455;
+  box-shadow: 0 3px 14px #23342130;
+  pointer-events: none;
+}
+.touch-joystick i {
+  position: absolute;
+  inset: 36px;
+  border-radius: 50%;
+  background: #faf7e9e6;
+  box-shadow: 0 2px 8px #23342140;
+}
+.touch-walk-hint {
+  display: none;
+}
+@media (pointer: coarse) {
+  .touch-walk-hint {
+    display: inline;
+  }
+  .map-hint > .keyboard-walk-hint {
+    display: none;
+  }
 }
 .pixel-map canvas {
   display: block;

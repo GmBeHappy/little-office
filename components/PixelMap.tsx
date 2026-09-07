@@ -29,7 +29,15 @@ export default function PixelMap(props: Props) {
     const parent = document.createElement("div");
     parent.style.cssText = "width:100%;height:100%;position:absolute;inset:0";
     host.current!.appendChild(parent);
+    const joystick = document.createElement("div");
+    joystick.className = "touch-joystick";
+    joystick.hidden = true;
+    joystick.setAttribute("aria-hidden", "true");
+    const thumb = joystick.appendChild(document.createElement("i"));
+    parent.appendChild(joystick);
     let game: Phaser.Game;
+    let disposed = false;
+    let cleanupInput = () => {};
     class OfficeScene extends Phaser.Scene {
       avatars = new Map<
         string,
@@ -45,10 +53,32 @@ export default function PixelMap(props: Props) {
       keys = new Set<string>();
       seq = 0;
       lastInput = 0;
+      touch?: {
+        pointer: Phaser.Input.Pointer;
+        target?: Phaser.GameObjects.GameObject;
+        x: number;
+        y: number;
+        dx: number;
+        dy: number;
+        dragged: boolean;
+      };
+      stopTouch() {
+        if (this.touch) {
+          this.touch = undefined;
+          const state = live.current;
+          this.seq = Math.max(
+            this.seq,
+            state.people.find((p) => p.id === state.self)?.seq || 0,
+          );
+          state.send({ type: "move", dx: 0, dy: 0, seq: ++this.seq });
+        }
+        joystick.hidden = true;
+      }
       constructor() {
         super("office");
       }
       create() {
+        if (disposed) return;
         const g = this.add.graphics();
         drawOfficeMap(
           getMap(props.mapId),
@@ -73,13 +103,82 @@ export default function PixelMap(props: Props) {
             .zone(room.x, room.y, room.w, room.h)
             .setOrigin(0)
             .setInteractive({ useHandCursor: true })
-            .on("pointerdown", () => {
-              live.current.send({ type: "zone", zone: room.id });
+            .setData("tap", () =>
+              live.current.send({ type: "zone", zone: room.id }),
+            )
+            .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+              if (!pointer.wasTouch)
+                live.current.send({ type: "zone", zone: room.id });
             });
         }
+        this.input.on(
+          "pointerdown",
+          (
+            pointer: Phaser.Input.Pointer,
+            targets: Phaser.GameObjects.GameObject[],
+          ) => {
+            if (
+              !pointer.wasTouch ||
+              this.touch ||
+              document.querySelector('[role="dialog"]')
+            )
+              return;
+            this.touch = {
+              pointer,
+              target: targets[0],
+              x: pointer.x,
+              y: pointer.y,
+              dx: 0,
+              dy: 0,
+              dragged: false,
+            };
+            joystick.style.left = `${pointer.x / density}px`;
+            joystick.style.top = `${pointer.y / density}px`;
+            thumb.style.transform = "translate(0px, 0px)";
+            joystick.hidden = false;
+          },
+        );
+        this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+          const touch = this.touch;
+          if (!touch || touch.pointer !== pointer) return;
+          const x = (pointer.x - touch.x) / density,
+            y = (pointer.y - touch.y) / density;
+          const distance = Math.hypot(x, y);
+          touch.dragged ||= distance >= 10;
+          const threshold = Math.max(Math.abs(x), Math.abs(y)) * 0.4;
+          touch.dx =
+            distance < 10 || Math.abs(x) < threshold ? 0 : Math.sign(x);
+          touch.dy =
+            distance < 10 || Math.abs(y) < threshold ? 0 : Math.sign(y);
+          const scale = Math.min(1, 44 / (distance || 1));
+          thumb.style.transform = `translate(${x * scale}px, ${y * scale}px)`;
+        });
+        this.input.on(
+          "pointerup",
+          (
+            pointer: Phaser.Input.Pointer,
+            targets: Phaser.GameObjects.GameObject[],
+          ) => {
+            const touch = this.touch;
+            if (!touch || touch.pointer !== pointer) return;
+            if (
+              !touch.dragged &&
+              pointer.getDistance() / density < 10 &&
+              pointer.event.type !== "touchcancel" &&
+              touch.target &&
+              targets.includes(touch.target)
+            )
+              touch.target.getData("tap")?.();
+            this.stopTouch();
+          },
+        );
+        this.input.on("pointerupoutside", (pointer: Phaser.Input.Pointer) => {
+          if (this.touch?.pointer === pointer) this.stopTouch();
+        });
         let active = true;
         const resize = () => {
           if (!active || !this.sys.isActive()) return;
+          this.stopTouch();
           this.scale.resize(
             Math.round(parent.clientWidth * density),
             Math.round(parent.clientHeight * density),
@@ -153,29 +252,47 @@ export default function PixelMap(props: Props) {
           }
         };
         const up = (e: KeyboardEvent) => this.keys.delete(e.key);
-        const blur = () => this.keys.clear();
+        const blur = () => {
+          this.keys.clear();
+          this.stopTouch();
+        };
+        const visibility = () => {
+          if (document.hidden) blur();
+        };
         window.addEventListener("keydown", down);
         window.addEventListener("keyup", up);
         window.addEventListener("blur", blur);
+        document.addEventListener("visibilitychange", visibility);
         window.addEventListener("pointerdown", pointer, true);
-        this.events.once("shutdown", () => {
+        cleanupInput = () => {
+          if (!active) return;
           active = false;
           observer.disconnect();
           window.removeEventListener("keydown", down);
           window.removeEventListener("keyup", up);
           window.removeEventListener("blur", blur);
+          document.removeEventListener("visibilitychange", visibility);
+          blur();
           window.removeEventListener("pointerdown", pointer, true);
-        });
+        };
+        this.events.once("shutdown", cleanupInput);
+        this.events.once("destroy", cleanupInput);
       }
       update(time: number, delta: number) {
         const state = live.current;
+        if (document.querySelector('[role="dialog"]')) {
+          this.keys.clear();
+          this.stopTouch();
+        }
         if (time - this.lastInput > 80) {
-          const dx =
-            (this.keys.has("d") || this.keys.has("ArrowRight") ? 1 : 0) -
-            (this.keys.has("a") || this.keys.has("ArrowLeft") ? 1 : 0);
-          const dy =
-            (this.keys.has("s") || this.keys.has("ArrowDown") ? 1 : 0) -
-            (this.keys.has("w") || this.keys.has("ArrowUp") ? 1 : 0);
+          const dx = this.touch
+            ? this.touch.dx
+            : (this.keys.has("d") || this.keys.has("ArrowRight") ? 1 : 0) -
+              (this.keys.has("a") || this.keys.has("ArrowLeft") ? 1 : 0);
+          const dy = this.touch
+            ? this.touch.dy
+            : (this.keys.has("s") || this.keys.has("ArrowDown") ? 1 : 0) -
+              (this.keys.has("w") || this.keys.has("ArrowUp") ? 1 : 0);
           this.seq = Math.max(
             this.seq,
             state.people.find((person) => person.id === state.self)?.seq || 0,
@@ -212,7 +329,10 @@ export default function PixelMap(props: Props) {
             container
               .setSize(44, 65)
               .setInteractive()
-              .on("pointerdown", () => state.select(p.id));
+              .setData("tap", () => live.current.select(p.id))
+              .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+                if (!pointer.wasTouch) live.current.select(p.id);
+              });
             a = { container, body, label, wave, color: "", walkTime: 0 };
             this.avatars.set(p.id, a);
           }
@@ -323,6 +443,10 @@ export default function PixelMap(props: Props) {
       banner: false,
     });
     return () => {
+      // Phaser destruction does not emit shutdown. Release global input now,
+      // including React's trial mount and workspace map changes.
+      disposed = true;
+      cleanupInput();
       game.destroy(true);
       parent.remove();
     };
@@ -337,7 +461,7 @@ export default function PixelMap(props: Props) {
       }
       data-map-id={props.mapId}
       role="img"
-      aria-label="Interactive pixel office. Move with WASD or arrow keys. Press Space to jump. Click a meeting room to enter, or use the Rooms list for keyboard-accessible navigation."
+      aria-label="Interactive pixel office. Move with WASD or arrow keys, or touch and drag to walk. Release to stop. Press Space to jump. Tap a person or meeting room to interact, or use the Rooms list for keyboard-accessible navigation."
     />
   );
 }
