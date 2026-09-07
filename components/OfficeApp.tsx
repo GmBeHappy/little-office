@@ -148,7 +148,7 @@ export default function OfficeApp() {
   const people = snapshot?.people || [];
   const workspace =
     snapshot?.workspace || config?.workspace || DEFAULT_WORKSPACE;
-  const media = useOfficeMedia(self, people, notify);
+  const media = useOfficeMedia(self, people, notify, user?.id);
   const mediaRef = useRef(media);
   mediaRef.current = media;
   useEffect(() => {
@@ -1407,20 +1407,44 @@ function SettingsPanel({
       {tab === "audio" && (
         <div>
           <p className="muted">
-            Join a conversation to select your active devices. Your browser may
-            ask for permission first.
+            Choose your microphone and speakers before or during a conversation.
+            Choices are saved for your account on this browser.
+          </p>
+          <button
+            className="secondary"
+            disabled={media.deviceBusy}
+            onClick={() => void media.enumerate(true)}
+          >
+            Allow microphone access & refresh devices
+          </button>
+          <p className="muted">
+            This reveals device names without turning your call microphone on.
           </p>
           <label>
             Microphone
             <select
               value={media.input}
+              disabled={media.deviceBusy}
               onChange={(e) =>
                 void media.switchDevice("audioinput", e.target.value)
               }
             >
               <option value="">System default</option>
+              {media.input &&
+                !media.devices.some(
+                  (d) => d.kind === "audioinput" && d.deviceId === media.input,
+                ) && (
+                  <option value={media.input}>
+                    Saved microphone · allow access or reconnect it
+                  </option>
+                )}
               {media.devices
-                .filter((d) => d.kind === "audioinput")
+                .filter(
+                  (d) =>
+                    d.kind === "audioinput" &&
+                    d.deviceId &&
+                    d.deviceId !== "default",
+                )
                 .map((d, i) => (
                   <option key={d.deviceId || i} value={d.deviceId}>
                     {d.label || `Microphone ${i + 1}`}
@@ -1429,16 +1453,79 @@ function SettingsPanel({
             </select>
           </label>
           <label>
+            Speakers / headphones
+            <select
+              value={media.output}
+              disabled={!media.outputSupported || media.deviceBusy}
+              onChange={(e) =>
+                void media.switchDevice("audiooutput", e.target.value)
+              }
+            >
+              <option value="">System default</option>
+              {media.output &&
+                !media.devices.some(
+                  (d) =>
+                    d.kind === "audiooutput" && d.deviceId === media.output,
+                ) && (
+                  <option value={media.output}>
+                    Saved speaker · allow access or reconnect it
+                  </option>
+                )}
+              {media.devices
+                .filter(
+                  (d) =>
+                    d.kind === "audiooutput" &&
+                    d.deviceId &&
+                    d.deviceId !== "default",
+                )
+                .map((d, i) => (
+                  <option key={d.deviceId} value={d.deviceId}>
+                    {d.label || `Speaker ${i + 1}`}
+                  </option>
+                ))}
+            </select>
+          </label>
+          {!media.outputSupported && (
+            <p className="muted">
+              This browser uses your system output. Select your speakers or
+              headphones in your system sound settings.
+            </p>
+          )}
+          {media.outputSupported && media.outputPickerSupported && (
+            <button
+              className="secondary"
+              disabled={media.deviceBusy}
+              onClick={() => void media.chooseOutput()}
+            >
+              Choose another speaker…
+            </button>
+          )}
+          <label>
             Camera
             <select
               value={media.videoInput}
+              disabled={media.deviceBusy}
               onChange={(e) =>
                 void media.switchDevice("videoinput", e.target.value)
               }
             >
               <option value="">System default</option>
+              {media.videoInput &&
+                !media.devices.some(
+                  (d) =>
+                    d.kind === "videoinput" && d.deviceId === media.videoInput,
+                ) && (
+                  <option value={media.videoInput}>
+                    Saved camera · allow access or reconnect it
+                  </option>
+                )}
               {media.devices
-                .filter((d) => d.kind === "videoinput")
+                .filter(
+                  (d) =>
+                    d.kind === "videoinput" &&
+                    d.deviceId &&
+                    d.deviceId !== "default",
+                )
                 .map((d, i) => (
                   <option key={d.deviceId || i} value={d.deviceId}>
                     {d.label || `Camera ${i + 1}`}

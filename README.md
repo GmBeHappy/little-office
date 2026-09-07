@@ -8,6 +8,8 @@ The map fills the browser window. Navigation, people/rooms, and media controls f
 
 Speaking activity appears as green highlights and animated sound bars on characters, the people list, and video tiles. Your microphone control also shows “Speaking” when it detects sound. Indicators follow your current conversation and nearby-audio range, and clear during silence, mute, or disconnection. Reduced-motion preferences keep the bars still.
 
+Choose your microphone, speakers/headphones, and camera in **Settings → Devices**, before or during a call. Choices are remembered per account on this browser and apply when changing rooms. Use **Allow microphone access & refresh devices** to reveal device names; the permission check stops its capture immediately and does not unmute your call. Browsers with an output-device picker also offer **Choose another speaker**. Where output switching is unsupported, use your system sound settings. Disconnected devices fall back to the system default when available.
+
 ## Run locally
 
 Install Bun 1.4.2+ and Node.js 24+. From the repository:

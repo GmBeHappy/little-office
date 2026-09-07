@@ -11,25 +11,80 @@ import {
 import { api } from "@/lib/api";
 import { nearby, type Person } from "@/shared/world";
 
+type DeviceChoices = Record<MediaDeviceKind, string>;
+const defaultDevices: DeviceChoices = {
+  audioinput: "",
+  audiooutput: "",
+  videoinput: "",
+};
+type OutputPicker = MediaDevices & {
+  selectAudioOutput?: (options?: {
+    deviceId?: string;
+  }) => Promise<MediaDeviceInfo>;
+};
+
 export function useOfficeMedia(
   self: Person | undefined,
   people: Person[],
   notify: (s: string) => void,
+  userId?: string,
 ) {
   const [room, setRoom] = useState<Room | null>(null);
   const [connected, setConnected] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [revision, bump] = useState(0);
   const [mic, setMic] = useState(false);
   const [camera, setCamera] = useState(false);
   const [speaking, setSpeaking] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  const [input, setInput] = useState("");
-  const [videoInput, setVideoInput] = useState("");
+  const [choices, setChoices] = useState<DeviceChoices>(defaultDevices);
+  const preferences = useRef<DeviceChoices>(defaultDevices);
+  const [outputSupported, setOutputSupported] = useState(false);
+  const [outputPickerSupported, setOutputPickerSupported] = useState(false);
+  const [deviceBusy, setDeviceBusy] = useState(false);
+  const deviceChange = useRef(false);
   const wanted = useRef({ mic: false, camera: false });
   const current = useRef<Room | null>(null);
   const pendingScreen = useRef<LocalTrack[]>([]);
   const preparing = useRef(false);
+  function remember(kind: MediaDeviceKind, id: string) {
+    const next = { ...preferences.current, [kind]: id };
+    preferences.current = next;
+    setChoices(next);
+    try {
+      if (userId)
+        localStorage.setItem(`office-devices:${userId}`, JSON.stringify(next));
+    } catch {
+      notify(
+        "Device changed, but this browser could not save your preference.",
+      );
+    }
+  }
+  useEffect(() => {
+    wanted.current = { mic: false, camera: false };
+    let saved: DeviceChoices = { ...defaultDevices };
+    try {
+      const value = JSON.parse(
+        localStorage.getItem(`office-devices:${userId}`) || "{}",
+      );
+      for (const kind of Object.keys(saved) as MediaDeviceKind[])
+        if (typeof value?.[kind] === "string") saved[kind] = value[kind];
+    } catch {
+      /* Unavailable storage uses system defaults. */
+    }
+    preferences.current = saved;
+    setChoices(saved);
+    setOutputSupported("setSinkId" in HTMLMediaElement.prototype);
+    setOutputPickerSupported(
+      typeof (navigator.mediaDevices as OutputPicker)?.selectAudioOutput ===
+        "function",
+    );
+    const changed = () => void enumerate(false, true);
+    navigator.mediaDevices?.addEventListener("devicechange", changed);
+    return () =>
+      navigator.mediaDevices?.removeEventListener("devicechange", changed);
+  }, [userId]);
   function cancelShare() {
     for (const track of pendingScreen.current) track.stop();
     pendingScreen.current = [];
@@ -40,6 +95,7 @@ export function useOfficeMedia(
     let cancelled = false;
     let next: Room | undefined;
     setConnected(false);
+    setConnecting(!!roomId);
     setSpeaking([]);
     setError("");
     setRoom(null);
@@ -53,10 +109,34 @@ export function useOfficeMedia(
           {},
         );
         if (cancelled || access.room !== roomId) return;
+        // Validate a saved output before remote tracks attach; unavailable devices use the default.
+        if (
+          preferences.current.audiooutput &&
+          "setSinkId" in HTMLMediaElement.prototype
+        ) {
+          try {
+            await new Audio().setSinkId(preferences.current.audiooutput);
+          } catch {
+            if (cancelled) return;
+            remember("audiooutput", "");
+            notify(
+              "Your saved speaker is unavailable. Using system default; choose it again in Devices.",
+            );
+          }
+        }
+        if (cancelled) return;
         next = new Room({
           adaptiveStream: true,
           dynacast: true,
+          audioCaptureDefaults: {
+            deviceId: preferences.current.audioinput || undefined,
+          },
+          audioOutput:
+            "setSinkId" in HTMLMediaElement.prototype
+              ? { deviceId: preferences.current.audiooutput }
+              : undefined,
           videoCaptureDefaults: {
+            deviceId: preferences.current.videoinput || undefined,
             resolution: { width: 640, height: 360, frameRate: 20 },
           },
         });
@@ -78,11 +158,16 @@ export function useOfficeMedia(
           next.on(event, () => bump((v) => v + 1));
         next.on(RoomEvent.Reconnecting, () => {
           setConnected(false);
+          setConnecting(true);
           setSpeaking([]);
         });
-        next.on(RoomEvent.Reconnected, () => setConnected(true));
+        next.on(RoomEvent.Reconnected, () => {
+          setConnected(true);
+          setConnecting(false);
+        });
         next.on(RoomEvent.Disconnected, () => {
           setConnected(false);
+          setConnecting(false);
           setSpeaking([]);
           setMic(false);
           setCamera(false);
@@ -94,6 +179,7 @@ export function useOfficeMedia(
         }
         setRoom(next);
         setConnected(true);
+        void enumerate();
         try {
           if (wanted.current.mic) {
             await next.localParticipant.setMicrophoneEnabled(true);
@@ -112,6 +198,8 @@ export function useOfficeMedia(
         bump((v) => v + 1);
       } catch (e) {
         if (!cancelled) setError((e as Error).message);
+      } finally {
+        if (!cancelled) setConnecting(false);
       }
     })();
     return () => {
@@ -123,7 +211,7 @@ export function useOfficeMedia(
         void next.disconnect();
       }
     };
-  }, [roomId]);
+  }, [roomId, userId]);
   useEffect(() => {
     if (!room || !self) return;
     for (const p of room.remoteParticipants.values()) {
@@ -158,6 +246,7 @@ export function useOfficeMedia(
       if (kind === "mic") setMic(!active);
       else setCamera(!active);
       bump((v) => v + 1);
+      void enumerate();
     } catch (e) {
       notify(
         `Could not enable ${kind === "mic" ? "microphone" : "camera"}: ${(e as Error).message}`,
@@ -207,21 +296,83 @@ export function useOfficeMedia(
     }
     bump((v) => v + 1);
   }
-  async function enumerate() {
+  async function enumerate(requestAccess = false, resetMissing = false) {
     try {
-      setDevices(await navigator.mediaDevices.enumerateDevices());
-    } catch {
-      notify("Device information is unavailable.");
+      if (requestAccess) {
+        // Reveal device names without publishing audio or leaving a capture running.
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        stream.getTracks().forEach((track) => track.stop());
+      }
+      const list = await navigator.mediaDevices.enumerateDevices();
+      setDevices(list);
+      if (resetMissing) {
+        for (const kind of Object.keys(defaultDevices) as MediaDeviceKind[]) {
+          const id = preferences.current[kind];
+          if (
+            id &&
+            id !== "default" &&
+            !list.some((d) => d.kind === kind && d.deviceId === id)
+          ) {
+            if (await switchDevice(kind, ""))
+              notify("A selected device disconnected. Using system default.");
+          }
+        }
+      }
+    } catch (e) {
+      notify(`Could not access devices: ${(e as Error).message}`);
     }
   }
-  async function switchDevice(kind: "audioinput" | "videoinput", id: string) {
+  async function switchDevice(kind: MediaDeviceKind, id: string) {
+    if (deviceChange.current) return false;
+    deviceChange.current = true;
+    setDeviceBusy(true);
     try {
-      if (!room) return;
-      await room.switchActiveDevice(kind, id);
-      if (kind === "audioinput") setInput(id);
-      else setVideoInput(id);
+      const target = current.current;
+      if (kind === "audiooutput") {
+        if (!("setSinkId" in HTMLMediaElement.prototype))
+          throw new Error(
+            "Choose your output device in your system sound settings.",
+          );
+        await new Audio().setSinkId(id);
+      }
+      if (
+        target &&
+        !(await target.switchActiveDevice(
+          kind,
+          id || (kind === "audiooutput" ? "" : "default"),
+        ))
+      )
+        throw new Error(
+          "The device could not be selected. Please choose another device.",
+        );
+      if (target !== current.current)
+        throw new Error(
+          "The conversation changed. Please choose your device again.",
+        );
+      remember(kind, id);
+      return true;
     } catch (e) {
       notify((e as Error).message);
+      return false;
+    } finally {
+      deviceChange.current = false;
+      setDeviceBusy(false);
+    }
+  }
+  async function chooseOutput() {
+    try {
+      const device = await (
+        navigator.mediaDevices as OutputPicker
+      ).selectAudioOutput?.({
+        deviceId: preferences.current.audiooutput || undefined,
+      });
+      if (!device) return;
+      await switchDevice("audiooutput", device.deviceId);
+      await enumerate();
+    } catch (e) {
+      notify(`Speaker selection was not completed: ${(e as Error).message}`);
     }
   }
   return {
@@ -251,8 +402,13 @@ export function useOfficeMedia(
     devices,
     enumerate,
     switchDevice,
-    input,
-    videoInput,
+    input: choices.audioinput,
+    output: choices.audiooutput,
+    videoInput: choices.videoinput,
+    outputSupported,
+    outputPickerSupported,
+    chooseOutput,
+    deviceBusy: deviceBusy || connecting,
   };
 }
 export function SpeakingIndicator() {
