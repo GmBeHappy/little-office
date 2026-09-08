@@ -27,6 +27,7 @@ import {
   MonitorUp,
   MoreHorizontal,
   Plus,
+  PencilRuler,
   Search,
   Settings,
   Shield,
@@ -52,6 +53,7 @@ import {
 import type { Command } from "@/shared/protocol";
 import { MediaTracks, SpeakingIndicator, useOfficeMedia } from "./Media";
 import { Select } from "./Select";
+import { boardScope, whiteboardEnabled } from "@/shared/whiteboard";
 import { Avatar } from "./Avatar";
 import { AvatarEditor } from "./AvatarEditor";
 import { DeviceSelect } from "./DeviceSelect";
@@ -66,6 +68,7 @@ const PixelMap = dynamic(() => import("./PixelMap"), {
   ssr: false,
   loading: MapLoading,
 });
+const Whiteboard = dynamic(() => import("./Whiteboard"), { ssr: false });
 const EmotePicker = dynamic(() => import("./EmotePicker"), { ssr: false });
 const statusLabel = {
   available: "Available",
@@ -108,6 +111,10 @@ export default function OfficeApp() {
   const [settingsTab, setSettingsTab] = useState<"workspace" | "members">(
     "workspace",
   );
+  const [whiteboard, setWhiteboard] = useState<{
+    scope: string;
+    name: string;
+  } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
   useEffect(() => {
@@ -981,6 +988,20 @@ export default function OfficeApp() {
                   .catch((e) => notify((e as Error).message));
             }}
           />
+          {whiteboardEnabled(workspace) && (
+            <Control
+              icon={<PencilRuler />}
+              label={t("Whiteboard")}
+              on={!!whiteboard}
+              onClick={() => {
+                if (self && !whiteboard)
+                  setWhiteboard({
+                    scope: boardScope(workspace.mapId, self),
+                    name: currentZone.name,
+                  });
+              }}
+            />
+          )}
           <span className="control-divider" />
           <ToolbarMenu label={t("Emote")} icon={<Smile />}>
             {(close) => (
@@ -1013,6 +1034,22 @@ export default function OfficeApp() {
           )}
         </div>
       </footer>
+      {whiteboard && (
+        <Whiteboard
+          scope={whiteboard.scope}
+          name={whiteboard.name}
+          userId={user.id}
+          enabled={whiteboardEnabled(workspace)}
+          storageConfigured={!!config?.storageConfigured}
+          active={
+            whiteboardEnabled(workspace) &&
+            !!self &&
+            connection === "Connected" &&
+            whiteboard.scope === boardScope(workspace.mapId, self)
+          }
+          onClose={() => setWhiteboard(null)}
+        />
+      )}
       {notice && <Toast text={notice} close={() => setNotice("")} />}
       {invites[0] && (
         <div

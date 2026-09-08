@@ -29,6 +29,17 @@ try {
   );
   process.exitCode = await run.exited;
 } finally {
+  const { storage } = await import("../server/storage");
+  for (const a of accounts) {
+    const files = await db.query(
+      "SELECT id,object_key FROM office_files WHERE created_by=$1",
+      [a.id],
+    );
+    for (const file of files.rows) {
+      await storage?.delete(file.object_key);
+      await db.query("DELETE FROM office_files WHERE id=$1", [file.id]);
+    }
+  }
   for (const a of accounts)
     await db.query('DELETE FROM "user" WHERE id=$1', [a.id]);
   await db.end();

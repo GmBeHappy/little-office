@@ -9,3 +9,5 @@ playwright-report/
 *.tsbuildinfo
 .DS_Store
 deploy/generated/
+
+/public/excalidraw/

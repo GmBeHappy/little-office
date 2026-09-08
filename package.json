@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "bun scripts/dev.ts",
-    "dev:web": "bun --bun next dev --hostname 0.0.0.0",
+    "dev:web": "bun scripts/prepare-assets.ts && bun --bun next dev --hostname 0.0.0.0",
     "dev:api": "bun --watch server/index.ts",
-    "build": "bun --bun next build",
+    "build": "bun scripts/prepare-assets.ts && bun --bun next build",
     "start": "bun --bun next start --hostname 0.0.0.0",
     "start:api": "bun server/index.ts",
     "db:migrate": "bun scripts/migrate.ts",
@@ -19,6 +19,7 @@
     "deploy:configure": "bun scripts/configure-deploy.ts"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "0.18.1",
     "@radix-ui/react-select": "2.3.7",
     "better-auth": "1.7.3",
     "elysia": "1.4.30",

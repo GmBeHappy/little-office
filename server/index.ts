@@ -6,10 +6,23 @@ import { Office } from "./office";
 import { mediaConfigured, retireRoom, setPresenter, tokenFor } from "./media";
 import { Command } from "../shared/protocol";
 import { AVATAR_PATTERN } from "../shared/appearance";
+import { Whiteboards } from "./whiteboard";
+import {
+  storage,
+  storageConfigured,
+  storageInfo,
+  checkStorage,
+} from "./storage";
+import {
+  BOARD_MESSAGE_BYTES,
+  boardScope,
+  whiteboardEnabled,
+} from "../shared/whiteboard";
 import { MAPS } from "../shared/maps";
 
 export const office = new Office(retireRoom, setPresenter);
 office.configureWorkspace(await workspaceSettings());
+export const whiteboards = new Whiteboards(office);
 function requireSession(s: AuthSession | null, owner = false) {
   if (!s) throw new Error("Please sign in.");
   if (!s.user.approved) throw new Error("Your account is awaiting approval.");
@@ -39,7 +52,7 @@ function isAuthPath(path: string) {
   );
 }
 
-export const app = new Elysia({ serve: { maxRequestBodySize: 16384 } })
+export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
   .onRequest(({ request, set }) => {
     if (
       !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
@@ -70,6 +83,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 16384 } })
     ssoConfigured: oidcConfigured,
     provider: oidcProvider,
     mediaConfigured,
+    storageConfigured,
     officeName: "Little Office",
   }))
   .derive(async ({ request }) => ({
@@ -148,7 +162,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 16384 } })
       const name = body.name.trim();
       if (!name) throw new Error("Enter a workspace name.");
       const result = await db.query(
-        'UPDATE workspace_settings SET name=$1, map_id=$2, revision=revision+1 WHERE id=1 AND revision=$3 RETURNING name, map_id AS "mapId", revision',
+        'UPDATE workspace_settings SET name=$1, map_id=$2, revision=revision+1 WHERE id=1 AND revision=$3 RETURNING name, map_id AS "mapId", revision, features',
         [name, body.mapId, body.revision],
       );
       if (!result.rows.length)
@@ -165,6 +179,140 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 16384 } })
         revision: t.Integer({ minimum: 0 }),
       }),
     },
+  )
+  .patch(
+    "/api/admin/features",
+    async ({ identity, body }) => {
+      requireSession(identity, true);
+      const result = await db.query(
+        'UPDATE workspace_settings SET features=$1::jsonb,revision=revision+1 WHERE id=1 AND revision=$2 RETURNING name,map_id AS "mapId",revision,features',
+        [JSON.stringify(body.features), body.revision],
+      );
+      if (!result.rows.length)
+        throw new Error(
+          "Workspace settings changed. Close and reopen settings before saving again.",
+        );
+      office.configureWorkspace(result.rows[0]);
+      whiteboards.prune();
+      return { workspace: office.workspace };
+    },
+    {
+      body: t.Object({
+        features: t.Object({ whiteboard: t.Boolean() }),
+        revision: t.Integer({ minimum: 0 }),
+      }),
+    },
+  )
+  .get("/api/admin/storage", ({ identity }) => {
+    requireSession(identity, true);
+    return storageInfo();
+  })
+  .post("/api/admin/storage/check", async ({ identity }) => {
+    requireSession(identity, true);
+    try {
+      return await checkStorage();
+    } catch {
+      throw new Error(
+        "Cannot read, write and delete in the configured S3 bucket. Check its credentials and permissions.",
+      );
+    }
+  })
+  .get("/api/whiteboard/files", async ({ identity }) => {
+    const session = requireSession(identity);
+    const member = office.members.get(session.user.id);
+    if (
+      !member ||
+      member.sessionId !== session.session.id ||
+      !whiteboardEnabled(office.workspace)
+    )
+      throw new Error("Whiteboard access ended.");
+    return (
+      await db.query(
+        'SELECT id,name,size,created_at AS "createdAt" FROM office_files WHERE board_id=$1 ORDER BY created_at DESC LIMIT 20',
+        [boardScope(office.workspace.mapId, member)],
+      )
+    ).rows;
+  })
+  .post(
+    "/api/whiteboard/files",
+    async ({ identity, request }) => {
+      const session = requireSession(identity);
+      const member = office.members.get(session.user.id);
+      if (
+        !member ||
+        member.sessionId !== session.session.id ||
+        !whiteboardEnabled(office.workspace)
+      )
+        throw new Error("Whiteboard access ended.");
+      if (!storage) throw new Error("External S3 storage is not configured.");
+      const scope = boardScope(office.workspace.mapId, member);
+      const cooldown = `storage:${member.id}`;
+      if (Date.now() < (office.cooldowns.get(cooldown) || 0))
+        throw new Error(
+          "Please wait a few seconds before saving another file.",
+        );
+      office.cooldowns.set(cooldown, Date.now() + 5000);
+      const bytes = new Uint8Array(await request.arrayBuffer());
+      if (
+        request.headers.get("content-type") !== "image/png" ||
+        bytes.length > 5_000_000 ||
+        ![137, 80, 78, 71, 13, 10, 26, 10].every(
+          (value, index) => bytes[index] === value,
+        )
+      )
+        throw new Error("Upload a PNG snapshot smaller than 5 MB.");
+      const id = crypto.randomUUID();
+      const key = `whiteboards/${new Bun.CryptoHasher("sha256").update(scope).digest("hex")}/${id}.png`;
+      const name = `whiteboard-${scope.replaceAll(":", "-")}-${Date.now()}.png`;
+      try {
+        await storage.write(key, bytes, { type: "image/png" });
+        const current = office.members.get(member.id);
+        if (
+          !current ||
+          current.sessionId !== session.session.id ||
+          boardScope(office.workspace.mapId, current) !== scope ||
+          !whiteboardEnabled(office.workspace)
+        )
+          throw new Error("Whiteboard access ended.");
+        await db.query(
+          "INSERT INTO office_files (id,board_id,object_key,name,size,created_by) VALUES ($1,$2,$3,$4,$5,$6)",
+          [id, scope, key, name, bytes.length, member.id],
+        );
+      } catch (error) {
+        await storage.delete(key).catch(() => {});
+        throw error;
+      }
+      return { id, name, url: `/api/whiteboard/files/${id}` };
+    },
+    { parse: "none" },
+  )
+  .get(
+    "/api/whiteboard/files/:id",
+    async ({ identity, params, redirect }) => {
+      const session = requireSession(identity);
+      const member = office.members.get(session.user.id);
+      if (
+        !storage ||
+        !member ||
+        member.sessionId !== session.session.id ||
+        !whiteboardEnabled(office.workspace)
+      )
+        throw new Error("Whiteboard access ended.");
+      const result = await db.query(
+        "SELECT object_key,name FROM office_files WHERE id=$1 AND board_id=$2",
+        [params.id, boardScope(office.workspace.mapId, member)],
+      );
+      if (!result.rows.length)
+        throw new Error("File not found in your current area.");
+      const file = result.rows[0];
+      return redirect(
+        storage.presign(file.object_key, {
+          expiresIn: 60,
+          contentDisposition: `attachment; filename="${file.name}"`,
+        }),
+      );
+    },
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) },
   )
   .get("/api/admin/users", async ({ identity }) => {
     requireSession(identity, true);
@@ -390,6 +538,56 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 16384 } })
       throw new Error("Conversation changed. Try again.");
     return result;
   })
+  .ws("/api/whiteboard", {
+    beforeHandle({ request, identity, set }) {
+      if (request.headers.get("origin") !== config.origin) {
+        set.status = 403;
+        return "Untrusted origin";
+      }
+      const session = requireSession(identity);
+      if (
+        office.members.get(session.user.id)?.sessionId !== session.session.id
+      ) {
+        set.status = 403;
+        return "Join the office first";
+      }
+    },
+    maxPayloadLength: BOARD_MESSAGE_BYTES,
+    idleTimeout: 60,
+    async open(ws) {
+      try {
+        const s = requireSession(ws.data.identity);
+        await whiteboards.open(
+          ws.id,
+          s.user.id,
+          s.session.id,
+          (event) => {
+            ws.send(event);
+          },
+          () => ws.close(1008, "Whiteboard access ended"),
+        );
+      } catch {
+        ws.send({ type: "error", message: "Unable to open this whiteboard." });
+        ws.close(1008);
+      }
+    },
+    async message(ws, raw) {
+      try {
+        await whiteboards.message(ws.id, raw);
+      } catch (error) {
+        ws.send({
+          type: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Unable to save whiteboard.",
+        });
+      }
+    },
+    close(ws) {
+      whiteboards.remove(ws.id);
+    },
+  })
   .ws("/api/office", {
     beforeHandle({ request, identity, set }) {
       if (request.headers.get("origin") !== config.origin) {
@@ -464,6 +662,7 @@ if (import.meta.main) {
     hostname: process.env.API_HOST || "127.0.0.1",
   });
   setInterval(() => office.tick(0.05), 50);
+  setInterval(() => whiteboards.prune(), 1000);
   setInterval(() => {
     if (office.dirty) office.broadcast();
   }, 100);

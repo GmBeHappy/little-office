@@ -1,6 +1,7 @@
 import { beforeAll, afterAll, describe, expect, test } from "bun:test";
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
+import { rectangle } from "./whiteboard-fixture";
 import { getMigrations } from "better-auth/db/migration";
 let server: PGLiteSocketServer,
   pg: PGlite,
@@ -44,6 +45,8 @@ beforeAll(async () => {
     "postgres://postgres:postgres@127.0.0.1:15433/postgres";
   process.env.BETTER_AUTH_SECRET = crypto.randomUUID() + crypto.randomUUID();
   process.env.APP_URL = "http://localhost:3000";
+  process.env.OFFICE_S3_ACCESS_KEY_ID = "";
+  process.env.OFFICE_S3_SECRET_ACCESS_KEY = "";
   process.env.OIDC_ISSUER = "";
   process.env.OIDC_CLIENT_ID = "";
   const database = await import("../server/db");
@@ -187,6 +190,148 @@ describe("authentication and authorization", () => {
     expect(
       (await request("/me", undefined, ownerCookie)).data.user.avatar,
     ).toBe(body.avatar);
+  });
+  test("whiteboards persist concurrent edits, isolate rooms, and revoke access after moving or leaving", async () => {
+    const { Office } = await import("../server/office");
+    const { Whiteboards } = await import("../server/whiteboard");
+    const office = new Office();
+    const boards = new Whiteboards(office);
+    const events = new Map<string, any[]>();
+    const closed: string[] = [];
+    for (const id of ["a", "b", "c"]) {
+      office.add(
+        { id, name: id, role: "member" },
+        id,
+        Date.now() + 60000,
+        () => {},
+        () => {},
+      );
+      events.set(id, []);
+    }
+    office.go(office.members.get("c")!, "studio");
+    for (const id of ["a", "b", "c"])
+      await boards.open(
+        id,
+        id,
+        id,
+        (event) => events.get(id)!.push(event),
+        () => closed.push(id),
+      );
+    await expect(
+      boards.open(
+        "intruder",
+        "a",
+        "wrong-session",
+        () => {},
+        () => {},
+      ),
+    ).rejects.toThrow();
+    await Promise.all([
+      boards.message("a", {
+        type: "change",
+        batch: "one",
+        elements: [rectangle("one")],
+      }),
+      boards.message("b", {
+        type: "change",
+        batch: "two",
+        elements: [rectangle("two")],
+      }),
+    ]);
+    const row = await db.query(
+      "SELECT elements FROM office_whiteboards WHERE id=$1",
+      [boards.peers.get("a")!.scope],
+    );
+    expect(row.rows[0].elements.map((e: any) => e.id).sort()).toEqual([
+      "one",
+      "two",
+    ]);
+    expect(
+      events.get("a")!.some((e) => e.type === "saved" && e.batch === "one"),
+    ).toBe(true);
+    expect(events.get("c")!.some((e) => e.type === "scene")).toBe(false);
+    boards.remove("b");
+    events.set("b", []);
+    await boards.open(
+      "b",
+      "b",
+      "b",
+      (event) => events.get("b")!.push(event),
+      () => closed.push("b"),
+    );
+    expect(
+      events.get("b")!.find((e) => e.type === "ready").elements,
+    ).toHaveLength(2);
+    office.go(office.members.get("b")!, "library");
+    await boards.message("b", {
+      type: "change",
+      batch: "forbidden",
+      elements: [rectangle("leak")],
+    });
+    expect(closed).toContain("b");
+    office.remove("a");
+    boards.prune();
+    expect(closed).toContain("a");
+    expect(
+      (
+        await db.query("SELECT elements FROM office_whiteboards WHERE id=$1", [
+          row.rows[0].id || `${office.workspace.mapId}:floor`,
+        ])
+      ).rows[0].elements,
+    ).toHaveLength(2);
+    office.configureWorkspace({
+      ...office.workspace,
+      revision: office.workspace.revision + 1,
+      features: { whiteboard: false },
+    });
+    boards.prune();
+    expect(closed).toContain("c");
+    await expect(
+      boards.open(
+        "disabled",
+        "c",
+        "c",
+        () => {},
+        () => {},
+      ),
+    ).rejects.toThrow();
+    boards.remove("c");
+  });
+  test("only owners can change feature flags and inspect storage configuration", async () => {
+    const current = (await request("/config")).data.workspace;
+    const body = {
+      revision: current.revision,
+      features: { whiteboard: false },
+    };
+    expect(
+      (await request("/admin/features", body, memberCookie, "PATCH")).status,
+    ).toBe(400);
+    const saved = await request("/admin/features", body, ownerCookie, "PATCH");
+    expect(saved.status).toBe(200);
+    expect(saved.data.workspace.features.whiteboard).toBe(false);
+    expect(
+      (await request("/admin/features", body, ownerCookie, "PATCH")).status,
+    ).toBe(400);
+    expect(
+      (await request("/admin/storage", undefined, memberCookie)).status,
+    ).toBe(400);
+    const storage = await request("/admin/storage", undefined, ownerCookie);
+    expect(storage.data.configured).toBe(false);
+    expect(storage.data).not.toHaveProperty("accessKeyId");
+    expect(storage.data).not.toHaveProperty("secretAccessKey");
+    expect(
+      (
+        await request(
+          "/admin/features",
+          {
+            revision: saved.data.workspace.revision,
+            features: { whiteboard: true },
+          },
+          ownerCookie,
+          "PATCH",
+        )
+      ).status,
+    ).toBe(200);
   });
   test("last-login and unconfigured SSO switches cannot lock the owner out", async () => {
     expect(

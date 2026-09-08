@@ -1,0 +1,31 @@
+import { BoardElement } from "../shared/whiteboard";
+export function rectangle(id: string, version = 1, versionNonce = 10) {
+  return BoardElement.parse({
+    id,
+    version,
+    versionNonce,
+    type: "rectangle",
+    isDeleted: false,
+    x: 100,
+    y: 100,
+    width: 100,
+    height: 80,
+    angle: 0,
+    seed: 10,
+    index: "a0",
+    strokeColor: "#1e1e1e",
+    backgroundColor: "transparent",
+    fillStyle: "hachure",
+    strokeWidth: 1,
+    strokeStyle: "solid",
+    roundness: null,
+    roughness: 1,
+    opacity: 100,
+    groupIds: [],
+    frameId: null,
+    boundElements: null,
+    updated: Date.now(),
+    locked: false,
+    link: null,
+  });
+}

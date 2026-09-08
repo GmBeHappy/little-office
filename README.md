@@ -307,3 +307,65 @@ Movement follows physical WASD keys, including **ไ / ฟ / ห / ก** on a Th
 The control bar has an **Emote** picker (emoji-picker-react, with English/Thai search) that broadcasts a three-second emoji above your avatar. Microphone and camera arrows open device menus; microphone settings also include speakers/headphones. Devices can still be changed under Settings. All selectors use styled, keyboard-accessible Radix Select menus. Status remains available in your profile.
 
 Customize your avatar under **Your profile**: five skin tones, five hairstyles, five outfits, and five headwear options plus no hat. Rotate the live preview, mix the pieces, then save. Existing presets remain available as starting points. The chosen appearance persists with your account and synchronizes across the map, portraits, and animation poses.
+
+### Shared whiteboards
+
+Open **Whiteboard** in the bottom control bar to draw with teammates using the embedded Excalidraw editor. Each map has separate boards for the commons, Studio, and Library. Everyone currently in the same area can open and edit its board; the commons board is shared by the whole commons, including people outside nearby voice range. Direct calls do not create private boards. Audio and camera connections continue while the board is open.
+
+Draw shapes, arrows, freehand strokes, and English/Thai text; see other editors' cursors; export PNG or download an editable `.excalidraw` copy. Changes merge by element version and nonce and show **Saved** only after PostgreSQL commits them. Reopening a board or restarting the app preserves its contents. Reconnecting retries pending edits while the editor stays open. If access ends or changes cannot be saved, download a copy before closing; a warning protects unsaved work. Images, web embeds, file imports and link navigation are not enabled in this version.
+
+Boards use the authenticated `/api/whiteboard` WebSocket through the existing HTTPS proxy, with no additional public port or Excalidraw account. Access follows active office membership and location; changing areas, logging out, or losing membership ends access to the old board. Drawing data is stored in `office_whiteboards` and included in normal PostgreSQL backups. Run `bun db:migrate` when upgrading. Each board is limited to 1,500 elements (including deletion records) and 2 MB; export before reaching these limits. Removing shapes keeps deletion records to prevent stale clients from restoring them.
+
+`bun build`, `bun dev`, and `bun dev:web` prepare self-hosted Excalidraw fonts. The editor loads only when opened. Upstream editor/font notices are in `public/licenses/excalidraw.txt`.
+
+### Workspace feature controls and external S3 files
+
+Owners can open **Settings → Workspace → Maps / Features / File storage**. The Features tab enables or disables Whiteboard for the entire workspace. Disabling it hides the control and closes active whiteboard access while retaining drawings. Feature changes persist and do not move users or interrupt voice rooms.
+
+File storage uses an external S3-compatible bucket, including Garage. Set these server-only variables in `.env` and restart the API:
+
+```dotenv
+OFFICE_S3_ENDPOINT=https://s3.example.com
+OFFICE_S3_REGION=garage
+OFFICE_S3_BUCKET=little-office
+OFFICE_S3_ACCESS_KEY_ID=replace-with-your-access-key
+OFFICE_S3_SECRET_ACCESS_KEY=replace-with-your-secret-key
+```
+
+For AWS S3, use its actual region and leave the endpoint blank; for R2 use its account endpoint and region `auto`. The File storage tab shows connection details without exposing keys. **Test storage connection** verifies writing, reading and deleting a uniquely named temporary object.
+
+With storage configured, the whiteboard has **Save snapshot to storage**. PNG snapshots (up to 5 MB) are held briefly in memory and written to the private S3 bucket; there is no VM file-storage fallback. The whiteboard menu lists the latest 20 **Saved snapshots** for the current area. Downloads check active membership, feature access and current area before issuing a 60-second signed S3 download URL. Editable board elements remain in PostgreSQL, while `office_files` holds only file metadata. Back up both PostgreSQL and the external bucket; disabling a feature does not delete either.
+
+Keep the bucket private. The server key needs read/write/delete object permissions for `whiteboards/` and `checks/`. Browser downloads use a signed URL, not the storage credentials. Configure CORS with one rule per origin for Garage; combining origins in one rule can produce an invalid comma-separated response header:
+
+```json
+{
+  "CORSRules": [
+    {
+      "ID": "little-office-production",
+      "AllowedOrigins": ["https://office.example.com"],
+      "AllowedMethods": ["GET", "HEAD", "PUT"],
+      "AllowedHeaders": ["*"],
+      "ExposeHeaders": ["ETag"],
+      "MaxAgeSeconds": 3600
+    },
+    {
+      "ID": "little-office-local",
+      "AllowedOrigins": ["http://localhost:3000"],
+      "AllowedMethods": ["GET", "HEAD", "PUT"],
+      "AllowedHeaders": ["*"],
+      "ExposeHeaders": ["ETag"],
+      "MaxAgeSeconds": 3600
+    }
+  ]
+}
+```
+
+Save this as `cors.json`, replace the production origin, then use AWS CLI with your credentials in environment variables or a local AWS profile:
+
+```sh
+aws --endpoint-url https://s3.example.com --region garage s3api put-bucket-cors --bucket little-office --cors-configuration file://cors.json
+aws --endpoint-url https://s3.example.com --region garage s3api get-bucket-cors --bucket little-office
+```
+
+Check any existing bucket rules before replacing them. Uploaded snapshots and connection checks use only the configured bucket. Runtime feature flags are stored in `workspace_settings.features`; add an explicit validated flag, UI control and server access check when introducing another feature.

@@ -34,5 +34,6 @@ export type AppConfig = {
   ssoConfigured: boolean;
   provider: string;
   mediaConfigured: boolean;
+  storageConfigured: boolean;
   officeName: string;
 };

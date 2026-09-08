@@ -1,3 +1,4 @@
+import "./prepare-assets";
 const api = Bun.spawn(["bun", "--watch", "server/index.ts"], {
   stdout: "inherit",
   stderr: "inherit",

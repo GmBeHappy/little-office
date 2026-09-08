@@ -94,6 +94,7 @@ export type WorkspaceSettings = {
   name: string;
   mapId: MapId;
   revision: number;
+  features?: { whiteboard: boolean };
 };
 export const DEFAULT_WORKSPACE: WorkspaceSettings = {
   name: "Team workspace",
