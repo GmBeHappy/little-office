@@ -1,3 +1,26 @@
+import {
+  and,
+  or,
+  eq,
+  ne,
+  lt,
+  gt,
+  desc,
+  exists,
+  notExists,
+  inArray,
+  sql,
+  DrizzleQueryError,
+} from "drizzle-orm";
+import {
+  accounts,
+  users,
+  sessions,
+  officeSettings,
+  workspaces,
+  officeFiles,
+  officeAudit,
+} from "./schema";
 import { Elysia, t } from "elysia";
 import { auth, sessionFor, type AuthSession } from "./auth";
 import { config, oidcConfigured, oidcProvider } from "./config";
@@ -18,9 +41,16 @@ import {
   boardScope,
   whiteboardEnabled,
 } from "../shared/whiteboard";
+import { ACTIVITY_ACTIONS } from "../shared/activity";
+import { memberRoleSchema } from "../shared/forms";
 import { MAPS } from "../shared/maps";
 
-export const office = new Office(retireRoom, setPresenter);
+export const office = new Office(retireRoom, setPresenter, (event) => {
+  void db
+    .insert(officeAudit)
+    .values({ ...event, createdAt: new Date(event.createdAt) })
+    .catch(() => console.error("Could not persist office activity."));
+});
 office.configureWorkspace(await workspaceSettings());
 export const whiteboards = new Whiteboards(office);
 function requireSession(s: AuthSession | null, owner = false) {
@@ -68,13 +98,15 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       error:
         code === "VALIDATION"
           ? "Invalid request."
-          : error instanceof Error
-            ? error.message
-            : "Request failed.",
+          : error instanceof DrizzleQueryError
+            ? "Database request failed."
+            : error instanceof Error
+              ? error.message
+              : "Request failed.",
     };
   })
   .get("/api/health", async () => {
-    await db.query("SELECT 1");
+    await db.execute(sql`SELECT 1`);
     return { ok: true };
   })
   .get("/api/config", async () => ({
@@ -116,10 +148,10 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
     }
     const response = await auth.handler(request);
     if (path === "/change-password" && response.ok && identity)
-      await db.query(
-        'UPDATE "user" SET "mustChangePassword"=false WHERE id=$1',
-        [identity.user.id],
-      );
+      await db
+        .update(users)
+        .set({ mustChangePassword: false })
+        .where(eq(users.id, identity.user.id));
     if (path === "/sign-out" && identity)
       office.revokeSession(identity.session.id);
     return response;
@@ -135,11 +167,10 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
     "/api/profile",
     async ({ identity, body }) => {
       const s = requireSession(identity);
-      await db.query('UPDATE "user" SET name=$1, avatar=$2 WHERE id=$3', [
-        body.name,
-        body.avatar,
-        s.user.id,
-      ]);
+      await db
+        .update(users)
+        .set({ name: body.name, avatar: body.avatar })
+        .where(eq(users.id, s.user.id));
       const member = office.members.get(s.user.id);
       if (member) {
         member.name = body.name;
@@ -161,15 +192,27 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       requireSession(identity, true);
       const name = body.name.trim();
       if (!name) throw new Error("Enter a workspace name.");
-      const result = await db.query(
-        'UPDATE workspace_settings SET name=$1, map_id=$2, revision=revision+1 WHERE id=1 AND revision=$3 RETURNING name, map_id AS "mapId", revision, features',
-        [name, body.mapId, body.revision],
-      );
-      if (!result.rows.length)
+      const result = await db
+        .update(workspaces)
+        .set({
+          name,
+          mapId: body.mapId,
+          revision: sql`${workspaces.revision}+1`,
+        })
+        .where(
+          and(eq(workspaces.id, 1), eq(workspaces.revision, body.revision)),
+        )
+        .returning({
+          name: workspaces.name,
+          mapId: workspaces.mapId,
+          revision: workspaces.revision,
+          features: workspaces.features,
+        });
+      if (!result.length)
         throw new Error(
           "Workspace settings changed. Close and reopen settings before saving again.",
         );
-      office.configureWorkspace(result.rows[0]);
+      office.configureWorkspace(result[0]);
       return { workspace: office.workspace };
     },
     {
@@ -184,15 +227,26 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
     "/api/admin/features",
     async ({ identity, body }) => {
       requireSession(identity, true);
-      const result = await db.query(
-        'UPDATE workspace_settings SET features=$1::jsonb,revision=revision+1 WHERE id=1 AND revision=$2 RETURNING name,map_id AS "mapId",revision,features',
-        [JSON.stringify(body.features), body.revision],
-      );
-      if (!result.rows.length)
+      const result = await db
+        .update(workspaces)
+        .set({
+          features: body.features,
+          revision: sql`${workspaces.revision}+1`,
+        })
+        .where(
+          and(eq(workspaces.id, 1), eq(workspaces.revision, body.revision)),
+        )
+        .returning({
+          name: workspaces.name,
+          mapId: workspaces.mapId,
+          revision: workspaces.revision,
+          features: workspaces.features,
+        });
+      if (!result.length)
         throw new Error(
           "Workspace settings changed. Close and reopen settings before saving again.",
         );
-      office.configureWorkspace(result.rows[0]);
+      office.configureWorkspace(result[0]);
       whiteboards.prune();
       return { workspace: office.workspace };
     },
@@ -226,12 +280,19 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       !whiteboardEnabled(office.workspace)
     )
       throw new Error("Whiteboard access ended.");
-    return (
-      await db.query(
-        'SELECT id,name,size,created_at AS "createdAt" FROM office_files WHERE board_id=$1 ORDER BY created_at DESC LIMIT 20',
-        [boardScope(office.workspace.mapId, member)],
+    return db
+      .select({
+        id: officeFiles.id,
+        name: officeFiles.name,
+        size: officeFiles.size,
+        createdAt: officeFiles.createdAt,
+      })
+      .from(officeFiles)
+      .where(
+        eq(officeFiles.boardId, boardScope(office.workspace.mapId, member)),
       )
-    ).rows;
+      .orderBy(desc(officeFiles.createdAt))
+      .limit(20);
   })
   .post(
     "/api/whiteboard/files",
@@ -274,10 +335,14 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
           !whiteboardEnabled(office.workspace)
         )
           throw new Error("Whiteboard access ended.");
-        await db.query(
-          "INSERT INTO office_files (id,board_id,object_key,name,size,created_by) VALUES ($1,$2,$3,$4,$5,$6)",
-          [id, scope, key, name, bytes.length, member.id],
-        );
+        await db.insert(officeFiles).values({
+          id,
+          boardId: scope,
+          objectKey: key,
+          name,
+          size: bytes.length,
+          createdBy: member.id,
+        });
       } catch (error) {
         await storage.delete(key).catch(() => {});
         throw error;
@@ -298,15 +363,20 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
         !whiteboardEnabled(office.workspace)
       )
         throw new Error("Whiteboard access ended.");
-      const result = await db.query(
-        "SELECT object_key,name FROM office_files WHERE id=$1 AND board_id=$2",
-        [params.id, boardScope(office.workspace.mapId, member)],
-      );
-      if (!result.rows.length)
+      const result = await db
+        .select({ objectKey: officeFiles.objectKey, name: officeFiles.name })
+        .from(officeFiles)
+        .where(
+          and(
+            eq(officeFiles.id, params.id),
+            eq(officeFiles.boardId, boardScope(office.workspace.mapId, member)),
+          ),
+        );
+      if (!result.length)
         throw new Error("File not found in your current area.");
-      const file = result.rows[0];
+      const file = result[0];
       return redirect(
-        storage.presign(file.object_key, {
+        storage.presign(file.objectKey, {
           expiresIn: 60,
           contentDisposition: `attachment; filename="${file.name}"`,
         }),
@@ -314,16 +384,141 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
     },
     { params: t.Object({ id: t.String({ format: "uuid" }) }) },
   )
+  .get("/api/admin/activity", async ({ identity, query, set }) => {
+    requireSession(identity, true);
+    set.headers["cache-control"] = "no-store";
+    const before = query.before;
+    if (
+      before &&
+      (!/^[1-9][0-9]{0,18}$/.test(before) ||
+        BigInt(before) > 9223372036854775807n)
+    )
+      throw new Error("Invalid activity cursor.");
+    const action = query.action;
+    if (action && !Object.hasOwn(ACTIVITY_ACTIONS, action))
+      throw new Error("Invalid activity filter.");
+    const result = await db
+      .select({
+        id: officeAudit.id,
+        actor: officeAudit.actor,
+        actorName: sql<string>`coalesce(${officeAudit.actorName},${users.name},${officeAudit.actor})`,
+        action: officeAudit.action,
+        targetName: officeAudit.targetName,
+        details: officeAudit.details,
+        createdAt: officeAudit.createdAt,
+      })
+      .from(officeAudit)
+      .leftJoin(users, eq(users.id, officeAudit.actor))
+      .where(
+        and(
+          before ? lt(officeAudit.id, BigInt(before)) : undefined,
+          action ? eq(officeAudit.action, action) : undefined,
+        ),
+      )
+      .orderBy(desc(officeAudit.id))
+      .limit(51);
+    const entries = result
+      .slice(0, 50)
+      .map((row) => ({ ...row, id: row.id.toString() }));
+    return {
+      entries,
+      nextCursor: result.length > 50 ? entries.at(-1)!.id : null,
+    };
+  })
+  .patch(
+    "/api/admin/users/:id/role",
+    async ({ identity, params, body }) => {
+      const s = requireSession(identity, true);
+      recent(s);
+      const { role } = memberRoleSchema.parse(body);
+      if (params.id === s.user.id)
+        throw new Error("You cannot change your own role.");
+      await db.transaction(async (tx) => {
+        await tx
+          .select({ id: officeSettings.id })
+          .from(officeSettings)
+          .where(eq(officeSettings.id, 1))
+          .for("update");
+        const [actor] = await tx
+          .select({ name: users.name })
+          .from(users)
+          .where(
+            and(
+              eq(users.id, s.user.id),
+              eq(users.role, "owner"),
+              eq(users.approved, true),
+            ),
+          );
+        if (!actor) throw new Error("Owner access required.");
+        const [target] = await tx
+          .select({
+            name: users.name,
+            role: users.role,
+            approved: users.approved,
+          })
+          .from(users)
+          .where(eq(users.id, params.id))
+          .for("update");
+        if (!target?.approved)
+          throw new Error("Approve this member before changing their role.");
+        if (target.role !== role) {
+          await tx.update(users).set({ role }).where(eq(users.id, params.id));
+          await tx.insert(officeAudit).values({
+            actor: s.user.id,
+            actorName: actor.name,
+            action: "member.role",
+            targetName: target.name,
+            details: { targetId: params.id, from: target.role, to: role },
+          });
+        }
+      });
+      const member = office.members.get(params.id);
+      if (member) {
+        member.role = role;
+        member.send({ type: "user-updated" });
+      }
+      return { ok: true };
+    },
+    {
+      body: t.Object({
+        role: t.Union([t.Literal("owner"), t.Literal("member")]),
+      }),
+    },
+  )
   .get("/api/admin/users", async ({ identity }) => {
     requireSession(identity, true);
-    return (
-      await db.query(
-        `SELECT u.id,u.name,u.username,u.role,u.approved,
-          EXISTS(SELECT 1 FROM account a WHERE a."userId"=u.id AND a."providerId"='credential')
-          AND NOT EXISTS(SELECT 1 FROM account a WHERE a."userId"=u.id AND a."providerId"<>'credential') AS "localPassword"
-         FROM "user" u ORDER BY u."createdAt"`,
-      )
-    ).rows;
+    return db
+      .select({
+        id: users.id,
+        name: users.name,
+        username: users.username,
+        role: users.role,
+        approved: users.approved,
+        localPassword: sql<boolean>`${exists(
+          db
+            .select({ id: accounts.id })
+            .from(accounts)
+            .where(
+              and(
+                eq(accounts.userId, users.id),
+                eq(accounts.providerId, "credential"),
+              ),
+            ),
+        )}
+        AND ${notExists(
+          db
+            .select({ id: accounts.id })
+            .from(accounts)
+            .where(
+              and(
+                eq(accounts.userId, users.id),
+                ne(accounts.providerId, "credential"),
+              ),
+            ),
+        )}`,
+      })
+      .from(users)
+      .orderBy(users.createdAt);
   })
   .post(
     "/api/admin/users",
@@ -342,14 +537,14 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
           password: body.password,
         },
       });
-      await db.query(
-        'UPDATE "user" SET approved=true,"mustChangePassword"=true WHERE id=$1',
-        [result.user.id],
-      );
-      await db.query("INSERT INTO office_audit(actor,action) VALUES($1,$2)", [
-        s.user.id,
-        `Created local member ${result.user.id}`,
-      ]);
+      await db
+        .update(users)
+        .set({ approved: true, mustChangePassword: true })
+        .where(eq(users.id, result.user.id));
+      await db.insert(officeAudit).values({
+        actor: s.user.id,
+        action: `Created local member ${result.user.id}`,
+      });
       return { ok: true };
     },
     {
@@ -366,14 +561,31 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       const s = requireSession(identity, true);
       if (params.id === s.user.id)
         throw new Error("You cannot disable your own account.");
-      await db.query('UPDATE "user" SET approved=$1 WHERE id=$2', [
-        body.approved,
-        params.id,
-      ]);
-      if (!body.approved) {
-        await db.query('DELETE FROM session WHERE "userId"=$1', [params.id]);
-        office.remove(params.id);
-      }
+      await db.transaction(async (tx) => {
+        await tx
+          .select({ id: officeSettings.id })
+          .from(officeSettings)
+          .where(eq(officeSettings.id, 1))
+          .for("update");
+        const [actor] = await tx
+          .select({ id: users.id })
+          .from(users)
+          .where(
+            and(
+              eq(users.id, s.user.id),
+              eq(users.role, "owner"),
+              eq(users.approved, true),
+            ),
+          );
+        if (!actor) throw new Error("Owner access required.");
+        await tx
+          .update(users)
+          .set({ approved: body.approved })
+          .where(eq(users.id, params.id));
+        if (!body.approved)
+          await tx.delete(sessions).where(eq(sessions.userId, params.id));
+      });
+      if (!body.approved) office.remove(params.id);
       return { ok: true };
     },
     { body: t.Object({ approved: t.Boolean() }) },
@@ -381,26 +593,23 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
   .delete("/api/admin/users/:id", async ({ identity, params }) => {
     const s = requireSession(identity, true);
     recent(s);
-    const connection = await db.connect();
-    try {
-      await connection.query("BEGIN");
-      const result = await connection.query(
-        "DELETE FROM \"user\" WHERE id=$1 AND role='member' AND id<>$2 RETURNING id",
-        [params.id, s.user.id],
-      );
-      if (!result.rowCount)
+    await db.transaction(async (tx) => {
+      const removed = await tx
+        .delete(users)
+        .where(
+          and(
+            eq(users.id, params.id),
+            eq(users.role, "member"),
+            ne(users.id, s.user.id),
+          ),
+        )
+        .returning({ id: users.id });
+      if (!removed.length)
         throw new Error("Member not found or owner account protected.");
-      await connection.query(
-        "INSERT INTO office_audit(actor,action) VALUES($1,$2)",
-        [s.user.id, `Deleted member ${params.id}`],
-      );
-      await connection.query("COMMIT");
-    } catch (e) {
-      await connection.query("ROLLBACK");
-      throw e;
-    } finally {
-      connection.release();
-    }
+      await tx
+        .insert(officeAudit)
+        .values({ actor: s.user.id, action: `Deleted member ${params.id}` });
+    });
     office.remove(params.id);
     return { ok: true };
   })
@@ -416,36 +625,42 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
         memoryCost: 19456,
         timeCost: 2,
       });
-      const connection = await db.connect();
-      try {
-        await connection.query("BEGIN");
-        const result = await connection.query(
-          `UPDATE account SET password=$1 WHERE "userId"=$2 AND "providerId"='credential'
-           AND NOT EXISTS(SELECT 1 FROM account a WHERE a."userId"=$2 AND a."providerId"<>'credential') RETURNING id`,
-          [hash, body.userId],
-        );
-        if (!result.rowCount)
+      await db.transaction(async (tx) => {
+        const result = await tx
+          .update(accounts)
+          .set({ password: hash })
+          .where(
+            and(
+              eq(accounts.userId, body.userId),
+              eq(accounts.providerId, "credential"),
+              notExists(
+                tx
+                  .select({ id: accounts.id })
+                  .from(accounts)
+                  .where(
+                    and(
+                      eq(accounts.userId, body.userId),
+                      ne(accounts.providerId, "credential"),
+                    ),
+                  ),
+              ),
+            ),
+          )
+          .returning({ id: accounts.id });
+        if (!result.length)
           throw new Error(
             "Only local password accounts can be reset here. Manage SSO passwords with your identity provider.",
           );
-        await connection.query(
-          'UPDATE "user" SET "mustChangePassword"=true WHERE id=$1',
-          [body.userId],
-        );
-        await connection.query('DELETE FROM session WHERE "userId"=$1', [
-          body.userId,
-        ]);
-        await connection.query(
-          "INSERT INTO office_audit(actor,action) VALUES($1,$2)",
-          [s.user.id, `Reset local password for ${body.userId}`],
-        );
-        await connection.query("COMMIT");
-      } catch (e) {
-        await connection.query("ROLLBACK");
-        throw e;
-      } finally {
-        connection.release();
-      }
+        await tx
+          .update(users)
+          .set({ mustChangePassword: true })
+          .where(eq(users.id, body.userId));
+        await tx.delete(sessions).where(eq(sessions.userId, body.userId));
+        await tx.insert(officeAudit).values({
+          actor: s.user.id,
+          action: `Reset local password for ${body.userId}`,
+        });
+      });
       office.remove(body.userId);
       return { ok: true };
     },
@@ -461,59 +676,80 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
     async ({ identity, body }) => {
       const s = requireSession(identity, true);
       recent(s);
-      const connection = await db.connect();
-      try {
-        await connection.query("BEGIN");
-        await connection.query(
-          "SELECT id FROM office_settings WHERE id=1 FOR UPDATE",
-        );
+      const removed = await db.transaction(async (tx) => {
+        await tx
+          .select({ id: officeSettings.id })
+          .from(officeSettings)
+          .where(eq(officeSettings.id, 1))
+          .for("update");
         if (!body.password && !body.sso)
           throw new Error("At least one login method must remain enabled.");
         if (body.sso && !oidcConfigured)
           throw new Error("Configure OIDC on the server before enabling SSO.");
         if (!body.password) {
-          const verified = await connection.query(
-            'SELECT s.id FROM session s JOIN "user" u ON u.id=s."userId" JOIN account a ON a."userId"=u.id WHERE s.method=\'sso\' AND s."expiresAt">now() AND u.role=\'owner\' AND u.approved=true AND a."providerId"=$1 LIMIT 1',
-            [oidcProvider],
-          );
-          if (!verified.rowCount)
+          const verified = await tx
+            .select({ id: sessions.id })
+            .from(sessions)
+            .innerJoin(users, eq(users.id, sessions.userId))
+            .innerJoin(accounts, eq(accounts.userId, users.id))
+            .where(
+              and(
+                eq(sessions.method, "sso"),
+                gt(sessions.expiresAt, sql`now()`),
+                eq(users.role, "owner"),
+                eq(users.approved, true),
+                eq(accounts.providerId, oidcProvider),
+              ),
+            )
+            .limit(1);
+          if (!verified.length)
             throw new Error(
               "An owner must successfully sign in with the configured SSO before disabling passwords.",
             );
         }
         if (!body.sso) {
-          const owner = await connection.query(
-            'SELECT a.id FROM account a JOIN "user" u ON u.id=a."userId" WHERE a."providerId"=\'credential\' AND u.role=\'owner\' AND u.approved=true LIMIT 1',
-          );
-          if (!owner.rowCount)
+          const owner = await tx
+            .select({ id: accounts.id })
+            .from(accounts)
+            .innerJoin(users, eq(users.id, accounts.userId))
+            .where(
+              and(
+                eq(accounts.providerId, "credential"),
+                eq(users.role, "owner"),
+                eq(users.approved, true),
+              ),
+            )
+            .limit(1);
+          if (!owner.length)
             throw new Error(
               "Keep an owner account with password access before disabling SSO.",
             );
         }
-        await connection.query(
-          "UPDATE office_settings SET password=$1,sso=$2,version=version+1 WHERE id=1",
-          [body.password, body.sso],
-        );
-        const removed = await connection.query(
-          "DELETE FROM session WHERE (method='password' AND NOT $1) OR (method='sso' AND NOT $2) RETURNING id",
-          [body.password, body.sso],
-        );
-        await connection.query(
-          "INSERT INTO office_audit(actor,action) VALUES($1,$2)",
-          [
-            s.user.id,
-            `Login methods: password=${body.password}, sso=${body.sso}`,
-          ],
-        );
-        await connection.query("COMMIT");
-        for (const row of removed.rows) office.revokeSession(row.id);
-        return await settings();
-      } catch (error) {
-        await connection.query("ROLLBACK");
-        throw error;
-      } finally {
-        connection.release();
-      }
+        await tx
+          .update(officeSettings)
+          .set({
+            password: body.password,
+            sso: body.sso,
+            version: sql`${officeSettings.version}+1`,
+          })
+          .where(eq(officeSettings.id, 1));
+        const removed = await tx
+          .delete(sessions)
+          .where(
+            or(
+              and(eq(sessions.method, "password"), sql`${!body.password}`),
+              and(eq(sessions.method, "sso"), sql`${!body.sso}`),
+            ),
+          )
+          .returning({ id: sessions.id });
+        await tx.insert(officeAudit).values({
+          actor: s.user.id,
+          action: `Login methods: password=${body.password}, sso=${body.sso}`,
+        });
+        return removed;
+      });
+      for (const row of removed) office.revokeSession(row.id);
+      return settings();
     },
     { body: t.Object({ password: t.Boolean(), sso: t.Boolean() }) },
   )
@@ -617,7 +853,13 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
         );
         whiteboards.prune();
       } catch (error) {
-        ws.send({ type: "error", message: (error as Error).message });
+        ws.send({
+          type: "error",
+          message:
+            error instanceof DrizzleQueryError
+              ? "Database request failed."
+              : (error as Error).message,
+        });
         ws.close();
       }
     },
@@ -643,12 +885,22 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       try {
         office.handle(s.user.id, result.data);
         if (result.data.type === "status")
-          db.query(
-            'UPDATE "user" SET availability=$1,"statusText"=$2 WHERE id=$3',
-            [result.data.status, result.data.text, s.user.id],
-          ).catch(() => {});
+          void db
+            .update(users)
+            .set({
+              availability: result.data.status,
+              statusText: result.data.text,
+            })
+            .where(eq(users.id, s.user.id))
+            .catch(() => {});
       } catch (error) {
-        ws.send({ type: "error", message: (error as Error).message });
+        ws.send({
+          type: "error",
+          message:
+            error instanceof DrizzleQueryError
+              ? "Database request failed."
+              : (error as Error).message,
+        });
       }
     },
     close(ws) {
@@ -673,11 +925,26 @@ if (import.meta.main) {
     try {
       const ids = [...office.members.values()].map((m) => m.sessionId);
       if (!ids.length) return;
-      const valid = await db.query(
-        'SELECT s.id FROM session s JOIN "user" u ON u.id=s."userId" JOIN office_settings p ON p.id=1 WHERE s.id=ANY($1::text[]) AND s."expiresAt">now() AND u.approved AND ((s.method=\'password\' AND p.password) OR (s.method=\'sso\' AND p.sso))',
-        [ids],
-      );
-      const keep = new Set(valid.rows.map((r) => r.id));
+      const valid = await db
+        .select({ id: sessions.id })
+        .from(sessions)
+        .innerJoin(users, eq(users.id, sessions.userId))
+        .innerJoin(officeSettings, eq(officeSettings.id, 1))
+        .where(
+          and(
+            inArray(sessions.id, ids),
+            gt(sessions.expiresAt, sql`now()`),
+            eq(users.approved, true),
+            or(
+              and(
+                eq(sessions.method, "password"),
+                eq(officeSettings.password, true),
+              ),
+              and(eq(sessions.method, "sso"), eq(officeSettings.sso, true)),
+            ),
+          ),
+        );
+      const keep = new Set(valid.map((r) => r.id));
       for (const m of [...office.members.values()])
         if (!keep.has(m.sessionId)) office.remove(m.id);
     } catch {

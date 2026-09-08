@@ -132,6 +132,19 @@ test("camera grid and expanded sharing preserve audio, support fullscreen, and r
       .click();
     await a.getByRole("button", { name: "Share screen", exact: true }).click();
     await expect(b.locator(".screen-tile video")).toBeVisible();
+    const sharingEvents = async (action: string) => {
+      const response = await a.request.get(
+        `/api/admin/activity?action=${action}`,
+      );
+      expect(response.ok()).toBe(true);
+      const result = await response.json();
+      return result.entries.filter(
+        (entry: { actor: string }) => entry.actor === accounts[0].id,
+      );
+    };
+    await expect
+      .poll(async () => (await sharingEvents("screen.start")).length)
+      .toBe(1);
     await b
       .getByRole("button", { name: "ขยายหน้าจอที่แชร์", exact: true })
       .click();
@@ -173,6 +186,10 @@ test("camera grid and expanded sharing preserve audio, support fullscreen, and r
       .getByRole("button", { name: "หน้าจอที่แชร์", exact: true })
       .click();
     await a.getByRole("button", { name: "Stop sharing", exact: true }).click();
+    await expect
+      .poll(async () => (await sharingEvents("screen.stop")).length)
+      .toBe(1);
+    expect((await sharingEvents("screen.start")).length).toBe(1);
     await expect(expanded.locator(".media-grid video")).toHaveCount(2);
     await expect(expanded.locator(".screen-tile")).toHaveCount(0);
     expect(

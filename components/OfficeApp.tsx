@@ -14,7 +14,12 @@ import { Input } from "./ui/input";
 import { Switch } from "./ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
-import { CreateMemberForm, MemberActionForm } from "./MemberForms";
+import { ActivityLog } from "./ActivityLog";
+import {
+  CreateMemberForm,
+  MemberActionForm,
+  MemberRoleForm,
+} from "./MemberForms";
 import { useI18n, LanguageToggle } from "@/lib/i18n";
 import dynamic from "next/dynamic";
 import { createPortal } from "react-dom";
@@ -265,6 +270,7 @@ export default function OfficeApp() {
           setInvites((v) => [...v, message.invitation]);
         else if (message.type === "invitation-ended")
           setInvites((v) => v.filter((i) => i.id !== message.id));
+        else if (message.type === "user-updated") void refresh();
         else if (message.type === "presenter" && message.enabled) {
           void mediaRef.current.share(true).catch((e) => {
             send({ type: "present", enabled: false });
@@ -304,9 +310,31 @@ export default function OfficeApp() {
       socket.current = null;
       setSnapshot(null);
     };
-  }, [user?.id, user?.approved, user?.mustChangePassword, notify, send]);
+  }, [
+    user?.id,
+    user?.approved,
+    user?.mustChangePassword,
+    notify,
+    send,
+    refresh,
+  ]);
   const wasSharing = useRef(false);
   const isSharing = !!media.room?.localParticipant.isScreenShareEnabled;
+  useEffect(() => {
+    if (connection !== "Connected" || !self?.room) return;
+    send({
+      type: "screen-share",
+      room: self.room,
+      enabled: isSharing && media.room?.name === self.room && media.connected,
+    });
+  }, [
+    connection,
+    self?.room,
+    isSharing,
+    media.room?.name,
+    media.connected,
+    send,
+  ]);
   useEffect(() => {
     if (wasSharing.current && !isSharing)
       send({ type: "present", enabled: false });
@@ -1245,6 +1273,7 @@ export default function OfficeApp() {
               />
             ) : (
               <SettingsPanel
+                key={user.role}
                 workspace={workspace}
                 initialTab={settingsTab}
                 user={user}
@@ -1727,14 +1756,14 @@ function SettingsPanel({
   media: ReturnType<typeof useOfficeMedia>;
 }) {
   const { t } = useI18n();
-  const [tab, setTab] = useState<"audio" | "auth" | "members" | "workspace">(
-      user.role === "owner" ? initialTab : "audio",
-    ),
+  const [tab, setTab] = useState<
+      "audio" | "auth" | "members" | "workspace" | "activity"
+    >(user.role === "owner" ? initialTab : "audio"),
     [users, setUsers] = useState<AdminUser[]>([]),
     [busy, setBusy] = useState(false);
   const [memberAction, setMemberAction] = useState<{
     user: AdminUser;
-    kind: "delete" | "reset";
+    kind: "delete" | "reset" | "role";
   } | null>(null);
   const loadUsers = useCallback(async () => {
     try {
@@ -1781,11 +1810,13 @@ function SettingsPanel({
         {user.role === "owner" && (
           <>
             <TabsTrigger value="members">{t("Members")}</TabsTrigger>
+            <TabsTrigger value="activity">{t("Activity")}</TabsTrigger>
             <TabsTrigger value="auth">{t("Authentication")}</TabsTrigger>
           </>
         )}
       </TabsList>
       <TabsContent value={tab} className="mt-0">
+        {tab === "activity" && user.role === "owner" && <ActivityLog />}
         {tab === "workspace" && (
           <WorkspaceSettings
             workspace={workspace}
@@ -1950,6 +1981,16 @@ function SettingsPanel({
                       <Button
                         variant="link"
                         className="text-button"
+                        disabled={busy || !u.approved}
+                        onClick={() =>
+                          setMemberAction({ user: u, kind: "role" })
+                        }
+                      >
+                        {t("Change role")}
+                      </Button>
+                      <Button
+                        variant="link"
+                        className="text-button"
                         disabled={busy}
                         onClick={async () => {
                           try {
@@ -1995,10 +2036,21 @@ function SettingsPanel({
                 </div>
               ))}
             </div>
-            {memberAction && (
+            {memberAction?.kind === "role" && (
+              <MemberRoleForm
+                key={memberAction.user.id}
+                user={memberAction.user}
+                onCancel={() => setMemberAction(null)}
+                saved={async () => {
+                  setMemberAction(null);
+                  await loadUsers();
+                }}
+              />
+            )}
+            {memberAction && memberAction.kind !== "role" && (
               <MemberActionForm
                 key={`${memberAction.kind}:${memberAction.user.id}`}
-                action={memberAction}
+                action={{ kind: memberAction.kind, user: memberAction.user }}
                 onCancel={() => setMemberAction(null)}
                 saved={async () => {
                   setMemberAction(null);

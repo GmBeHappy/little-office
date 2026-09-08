@@ -1,5 +1,10 @@
 import { z } from "zod";
 export const Command = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("screen-share"),
+    room: z.string().max(200),
+    enabled: z.boolean(),
+  }),
   z.object({ type: z.literal("jump") }),
   z.object({
     type: z.literal("emote"),

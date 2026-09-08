@@ -1,9 +1,14 @@
 "use client";
-import { FormProvider, useForm } from "react-hook-form";
+import { Controller, FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus } from "lucide-react";
-import { createMemberSchema, resetPasswordSchema } from "@/shared/forms";
+import {
+  createMemberSchema,
+  resetPasswordSchema,
+  memberRoleSchema,
+} from "@/shared/forms";
+import { Select } from "./Select";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "./ui/button";
@@ -167,6 +172,75 @@ export function MemberActionForm({
             {t(
               action.kind === "delete" ? "Confirm deletion" : "Reset password",
             )}
+          </Button>
+        </div>
+      </form>
+    </FormProvider>
+  );
+}
+
+export function MemberRoleForm({
+  user,
+  onCancel,
+  saved,
+}: {
+  user: { id: string; name: string; role: string };
+  onCancel: () => void;
+  saved: () => Promise<void>;
+}) {
+  const { t } = useI18n();
+  const form = useForm({
+    resolver: zodResolver(memberRoleSchema),
+    defaultValues: {
+      role: user.role === "owner" ? ("owner" as const) : ("member" as const),
+    },
+  });
+  const busy = form.formState.isSubmitting;
+  return (
+    <FormProvider {...form}>
+      <form
+        className="member-action-form space-y-4"
+        aria-label={t("Change role")}
+        onSubmit={form.handleSubmit(async (values) => {
+          form.clearErrors("root");
+          try {
+            await api(`/admin/users/${user.id}/role`, values, "PATCH");
+            await saved();
+          } catch (error) {
+            form.setError("root", { message: (error as Error).message });
+          }
+        })}
+      >
+        <strong>{user.name}</strong>
+        <p>
+          {t(
+            "Owners can manage members, settings and activity logs. Members can use the office without administration access.",
+          )}
+        </p>
+        <Controller
+          control={form.control}
+          name="role"
+          render={({ field }) => (
+            <Select
+              label={t("Role")}
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              disabled={busy}
+              options={[
+                { value: "member", label: t("member") },
+                { value: "owner", label: t("owner") },
+              ]}
+            />
+          )}
+        />
+        <FormError />
+        <div className="member-actions">
+          <Button variant="link" disabled={busy} onClick={onCancel}>
+            {t("Cancel")}
+          </Button>
+          <Button type="submit" disabled={busy || !form.formState.isDirty}>
+            {t("Save role")}
           </Button>
         </div>
       </form>

@@ -1,6 +1,6 @@
 # Little Office
 
-A pixel-art office built with **Next.js, Elysia on Bun, PostgreSQL, Phaser, Better Auth, and LiveKit**. The interface uses **Tailwind CSS 4 + shadcn/ui**, with **React Hook Form + Zod** for forms.
+A pixel-art office built with **Next.js, Elysia on Bun, Drizzle ORM, PostgreSQL, Phaser, Better Auth, and LiveKit**. The interface uses **Tailwind CSS 4 + shadcn/ui**, with **React Hook Form + Zod** for forms.
 
 Walk with WASD/arrows and press Space to jump (or click the Space control on the map). Nearby voice joins automatically; turn your microphone on to talk to people in range. The navbar shows your current location. A compact, horizontally scrolling strip shows nearby teammates with avatars, names, and speaking activity. Join the Studio or Library for a meeting, share your screen, wave, summon a teammate with their consent, or start an accepted direct call. Microphone and camera start off.
 
@@ -70,6 +70,23 @@ The map, presence, waves, summons, and authentication work without LiveKit. Call
 
 Press **Space** to jump, **1** to sit, and **2** to sleep, or use the map buttons. Press the same key again, walk, or jump to stand up. Sitting has a settling animation; sleeping shows a resting pose with gentle breathing and Zzz. Poses synchronize to everyone without changing availability or microphone state. Each avatar's name bar shows a microphone icon with a slash while muted; room changes reset it until microphone publication resumes.
 
+## Database and migrations
+
+The backend uses **Drizzle ORM** with the existing `pg` PostgreSQL connection pool. Typed table definitions live in `server/schema.ts`; HTTP endpoints, whiteboard saves, account provisioning, and Better Auth use Drizzle. Transactions retain the row locks used for concurrent whiteboard edits and owner changes. SQL remains in reviewed migration files, small SQL expressions, and independent database assertions in tests.
+
+`drizzle/` contains versioned SQL migrations and schema snapshots. `bun db:migrate` applies them and tracks applied versions in `drizzle.__drizzle_migrations`. The first migration can create a fresh database or adopt the existing Little Office schema without replacing tables, resetting settings, or rewriting credentials. Existing sessions, OIDC links/tokens, whiteboards, audit entries and S3 metadata are retained. Back up PostgreSQL, run the migration once before starting the updated API, and keep `BETTER_AUTH_SECRET` unchanged so existing sessions and encrypted OAuth tokens remain usable.
+
+For future schema changes:
+
+```sh
+# Edit server/schema.ts, then generate and review the SQL.
+bun db:generate --name=describe_change
+bun db:check
+bun db:migrate
+```
+
+Commit the schema and generated `drizzle/` files together. The migration command resolves files relative to the app, so it works in the container and from other working directories. Better Auth now uses its Drizzle adapter; schema changes for authentication must be reflected in `server/schema.ts` and Drizzle migrations instead of running Better Auth's former automatic migration command. Production updates use the same `db:migrate` step shown below; do not use schema push against production.
+
 ## Video quality
 
 Under **Settings → Devices → Video & screen quality**, choose Maximum (up to 3840×2160 at 60 fps, the default), High (up to 1920×1080 at 60 fps), or Balanced (up to 1280×720 at 30 fps). The preference stays saved per account in this browser. Turn the camera off/on or restart sharing to apply a change; microphone audio and the room connection stay active.
@@ -124,6 +141,14 @@ https://office.example.com/api/auth/callback/<provider-id>
 The provider ID includes a hash of the issuer, so changing issuer cannot accidentally reuse another provider's identities. Enable SSO in settings, link your owner account while recently authenticated, then sign out and sign in with SSO to verify it. Password login remains under your control.
 
 SSO sign-in needs the provider's `openid`, `profile`, and `email` claims. Provider groups, SCIM provisioning, and back-channel logout are not implemented in this release. Provider disablement is not immediate application-session revocation; owner account disablement in this app revokes access. Sessions expire after eight hours. A separately authorized local password can still log in while that method is enabled.
+
+## Activity history and member roles
+
+Owners can open **Settings → Activity** to see office joins and leaves, screen-sharing starts and stops, nudges (including the recipient), and role changes. Events are stored in PostgreSQL with timestamps and names, and survive member deletion. The panel shows local time with seconds, supports action filters, and loads 50 records at a time. Use **Refresh** for new events. Both the panel and API require owner access.
+
+In **Settings → Members**, choose **Change role**, select **member** or **owner**, and save. Owners manage members, authentication, workspace settings and activity history; members use the office without administration access. Approve pending members first. You cannot change your own role. Changes require a login within the last 10 minutes and take effect for connected users without reloading.
+
+Apply `bun run db:migrate` before starting the updated API. This adds activity columns and an index to the existing audit table; it preserves existing records. New presence and sharing history starts after this update. Sharing starts are recorded after the client publishes a screen track, not when the screen picker opens; room changes and disconnects record the corresponding stop. Unexpected disconnects are detected by the existing connection timeout. This history records actions, not audio, video or screen contents.
 
 ## Container images and GitHub Actions
 
@@ -298,7 +323,7 @@ The runner creates isolated temporary accounts, uses synthetic audio/video sourc
 ## Implementation notes
 
 - `app/`, `components/`: Next.js interface, Phaser office, and LiveKit media controls.
-- `server/`: Elysia HTTP/WebSocket endpoints, Better Auth, office rules, PostgreSQL access, and LiveKit grants.
+- `server/`: Elysia HTTP/WebSocket endpoints, Better Auth, office rules, Drizzle/PostgreSQL access, and LiveKit grants.
 - `shared/`: authored map geometry, collision checks, message schemas, and shared types.
 - `scripts/`, `deploy/`: migrations, account provisioning, tests, and VM configuration.
 

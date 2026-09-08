@@ -46,3 +46,5 @@ export const workspaceSchema = z.object({
     .string()
     .refine((id) => MAPS.some((map) => map.id === id), "Choose a valid map."),
 });
+
+export const memberRoleSchema = z.object({ role: z.enum(["member", "owner"]) });

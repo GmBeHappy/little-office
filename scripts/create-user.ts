@@ -1,5 +1,7 @@
 import { auth } from "../server/auth";
-import { db } from "../server/db";
+import { eq } from "drizzle-orm";
+import { users } from "../server/schema";
+import { db, pool } from "../server/db";
 import { createInterface } from "node:readline/promises";
 const username = process.argv[2];
 const name = process.argv[3] || username;
@@ -22,9 +24,12 @@ if (!password) {
 const result = await auth.api.signUpEmail({
   body: { email: `${username}@local.invalid`, username, name, password },
 });
-await db.query('UPDATE "user" SET approved = true, role = $1 WHERE id = $2', [
-  process.argv.includes("--owner") ? "owner" : "member",
-  result.user.id,
-]);
+await db
+  .update(users)
+  .set({
+    approved: true,
+    role: process.argv.includes("--owner") ? "owner" : "member",
+  })
+  .where(eq(users.id, result.user.id));
 console.log(`Created ${username}.`);
-await db.end();
+await pool.end();

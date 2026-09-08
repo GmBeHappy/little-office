@@ -11,6 +11,7 @@ import {
   type ZoneId,
   type Snapshot,
 } from "../shared/world";
+import type { ActivityEvent } from "../shared/activity";
 import type { Command } from "../shared/protocol";
 import {
   DEFAULT_WORKSPACE,
@@ -30,6 +31,7 @@ type Member = Person & {
   sessionId: string;
   connectionId: string;
   expires: number;
+  sharing: boolean;
 };
 export class Office {
   workspace: WorkspaceSettings = { ...DEFAULT_WORKSPACE };
@@ -38,6 +40,8 @@ export class Office {
   configureWorkspace(next: WorkspaceSettings) {
     if (next.revision <= this.workspace.revision) return;
     const changedMap = next.mapId !== this.workspace.mapId;
+    if (changedMap)
+      for (const member of this.members.values()) this.stopSharing(member);
     this.workspace = { ...next };
     if (changedMap) {
       this.blocks = mapBlocks(getMap(next.mapId));
@@ -90,7 +94,27 @@ export class Office {
       id: string,
       present: boolean,
     ) => Promise<void> = async () => {},
+    private record: (event: ActivityEvent) => void = () => {},
   ) {}
+  log(member: Member, action: ActivityEvent["action"], target?: Member) {
+    this.record({
+      actor: member.id,
+      actorName: member.name,
+      action,
+      targetName: target?.name,
+      details: {
+        mapId: this.workspace.mapId,
+        zone: member.zone,
+        ...(target ? { targetId: target.id } : {}),
+      },
+      createdAt: new Date().toISOString(),
+    });
+  }
+  stopSharing(member: Member) {
+    if (!member.sharing) return;
+    member.sharing = false;
+    this.log(member, "screen.stop");
+  }
   room(group: string) {
     if (!group) return "";
     if (!this.generations.has(group))
@@ -143,8 +167,10 @@ export class Office {
       sessionId,
       connectionId,
       expires,
+      sharing: false,
     };
     this.members.set(user.id, member);
+    this.log(member, "office.join");
     this.syncConversation(member);
     this.broadcast();
     return member;
@@ -157,6 +183,7 @@ export class Office {
     this.retire(old);
     for (const member of this.members.values())
       if (member.conversation === group) {
+        this.stopSharing(member);
         member.room = this.room(group);
         member.microphone = false;
       }
@@ -164,6 +191,7 @@ export class Office {
   assign(member: Member, group: string) {
     const old = member.conversation;
     if (old === group) return;
+    this.stopSharing(member);
     member.conversation = group;
     member.room = this.room(group);
     member.microphone = false;
@@ -191,6 +219,8 @@ export class Office {
   remove(id: string, code?: number, reason?: string) {
     const member = this.members.get(id);
     if (!member) return;
+    this.stopSharing(member);
+    this.log(member, "office.leave");
     this.members.delete(id);
     member.close(code, reason);
     if (member.conversation) this.rotate(member.conversation);
@@ -329,6 +359,7 @@ export class Office {
           throw new Error("Face a nearby teammate to nudge them.");
         if (target.status === "dnd")
           throw new Error("They have Do not disturb enabled.");
+        this.log(m, "nudge", target);
         target.send({ type: "nudge", from: id, name: m.name });
         m.send({ type: "nudge-sent", to: target.id });
         for (const person of this.members.values())
@@ -432,12 +463,26 @@ export class Office {
         }
         break;
       }
+      case "screen-share": {
+        if (command.room !== m.room) break;
+        if (!command.enabled) this.stopSharing(m);
+        else if (
+          m.room &&
+          this.presenters[m.conversation] === id &&
+          !m.sharing
+        ) {
+          m.sharing = true;
+          this.log(m, "screen.start");
+        }
+        break;
+      }
       case "present": {
         if (!m.conversation)
           throw new Error("Join a conversation before sharing.");
         const presenter = this.presenters[m.conversation];
         if (command.enabled && presenter && presenter !== id)
           throw new Error("Someone is already presenting.");
+        if (!command.enabled) this.stopSharing(m);
         if (command.enabled) this.presenters[m.conversation] = id;
         else if (presenter === id) delete this.presenters[m.conversation];
         const group = m.conversation,

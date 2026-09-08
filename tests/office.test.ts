@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Office } from "../server/office";
+import type { ActivityEvent } from "../shared/activity";
 import { Command } from "../shared/protocol";
 import { JUMP_DURATION } from "../shared/world";
 import { walkable, WORLD, zoneAt, canNudge } from "../shared/world";
@@ -442,4 +443,68 @@ describe("office behavior", () => {
     office.tick(0.05, now);
     expect(office.members.has("a")).toBe(false);
   });
+});
+
+test("activity records accepted actions once, including sharing interruptions and reconnects", () => {
+  const log: ActivityEvent[] = [];
+  const office = new Office(undefined, undefined, (event) => log.push(event));
+  const add = (id: string) =>
+    office.add(
+      { id, name: `Person ${id}`, role: "member" },
+      id,
+      Date.now() + 60000,
+      () => {},
+      () => {},
+    );
+  const a = add("a"),
+    b = add("b");
+  expect(log.map((e) => e.action)).toEqual(["office.join", "office.join"]);
+  a.direction = "right";
+  b.x = a.x + 30;
+  office.handle("a", { type: "nudge", target: "b" });
+  expect(log.at(-1)).toMatchObject({
+    action: "nudge",
+    actorName: "Person a",
+    targetName: "Person b",
+    details: { targetId: "b" },
+  });
+  expect(Number.isNaN(Date.parse(log.at(-1)!.createdAt))).toBe(false);
+  const count = log.length;
+  expect(() =>
+    office.handle("b", { type: "nudge", target: "missing" }),
+  ).toThrow();
+  expect(log.length).toBe(count);
+  office.handle("a", { type: "screen-share", room: a.room, enabled: true });
+  expect(log.length).toBe(count); // Cannot announce a share without presenting permission.
+  office.handle("a", { type: "present", enabled: true });
+  office.handle("a", { type: "present", enabled: false });
+  expect(log.length).toBe(count); // Cancelling the picker does not start a share.
+  office.handle("a", { type: "present", enabled: true });
+  office.handle("a", {
+    type: "screen-share",
+    room: "stale-room",
+    enabled: true,
+  });
+  expect(log.length).toBe(count);
+  for (let i = 0; i < 2; i++)
+    office.handle("a", { type: "screen-share", room: a.room, enabled: true });
+  expect(log.filter((e) => e.action === "screen.start")).toHaveLength(1);
+  office.go(b, "studio"); // Room rotation stops the remaining participant's share.
+  expect(log.at(-1)?.action).toBe("screen.stop");
+  office.handle("a", { type: "screen-share", room: a.room, enabled: false });
+  expect(log.filter((e) => e.action === "screen.stop")).toHaveLength(1);
+  office.handle("a", { type: "present", enabled: true });
+  office.handle("a", { type: "screen-share", room: a.room, enabled: true });
+  office.remove("a");
+  office.remove("a");
+  expect(log.slice(-2).map((e) => e.action)).toEqual([
+    "screen.stop",
+    "office.leave",
+  ]);
+  expect(log.filter((e) => e.action === "office.leave")).toHaveLength(1);
+  add("b");
+  expect(log.slice(-2).map((e) => e.action)).toEqual([
+    "office.leave",
+    "office.join",
+  ]);
 });

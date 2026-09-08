@@ -1,13 +1,15 @@
 import { beforeAll, afterAll, describe, expect, test } from "bun:test";
+import { betterAuth } from "better-auth";
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { rectangle } from "./whiteboard-fixture";
-import { getMigrations } from "better-auth/db/migration";
 let server: PGLiteSocketServer,
   pg: PGlite,
   app: (typeof import("../server/index"))["app"],
   auth: (typeof import("../server/auth"))["auth"],
-  db: (typeof import("../server/db"))["db"];
+  pool: (typeof import("../server/db"))["pool"];
+let legacyCookie = "",
+  legacyHash = "";
 let ownerCookie = "",
   memberCookie = "";
 const password = crypto.randomUUID() + "Test!";
@@ -34,6 +36,11 @@ async function request(
 beforeAll(async () => {
   pg = new PGlite();
   await pg.waitReady;
+  await pg.exec(
+    await Bun.file(
+      new URL("./fixtures/legacy-schema.sql", import.meta.url),
+    ).text(),
+  );
   server = new PGLiteSocketServer({
     db: pg,
     port: 15433,
@@ -50,13 +57,12 @@ beforeAll(async () => {
   process.env.OIDC_ISSUER = "";
   process.env.OIDC_CLIENT_ID = "";
   const database = await import("../server/db");
-  db = database.db;
-  await database.migrateOffice();
+  pool = database.pool;
   auth = (await import("../server/auth")).auth;
-  await (await getMigrations(auth.options)).runMigrations();
-  app = (await import("../server/index")).app;
+  // Exercise the adapter transition with real accounts and a cookie from the old pg adapter.
+  const legacyAuth = betterAuth({ ...auth.options, database: pool });
   for (const username of ["owner_test", "member_test"]) {
-    const result = await auth.api.signUpEmail({
+    const result = await legacyAuth.api.signUpEmail({
       body: {
         username,
         email: `${username}@local.invalid`,
@@ -64,18 +70,53 @@ beforeAll(async () => {
         password,
       },
     });
-    await db.query('UPDATE "user" SET approved=true,role=$1 WHERE id=$2', [
+    await pool.query('UPDATE "user" SET approved=true,role=$1 WHERE id=$2', [
       username === "owner_test" ? "owner" : "member",
       result.user.id,
     ]);
   }
+  const oldLogin = await legacyAuth.handler(
+    new Request("http://localhost:3000/api/auth/sign-in/username", {
+      method: "POST",
+      headers: {
+        origin: "http://localhost:3000",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ username: "owner_test", password }),
+    }),
+  );
+  expect(oldLogin.status).toBe(200);
+  legacyCookie = oldLogin.headers.get("set-cookie")!.split(";")[0];
+  legacyHash = (
+    await pool.query(
+      `SELECT password FROM account a JOIN "user" u ON u.id=a."userId" WHERE u.username='owner_test'`,
+    )
+  ).rows[0].password;
+  await database.migrateDatabase();
+  app = (await import("../server/index")).app;
 }, 20000);
 afterAll(async () => {
-  await db?.end();
+  await pool?.end();
   await server?.stop();
   await pg?.close();
 });
 describe("authentication and authorization", () => {
+  test("Drizzle preserves pre-migration session cookies and password hashes", async () => {
+    const me = await request("/me", undefined, legacyCookie);
+    expect(me.status).toBe(200);
+    expect(me.data.user).toMatchObject({
+      username: "owner_test",
+      approved: true,
+      role: "owner",
+    });
+    const hash = (
+      await pool.query(`SELECT password FROM account WHERE "userId"=$1`, [
+        me.data.user.id,
+      ])
+    ).rows[0].password;
+    expect(hash).toBe(legacyHash);
+    expect(await Bun.password.verify(password, hash)).toBe(true);
+  });
   test("password login verifies credentials and creates a secure application session", async () => {
     const bad = await request("/auth/sign-in/username", {
       username: "owner_test",
@@ -125,6 +166,152 @@ describe("authentication and authorization", () => {
     ).toBe(400);
     expect((await request("/media/token", {}, memberCookie)).status).toBe(400);
   });
+  test("owner-only activity is paginated and role changes update existing sessions and connected members", async () => {
+    const owner = (await request("/me", undefined, ownerCookie)).data.user;
+    const member = (await request("/me", undefined, memberCookie)).data.user;
+    expect((await request("/admin/activity")).data.error).toBe(
+      "Please sign in.",
+    );
+    expect(
+      (await request("/admin/activity", undefined, memberCookie)).data.error,
+    ).toBe("Owner access required.");
+    expect(
+      (
+        await request(
+          `/admin/users/${owner.id}/role`,
+          { role: "member" },
+          ownerCookie,
+          "PATCH",
+        )
+      ).data.error,
+    ).toContain("own role");
+    expect(
+      (
+        await request(
+          `/admin/users/${member.id}/role`,
+          { role: "owner" },
+          memberCookie,
+          "PATCH",
+        )
+      ).data.error,
+    ).toBe("Owner access required.");
+    expect(
+      (
+        await request(
+          `/admin/users/${member.id}/role`,
+          { role: "admin" },
+          ownerCookie,
+          "PATCH",
+        )
+      ).status,
+    ).toBe(400);
+    const { office } = await import("../server/index");
+    const events: any[] = [];
+    const connected = office.add(
+      member,
+      "test-role-session",
+      Date.now() + 60000,
+      (event) => events.push(event),
+      () => {},
+    );
+    expect(
+      (
+        await request(
+          `/admin/users/${member.id}/role`,
+          { role: "owner" },
+          ownerCookie,
+          "PATCH",
+        )
+      ).status,
+    ).toBe(200);
+    expect(connected.role).toBe("owner");
+    expect(events).toContainEqual({ type: "user-updated" });
+    expect(
+      (await request("/admin/activity", undefined, memberCookie)).status,
+    ).toBe(200);
+    expect(
+      (
+        await request(
+          `/admin/users/${member.id}/role`,
+          { role: "member" },
+          ownerCookie,
+          "PATCH",
+        )
+      ).status,
+    ).toBe(200);
+    expect(connected.role).toBe("member");
+    expect(
+      (await request("/admin/activity", undefined, memberCookie)).data.error,
+    ).toBe("Owner access required.");
+    await pool.query('UPDATE "user" SET approved=false WHERE id=$1', [
+      member.id,
+    ]);
+    expect(
+      (
+        await request(
+          `/admin/users/${member.id}/role`,
+          { role: "owner" },
+          ownerCookie,
+          "PATCH",
+        )
+      ).data.error,
+    ).toContain("Approve this member");
+    await pool.query('UPDATE "user" SET approved=true WHERE id=$1', [
+      member.id,
+    ]);
+    office.remove(member.id);
+    await pool.query(
+      "INSERT INTO office_audit(actor,actor_name,action,details) SELECT $1,'Original name','nudge','{}'::jsonb FROM generate_series(1,52)",
+      [member.id],
+    );
+    const first = (
+      await request("/admin/activity?action=nudge", undefined, ownerCookie)
+    ).data;
+    expect(first.entries).toHaveLength(50);
+    expect(
+      first.entries.every(
+        (e: any) => e.actorName === "Original name" && e.action === "nudge",
+      ),
+    ).toBe(true);
+    const second = (
+      await request(
+        `/admin/activity?action=nudge&before=${first.nextCursor}`,
+        undefined,
+        ownerCookie,
+      )
+    ).data;
+    expect(second.entries).toHaveLength(2);
+    expect(second.nextCursor).toBeNull();
+    expect(
+      new Set([...first.entries, ...second.entries].map((e: any) => e.id)).size,
+    ).toBe(52);
+    const roles = (
+      await request(
+        "/admin/activity?action=member.role",
+        undefined,
+        ownerCookie,
+      )
+    ).data.entries;
+    expect(roles).toHaveLength(2);
+    expect(roles[0]).toMatchObject({
+      actorName: owner.name,
+      targetName: member.name,
+      details: { from: "owner", to: "member" },
+    });
+    expect(
+      (
+        await request(
+          "/admin/activity?before=9999999999999999999",
+          undefined,
+          ownerCookie,
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (await request("/admin/activity?action=invalid", undefined, ownerCookie))
+        .status,
+    ).toBe(400);
+  });
   test("workspace settings require an owner, validate maps, persist, and reject stale saves", async () => {
     const initial = (await request("/config")).data.workspace;
     const body = {
@@ -159,7 +346,7 @@ describe("authentication and authorization", () => {
       (await request("/admin/workspace", body, ownerCookie, "PATCH")).status,
     ).toBe(200);
     const row = (
-      await db.query("SELECT name, map_id FROM workspace_settings WHERE id=1")
+      await pool.query("SELECT name, map_id FROM workspace_settings WHERE id=1")
     ).rows[0];
     expect(row).toEqual({ name: "Garden team", map_id: "nature-large" });
     expect((await request("/config")).data.workspace.mapId).toBe(
@@ -238,7 +425,7 @@ describe("authentication and authorization", () => {
         elements: [rectangle("two")],
       }),
     ]);
-    const row = await db.query(
+    const row = await pool.query(
       "SELECT elements FROM office_whiteboards WHERE id=$1",
       [boards.peers.get("a")!.scope],
     );
@@ -281,9 +468,10 @@ describe("authentication and authorization", () => {
     expect(closed).toContain("a");
     expect(
       (
-        await db.query("SELECT elements FROM office_whiteboards WHERE id=$1", [
-          row.rows[0].id || `${office.workspace.mapId}:floor`,
-        ])
+        await pool.query(
+          "SELECT elements FROM office_whiteboards WHERE id=$1",
+          [row.rows[0].id || `${office.workspace.mapId}:floor`],
+        )
       ).rows[0].elements,
     ).toHaveLength(2);
     office.configureWorkspace({
@@ -364,7 +552,7 @@ describe("authentication and authorization", () => {
     expect((await request("/config")).data.password).toBe(true);
   });
   test("password hashes are Argon2id, never the submitted password", async () => {
-    const rows = await db.query(
+    const rows = await pool.query(
       "SELECT password FROM account WHERE \"providerId\"='credential'",
     );
     expect(rows.rows[0].password).toStartWith("$argon2id$");
@@ -380,7 +568,7 @@ describe("authentication and authorization", () => {
       },
     });
     const id = result.user.id;
-    await db.query('UPDATE "user" SET approved=true WHERE id=$1', [id]);
+    await pool.query('UPDATE "user" SET approved=true WHERE id=$1', [id]);
     const login = await request("/auth/sign-in/username", {
       username: "managed_test",
       password,
@@ -417,7 +605,7 @@ describe("authentication and authorization", () => {
       ).status,
     ).toBe(400);
     // Linked SSO identities must never be reset through a local-password control.
-    await db.query(
+    await pool.query(
       `INSERT INTO account(id,"accountId","providerId","userId","createdAt","updatedAt") VALUES('test-sso','subject','oidc',$1,now(),now())`,
       [id],
     );
@@ -429,7 +617,7 @@ describe("authentication and authorization", () => {
     expect(
       (await request("/admin/reset-password", reset, ownerCookie)).status,
     ).toBe(400);
-    await db.query("DELETE FROM account WHERE id='test-sso'");
+    await pool.query("DELETE FROM account WHERE id='test-sso'");
     expect(
       (await request("/admin/users", undefined, ownerCookie)).data.find(
         (u: any) => u.id === id,
@@ -440,7 +628,7 @@ describe("authentication and authorization", () => {
     ).toBe(200);
     expect((await request("/me", undefined, login.cookie)).status).toBe(401);
     const account = (
-      await db.query('SELECT password FROM account WHERE "userId"=$1', [id])
+      await pool.query('SELECT password FROM account WHERE "userId"=$1', [id])
     ).rows[0];
     expect(await Bun.password.verify(reset.password, account.password)).toBe(
       true,
@@ -476,12 +664,12 @@ describe("authentication and authorization", () => {
         )
       ).status,
     ).toBe(400);
-    await db.query("UPDATE \"user\" SET role='owner' WHERE id=$1", [id]);
+    await pool.query("UPDATE \"user\" SET role='owner' WHERE id=$1", [id]);
     expect(
       (await request(`/admin/users/${id}`, undefined, ownerCookie, "DELETE"))
         .status,
     ).toBe(400);
-    await db.query("UPDATE \"user\" SET role='member' WHERE id=$1", [id]);
+    await pool.query("UPDATE \"user\" SET role='member' WHERE id=$1", [id]);
     expect(
       (await request(`/admin/users/${id}`, undefined, ownerCookie, "DELETE"))
         .status,
@@ -492,20 +680,20 @@ describe("authentication and authorization", () => {
     for (const table of ['"user"', "account", "session"]) {
       const column = table === '\"user\"' ? "id" : '"userId"';
       expect(
-        (await db.query(`SELECT * FROM ${table} WHERE ${column}=$1`, [id]))
+        (await pool.query(`SELECT * FROM ${table} WHERE ${column}=$1`, [id]))
           .rowCount,
       ).toBe(0);
     }
     expect(
       (
-        await db.query("SELECT * FROM office_audit WHERE action=$1", [
+        await pool.query("SELECT * FROM office_audit WHERE action=$1", [
           `Deleted member ${id}`,
         ])
       ).rowCount,
     ).toBe(1);
   });
   test("disabled password method rejects direct login and existing sessions", async () => {
-    await db.query("UPDATE office_settings SET password=false");
+    await pool.query("UPDATE office_settings SET password=false");
     expect(
       (
         await request("/auth/sign-in/username", {
@@ -515,7 +703,7 @@ describe("authentication and authorization", () => {
       ).status,
     ).toBe(403);
     expect((await request("/me", undefined, ownerCookie)).status).toBe(401);
-    await db.query("UPDATE office_settings SET password=true");
+    await pool.query("UPDATE office_settings SET password=true");
   });
   test("SSO endpoints stay unavailable until configured and enabled", async () => {
     expect(

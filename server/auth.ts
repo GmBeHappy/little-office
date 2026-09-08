@@ -1,11 +1,22 @@
 import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { users, sessions, accounts, verifications } from "./schema";
 import { APIError } from "better-auth/api";
 import { genericOAuth, username } from "better-auth/plugins";
 import { config, oidcConfigured, oidcProvider } from "./config";
 import { db, settings } from "./db";
 
 export const auth = betterAuth({
-  database: db,
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    schema: {
+      user: users,
+      session: sessions,
+      account: accounts,
+      verification: verifications,
+    },
+    transaction: true,
+  }),
   baseURL: config.origin,
   basePath: "/api/auth",
   secret: config.secret,

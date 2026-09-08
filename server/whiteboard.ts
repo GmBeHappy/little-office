@@ -1,4 +1,5 @@
-import type { PoolClient } from "pg";
+import { eq, sql } from "drizzle-orm";
+import { whiteboardScenes } from "./schema";
 import type { Office } from "./office";
 import { db } from "./db";
 import {
@@ -8,7 +9,6 @@ import {
   boardScope,
   mergeBoard,
   whiteboardEnabled,
-  type BoardElement,
 } from "../shared/whiteboard";
 type Peer = {
   userId: string;
@@ -63,10 +63,10 @@ export class Whiteboards {
       }
     this.peers.set(key, peer);
     try {
-      const result = await db.query(
-        "SELECT elements FROM office_whiteboards WHERE id=$1",
-        [peer.scope],
-      );
+      const [scene] = await db
+        .select({ elements: whiteboardScenes.elements })
+        .from(whiteboardScenes)
+        .where(eq(whiteboardScenes.id, peer.scope));
       if (!this.allowed(peer) || this.peers.get(key) !== peer) {
         close();
         return;
@@ -74,7 +74,7 @@ export class Whiteboards {
       send({
         type: "ready",
         scope: peer.scope,
-        elements: result.rows[0]?.elements || [],
+        elements: scene?.elements || [],
       });
       this.presence(peer.scope);
     } catch (error) {
@@ -139,45 +139,37 @@ export class Whiteboards {
     }
     if (peer.writing) throw new Error("Wait for the current whiteboard save.");
     peer.writing = true;
-    let connection: PoolClient | undefined;
     try {
-      connection = await db.connect();
-      await connection.query("BEGIN");
-      await connection.query(
-        "INSERT INTO office_whiteboards (id) VALUES ($1) ON CONFLICT DO NOTHING",
-        [peer.scope],
-      );
-      const result = await connection.query(
-        "SELECT elements FROM office_whiteboards WHERE id=$1 FOR UPDATE",
-        [peer.scope],
-      );
-      if (!this.allowed(peer)) throw new Error("Whiteboard access ended.");
-      const elements = mergeBoard(
-        result.rows[0].elements as BoardElement[],
-        message.elements,
-      );
-      const encoded = JSON.stringify(elements);
-      if (
-        elements.length > BOARD_MAX_ELEMENTS ||
-        Buffer.byteLength(encoded) > BOARD_MAX_BYTES
-      )
-        throw new Error(
-          "Whiteboard limit reached. Export a copy to keep your work.",
-        );
-      await connection.query(
-        "UPDATE office_whiteboards SET elements=$2::jsonb, updated_at=now() WHERE id=$1",
-        [peer.scope, encoded],
-      );
-      await connection.query("COMMIT");
+      const elements = await db.transaction(async (tx) => {
+        await tx
+          .insert(whiteboardScenes)
+          .values({ id: peer.scope })
+          .onConflictDoNothing();
+        const [scene] = await tx
+          .select({ elements: whiteboardScenes.elements })
+          .from(whiteboardScenes)
+          .where(eq(whiteboardScenes.id, peer.scope))
+          .for("update");
+        if (!this.allowed(peer)) throw new Error("Whiteboard access ended.");
+        const elements = mergeBoard(scene.elements, message.elements);
+        if (
+          elements.length > BOARD_MAX_ELEMENTS ||
+          Buffer.byteLength(JSON.stringify(elements)) > BOARD_MAX_BYTES
+        )
+          throw new Error(
+            "Whiteboard limit reached. Export a copy to keep your work.",
+          );
+        await tx
+          .update(whiteboardScenes)
+          .set({ elements, updatedAt: sql`now()` })
+          .where(eq(whiteboardScenes.id, peer.scope));
+        return elements;
+      });
       // Acknowledgement only follows a durable database commit.
       if (this.allowed(peer))
         peer.send({ type: "saved", batch: message.batch, elements });
       this.broadcast(peer.scope, { type: "scene", elements });
-    } catch (error) {
-      await connection?.query("ROLLBACK");
-      throw error;
     } finally {
-      connection?.release();
       peer.writing = false;
     }
   }
