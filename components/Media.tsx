@@ -54,6 +54,43 @@ export function useOfficeMedia(
   const [chimeBlocked, setChimeBlocked] = useState(false);
   const chime = useRef<HTMLAudioElement | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [capturePermissions, setCapturePermissions] = useState<
+    Partial<Record<"microphone" | "camera", PermissionState>>
+  >({});
+  useEffect(() => {
+    let disposed = false;
+    const cleanups: (() => void)[] = [];
+    for (const name of ["microphone", "camera"] as const) {
+      void navigator.permissions
+        ?.query({ name: name as PermissionName })
+        .then((status) => {
+          if (disposed) return;
+          const changed = () =>
+            setCapturePermissions((current) => ({
+              ...current,
+              [name]: status.state,
+            }));
+          changed();
+          status.addEventListener("change", changed);
+          cleanups.push(() => status.removeEventListener("change", changed));
+        })
+        .catch(() => {
+          /* Unsupported permission queries fall back to device labels. */
+        });
+    }
+    return () => {
+      disposed = true;
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, []);
+  const microphoneAllowed = capturePermissions.microphone
+    ? capturePermissions.microphone === "granted"
+    : mic ||
+      devices.some((device) => device.kind === "audioinput" && !!device.label);
+  const cameraAllowed = capturePermissions.camera
+    ? capturePermissions.camera === "granted"
+    : camera ||
+      devices.some((device) => device.kind === "videoinput" && !!device.label);
   const [quality, setQuality] = useState<MediaQuality>("maximum");
   const qualityPreference = useRef<MediaQuality>("maximum");
   const pendingScreenQuality = useRef<MediaQuality>("maximum");
@@ -534,6 +571,8 @@ export function useOfficeMedia(
     chooseQuality,
     outputSupported,
     outputPickerSupported,
+    microphoneAllowed,
+    cameraAllowed,
     chooseOutput,
     deviceBusy: deviceBusy || connecting,
   };

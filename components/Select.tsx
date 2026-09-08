@@ -43,7 +43,10 @@ export function Select({
           className="select-menu"
           position="popper"
           sideOffset={6}
-          collisionPadding={12}
+          collisionBoundary={
+            trigger?.closest('dialog, [role="dialog"]') || undefined
+          }
+          collisionPadding={8}
         >
           <SelectPrimitive.ScrollUpButton className="select-scroll">
             <ChevronUp size={16} />

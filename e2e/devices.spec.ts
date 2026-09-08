@@ -47,11 +47,6 @@ test("device choices persist and route incoming call audio to the selected outpu
     });
     await login(a, 0);
     await settings(a);
-    await a
-      .getByRole("button", {
-        name: "Allow microphone access & refresh devices",
-      })
-      .click();
     const mic = a.getByRole("combobox", { name: "Microphone", exact: true });
     const output = a.getByRole("combobox", {
       name: "Speakers / headphones",

@@ -3310,3 +3310,17 @@ html[lang="th"] .section-title {
     padding: 12px;
   }
 }
+
+/* Reserve scrolling space when a compact device dialog opens a list. */
+.toolbar-menu:has([role="listbox"]) {
+  min-height: min(360px, calc(100dvh - 150px));
+}
+@media (max-height: 500px) {
+  .toolbar-menu {
+    bottom: 16px;
+    max-height: calc(100dvh - 32px);
+  }
+  .toolbar-menu:has([role="listbox"]) {
+    min-height: min(360px, calc(100dvh - 32px));
+  }
+}

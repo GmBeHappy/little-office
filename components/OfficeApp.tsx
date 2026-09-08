@@ -927,13 +927,15 @@ export default function OfficeApp() {
                       {t("Choose another speaker…")}
                     </button>
                   )}
-                  <button
-                    className="secondary"
-                    disabled={media.deviceBusy}
-                    onClick={() => void media.enumerate(true)}
-                  >
-                    {t("Allow microphone access & refresh devices")}
-                  </button>
+                  {!media.microphoneAllowed && (
+                    <button
+                      className="secondary"
+                      disabled={media.deviceBusy}
+                      onClick={() => void media.enumerate(true)}
+                    >
+                      {t("Allow microphone access & refresh devices")}
+                    </button>
+                  )}
                 </>
               )}
             </ToolbarMenu>
@@ -952,13 +954,15 @@ export default function OfficeApp() {
               {() => (
                 <>
                   <DeviceSelect media={media} kind="videoinput" />
-                  <button
-                    className="secondary"
-                    disabled={media.deviceBusy}
-                    onClick={() => void media.enumerate("videoinput")}
-                  >
-                    {t("Allow camera access & refresh devices")}
-                  </button>
+                  {!media.cameraAllowed && (
+                    <button
+                      className="secondary"
+                      disabled={media.deviceBusy}
+                      onClick={() => void media.enumerate("videoinput")}
+                    >
+                      {t("Allow camera access & refresh devices")}
+                    </button>
+                  )}
                 </>
               )}
             </ToolbarMenu>
@@ -1698,18 +1702,22 @@ function SettingsPanel({
               "Choose your microphone and speakers before or during a conversation. Choices are saved for your account on this browser.",
             )}
           </p>
-          <button
-            className="secondary"
-            disabled={media.deviceBusy}
-            onClick={() => void media.enumerate(true)}
-          >
-            {t("Allow microphone access & refresh devices")}
-          </button>
-          <p className="muted">
-            {t(
-              "This reveals device names without turning your call microphone on.",
-            )}
-          </p>
+          {!media.microphoneAllowed && (
+            <>
+              <button
+                className="secondary"
+                disabled={media.deviceBusy}
+                onClick={() => void media.enumerate(true)}
+              >
+                {t("Allow microphone access & refresh devices")}
+              </button>
+              <p className="muted">
+                {t(
+                  "This reveals device names without turning your call microphone on.",
+                )}
+              </p>
+            </>
+          )}
           <DeviceSelect media={media} kind="audioinput" />
           <DeviceSelect media={media} kind="audiooutput" />
           {!media.outputSupported && (

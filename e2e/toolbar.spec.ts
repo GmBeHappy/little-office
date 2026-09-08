@@ -78,9 +78,11 @@ test("compact navigation, emotes and custom toolbar menus work on desktop and mo
       .getByRole("button", { name: "Camera devices", exact: true })
       .click();
     const camera = a.getByRole("dialog", { name: "Camera devices" });
-    await camera
-      .getByRole("button", { name: "Allow camera access & refresh devices" })
-      .click();
+    await expect(
+      camera.getByRole("button", {
+        name: "Allow camera access & refresh devices",
+      }),
+    ).toHaveCount(0);
     const cameraSelect = camera.getByRole("combobox", {
       name: "Camera",
       exact: true,
@@ -102,6 +104,8 @@ test("compact navigation, emotes and custom toolbar menus work on desktop and mo
     await expect.poll(() => emotes.at(-1)?.emoji).toBe("😀");
     await expect(picker).toHaveCount(0);
     await a.screenshot({ path: "/private/tmp/office-toolbar-desktop.png" });
+    const collapse = a.getByRole("button", { name: "Collapse issues badge" });
+    if (await collapse.isVisible()) await collapse.click();
     await a.setViewportSize({ width: 390, height: 844 });
     await a.getByRole("button", { name: "เปลี่ยนเป็นภาษาไทย" }).click();
     await a.getByRole("button", { name: "อีโมต", exact: true }).click();
