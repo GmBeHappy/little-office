@@ -170,7 +170,10 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 16384 } })
     requireSession(identity, true);
     return (
       await db.query(
-        'SELECT id,name,username,role,approved FROM "user" ORDER BY "createdAt"',
+        `SELECT u.id,u.name,u.username,u.role,u.approved,
+          EXISTS(SELECT 1 FROM account a WHERE a."userId"=u.id AND a."providerId"='credential')
+          AND NOT EXISTS(SELECT 1 FROM account a WHERE a."userId"=u.id AND a."providerId"<>'credential') AS "localPassword"
+         FROM "user" u ORDER BY u."createdAt"`,
       )
     ).rows;
   })
@@ -227,6 +230,32 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 16384 } })
     },
     { body: t.Object({ approved: t.Boolean() }) },
   )
+  .delete("/api/admin/users/:id", async ({ identity, params }) => {
+    const s = requireSession(identity, true);
+    recent(s);
+    const connection = await db.connect();
+    try {
+      await connection.query("BEGIN");
+      const result = await connection.query(
+        "DELETE FROM \"user\" WHERE id=$1 AND role='member' AND id<>$2 RETURNING id",
+        [params.id, s.user.id],
+      );
+      if (!result.rowCount)
+        throw new Error("Member not found or owner account protected.");
+      await connection.query(
+        "INSERT INTO office_audit(actor,action) VALUES($1,$2)",
+        [s.user.id, `Deleted member ${params.id}`],
+      );
+      await connection.query("COMMIT");
+    } catch (e) {
+      await connection.query("ROLLBACK");
+      throw e;
+    } finally {
+      connection.release();
+    }
+    office.remove(params.id);
+    return { ok: true };
+  })
   .post(
     "/api/admin/reset-password",
     async ({ identity, body }) => {
@@ -239,22 +268,37 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 16384 } })
         memoryCost: 19456,
         timeCost: 2,
       });
-      const result = await db.query(
-        'UPDATE account SET password=$1 WHERE "userId"=$2 AND "providerId"=\'credential\' RETURNING id',
-        [hash, body.userId],
-      );
-      if (!result.rowCount)
-        throw new Error("This account has no local password.");
-      await db.query(
-        'UPDATE "user" SET "mustChangePassword"=true WHERE id=$1',
-        [body.userId],
-      );
-      await db.query('DELETE FROM session WHERE "userId"=$1', [body.userId]);
+      const connection = await db.connect();
+      try {
+        await connection.query("BEGIN");
+        const result = await connection.query(
+          `UPDATE account SET password=$1 WHERE "userId"=$2 AND "providerId"='credential'
+           AND NOT EXISTS(SELECT 1 FROM account a WHERE a."userId"=$2 AND a."providerId"<>'credential') RETURNING id`,
+          [hash, body.userId],
+        );
+        if (!result.rowCount)
+          throw new Error(
+            "Only local password accounts can be reset here. Manage SSO passwords with your identity provider.",
+          );
+        await connection.query(
+          'UPDATE "user" SET "mustChangePassword"=true WHERE id=$1',
+          [body.userId],
+        );
+        await connection.query('DELETE FROM session WHERE "userId"=$1', [
+          body.userId,
+        ]);
+        await connection.query(
+          "INSERT INTO office_audit(actor,action) VALUES($1,$2)",
+          [s.user.id, `Reset local password for ${body.userId}`],
+        );
+        await connection.query("COMMIT");
+      } catch (e) {
+        await connection.query("ROLLBACK");
+        throw e;
+      } finally {
+        connection.release();
+      }
       office.remove(body.userId);
-      await db.query("INSERT INTO office_audit(actor,action) VALUES($1,$2)", [
-        s.user.id,
-        `Reset local password for ${body.userId}`,
-      ]);
       return { ok: true };
     },
     {

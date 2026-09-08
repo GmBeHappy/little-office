@@ -196,6 +196,140 @@ describe("authentication and authorization", () => {
     expect(rows.rows[0].password).toStartWith("$argon2id$");
     expect(rows.rows[0].password).not.toBe(password);
   });
+  test("member deletion and local password resets enforce owner access, revoke sessions, and protect SSO and owners", async () => {
+    const result = await auth.api.signUpEmail({
+      body: {
+        username: "managed_test",
+        email: "managed_test@local.invalid",
+        name: "Managed",
+        password,
+      },
+    });
+    const id = result.user.id;
+    await db.query('UPDATE "user" SET approved=true WHERE id=$1', [id]);
+    const login = await request("/auth/sign-in/username", {
+      username: "managed_test",
+      password,
+    });
+    const reset = { userId: id, password: crypto.randomUUID() + "New!" };
+    expect(
+      (await request("/admin/reset-password", reset, memberCookie)).status,
+    ).toBe(400);
+    expect(
+      (await request(`/admin/users/${id}`, undefined, memberCookie, "DELETE"))
+        .status,
+    ).toBe(400);
+    expect(
+      (await request(`/admin/users/${id}`, undefined, "", "DELETE")).status,
+    ).toBe(400);
+    expect(
+      (
+        await request(
+          `/admin/users/${id}`,
+          undefined,
+          ownerCookie,
+          "DELETE",
+          "https://untrusted.invalid",
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(
+          "/admin/reset-password",
+          { ...reset, password: "short" },
+          ownerCookie,
+        )
+      ).status,
+    ).toBe(400);
+    // Linked SSO identities must never be reset through a local-password control.
+    await db.query(
+      `INSERT INTO account(id,"accountId","providerId","userId","createdAt","updatedAt") VALUES('test-sso','subject','oidc',$1,now(),now())`,
+      [id],
+    );
+    expect(
+      (await request("/admin/users", undefined, ownerCookie)).data.find(
+        (u: any) => u.id === id,
+      ).localPassword,
+    ).toBe(false);
+    expect(
+      (await request("/admin/reset-password", reset, ownerCookie)).status,
+    ).toBe(400);
+    await db.query("DELETE FROM account WHERE id='test-sso'");
+    expect(
+      (await request("/admin/users", undefined, ownerCookie)).data.find(
+        (u: any) => u.id === id,
+      ).localPassword,
+    ).toBe(true);
+    expect(
+      (await request("/admin/reset-password", reset, ownerCookie)).status,
+    ).toBe(200);
+    expect((await request("/me", undefined, login.cookie)).status).toBe(401);
+    const account = (
+      await db.query('SELECT password FROM account WHERE "userId"=$1', [id])
+    ).rows[0];
+    expect(await Bun.password.verify(reset.password, account.password)).toBe(
+      true,
+    );
+    expect(await Bun.password.verify(password, account.password)).toBe(false);
+    const temporary = await request("/auth/sign-in/username", {
+      username: "managed_test",
+      password: reset.password,
+    });
+    expect(temporary.status).toBe(200);
+    expect(
+      (await request("/me", undefined, temporary.cookie)).data.user
+        .mustChangePassword,
+    ).toBe(true);
+    expect(
+      (
+        await request(
+          "/profile",
+          { name: "Blocked", avatar: "sage" },
+          temporary.cookie,
+          "PATCH",
+        )
+      ).status,
+    ).toBe(400);
+    const owner = (await request("/me", undefined, ownerCookie)).data.user;
+    expect(
+      (
+        await request(
+          `/admin/users/${owner.id}`,
+          undefined,
+          ownerCookie,
+          "DELETE",
+        )
+      ).status,
+    ).toBe(400);
+    await db.query("UPDATE \"user\" SET role='owner' WHERE id=$1", [id]);
+    expect(
+      (await request(`/admin/users/${id}`, undefined, ownerCookie, "DELETE"))
+        .status,
+    ).toBe(400);
+    await db.query("UPDATE \"user\" SET role='member' WHERE id=$1", [id]);
+    expect(
+      (await request(`/admin/users/${id}`, undefined, ownerCookie, "DELETE"))
+        .status,
+    ).toBe(200);
+    expect((await request("/me", undefined, temporary.cookie)).status).toBe(
+      401,
+    );
+    for (const table of ['"user"', "account", "session"]) {
+      const column = table === '\"user\"' ? "id" : '"userId"';
+      expect(
+        (await db.query(`SELECT * FROM ${table} WHERE ${column}=$1`, [id]))
+          .rowCount,
+      ).toBe(0);
+    }
+    expect(
+      (
+        await db.query("SELECT * FROM office_audit WHERE action=$1", [
+          `Deleted member ${id}`,
+        ])
+      ).rowCount,
+    ).toBe(1);
+  });
   test("disabled password method rejects direct login and existing sessions", async () => {
     await db.query("UPDATE office_settings SET password=false");
     expect(

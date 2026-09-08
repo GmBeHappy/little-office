@@ -401,5 +401,14 @@
   "Jump (Space)": "กระโดด (Space)",
   "Sit / stand (1)": "นั่ง / ยืน (1)",
   "Sleep / wake (2)": "นอน / ตื่น (2)",
-  "Face someone nearby and press Z to nudge them. Both of you hear a chime, and the avatars react. Press 1 to sit or 2 to sleep; move or jump to stand up. These poses do not change your voice or availability.": "หันหน้าเข้าหาคนใกล้ ๆ แล้วกด Z เพื่อสะกิด ทั้งสองฝ่ายจะได้ยินเสียงและเห็นตัวละครขยับ กด 1 เพื่อนั่ง หรือ 2 เพื่อนอน เดินหรือกระโดดเพื่อยืนขึ้น ท่าทางเหล่านี้ไม่เปลี่ยนเสียงสนทนาหรือสถานะพร้อมใช้งาน"
+  "Face someone nearby and press Z to nudge them. Both of you hear a chime, and the avatars react. Press 1 to sit or 2 to sleep; move or jump to stand up. These poses do not change your voice or availability.": "หันหน้าเข้าหาคนใกล้ ๆ แล้วกด Z เพื่อสะกิด ทั้งสองฝ่ายจะได้ยินเสียงและเห็นตัวละครขยับ กด 1 เพื่อนั่ง หรือ 2 เพื่อนอน เดินหรือกระโดดเพื่อยืนขึ้น ท่าทางเหล่านี้ไม่เปลี่ยนเสียงสนทนาหรือสถานะพร้อมใช้งาน",
+  "Reset password": "รีเซ็ตรหัสผ่าน",
+  "Delete member": "ลบสมาชิก",
+  "Confirm deletion": "ยืนยันการลบ",
+  "Member deleted.": "ลบสมาชิกแล้ว",
+  "Password reset. Give the temporary password to the member; they must change it on their next login.": "รีเซ็ตรหัสผ่านแล้ว ส่งรหัสผ่านชั่วคราวให้สมาชิก โดยสมาชิกต้องเปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งถัดไป",
+  "Delete this member and sign them out? This cannot be undone. Their SSO identity is not deleted; signing in again requires approval.": "ลบสมาชิกนี้และออกจากระบบให้สมาชิกหรือไม่? การลบไม่สามารถย้อนกลับได้ บัญชีที่ผู้ให้บริการ SSO จะไม่ถูกลบ และต้องได้รับการอนุมัติเมื่อเข้าสู่ระบบใหม่",
+  "Set a temporary password with at least 12 characters. The member will be signed out and must change it on their next login.": "ตั้งรหัสผ่านชั่วคราวอย่างน้อย 12 ตัวอักษร สมาชิกจะออกจากระบบและต้องเปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งถัดไป",
+  "Member not found or owner account protected.": "ไม่พบสมาชิก หรือบัญชีนี้เป็นเจ้าของซึ่งไม่สามารถลบได้",
+  "Only local password accounts can be reset here. Manage SSO passwords with your identity provider.": "รีเซ็ตรหัสผ่านได้เฉพาะบัญชีภายในระบบ สำหรับ SSO ให้จัดการรหัสผ่านกับผู้ให้บริการยืนยันตัวตน"
 }

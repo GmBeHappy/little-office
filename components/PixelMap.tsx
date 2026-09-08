@@ -277,20 +277,20 @@ export default function PixelMap(props: Props) {
               "ArrowDown",
               "ArrowLeft",
               "ArrowRight",
-              "w",
-              "a",
-              "s",
-              "d",
-            ].includes(e.key)
+              "KeyW",
+              "KeyA",
+              "KeyS",
+              "KeyD",
+            ].includes(e.code)
           ) {
             e.preventDefault();
             // Walking resumes map controls after using a room or toolbar button.
             keyboardNavigation = false;
             host.current?.focus({ preventScroll: true });
-            this.keys.add(e.key);
+            this.keys.add(e.code);
           }
         };
-        const up = (e: KeyboardEvent) => this.keys.delete(e.key);
+        const up = (e: KeyboardEvent) => this.keys.delete(e.code);
         const blur = () => {
           this.keys.clear();
           this.stopTouch();
@@ -326,12 +326,12 @@ export default function PixelMap(props: Props) {
         if (time - this.lastInput > 80) {
           const dx = this.touch
             ? this.touch.dx
-            : (this.keys.has("d") || this.keys.has("ArrowRight") ? 1 : 0) -
-              (this.keys.has("a") || this.keys.has("ArrowLeft") ? 1 : 0);
+            : (this.keys.has("KeyD") || this.keys.has("ArrowRight") ? 1 : 0) -
+              (this.keys.has("KeyA") || this.keys.has("ArrowLeft") ? 1 : 0);
           const dy = this.touch
             ? this.touch.dy
-            : (this.keys.has("s") || this.keys.has("ArrowDown") ? 1 : 0) -
-              (this.keys.has("w") || this.keys.has("ArrowUp") ? 1 : 0);
+            : (this.keys.has("KeyS") || this.keys.has("ArrowDown") ? 1 : 0) -
+              (this.keys.has("KeyW") || this.keys.has("ArrowUp") ? 1 : 0);
           this.seq = Math.max(
             this.seq,
             state.people.find((person) => person.id === state.self)?.seq || 0,

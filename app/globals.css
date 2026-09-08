@@ -3006,3 +3006,31 @@ html[lang="th"] .section-title {
   max-height: 100%;
   align-self: center;
 }
+
+.member-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+  margin-left: auto;
+}
+.admin-users > div {
+  flex-wrap: wrap;
+}
+.member-actions .text-button {
+  margin-left: 0;
+}
+.member-action-form {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.member-action-form p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.member-action-form .member-actions {
+  margin-top: 14px;
+}

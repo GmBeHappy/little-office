@@ -299,3 +299,7 @@ This release targets one private office and a small team. It has one authoritati
 Nearby voice uses selective subscriptions within a public floor room. Distance is a user-experience rule, not a confidentiality boundary against modified clients. Private meetings/direct calls use isolated LiveKit rooms. Leaving a media group rotates its room generation and disconnects the retired room, so old tokens cannot reach the continuing conversation. Remaining members reconnect briefly; busy offices may need a more advanced admission system to reduce that churn.
 
 The map uses original geometric pixel art and requires no downloaded sprite assets. Desktop browsers are the primary target; the compact layout and room navigation work on smaller screens, but touch movement is not included. Screen/system audio support varies by browser and capture source. Recording, a map editor, persistent chat, and multiple organizations are outside this release.
+
+Owners can delete members or reset local (non-SSO) passwords in **Settings → Members**. Deletion requires confirmation, removes sessions and account records, and disconnects the member; owner accounts cannot be deleted. SSO identities remain at the identity provider and need office approval if they sign in again. Password resets revoke sessions and require changing the temporary password on next login. These actions require an owner sign-in within the last 10 minutes.
+
+Movement follows physical WASD keys, including **ไ / ฟ / ห / ก** on a Thai keyboard, as well as arrow keys. Typing in forms does not move your character.

@@ -73,6 +73,7 @@ const statusLabel = {
   away: "Away",
 };
 type AdminUser = {
+  localPassword: boolean;
   id: string;
   name: string;
   username: string;
@@ -1572,6 +1573,10 @@ function SettingsPanel({
     ),
     [users, setUsers] = useState<AdminUser[]>([]),
     [busy, setBusy] = useState(false);
+  const [memberAction, setMemberAction] = useState<{
+    user: AdminUser;
+    kind: "delete" | "reset";
+  } | null>(null);
   const loadUsers = useCallback(async () => {
     try {
       setUsers(await api<AdminUser[]>("/admin/users"));
@@ -1879,36 +1884,147 @@ function SettingsPanel({
         <>
           <div className="admin-users">
             {users.map((u) => (
-              <div key={u.id}>
+              <div key={u.id} data-member-id={u.id}>
                 <Avatar color="sage" />
                 <span>
                   <strong>{u.name}</strong>
                   <small>
                     {u.username || t("SSO account")} · {t(u.role)}
+                    {!u.localPassword && u.username
+                      ? ` · ${t("SSO account")}`
+                      : ""}
                   </small>
                 </span>
                 {u.id !== user.id && (
-                  <button
-                    className="text-button"
-                    onClick={async () => {
-                      try {
-                        await api(
-                          `/admin/users/${u.id}`,
-                          { approved: !u.approved },
-                          "PATCH",
-                        );
-                        await loadUsers();
-                      } catch (e) {
-                        notify((e as Error).message);
-                      }
-                    }}
-                  >
-                    {u.approved ? t("Disable") : t("Approve")}
-                  </button>
+                  <div className="member-actions">
+                    <button
+                      className="text-button"
+                      disabled={busy}
+                      onClick={async () => {
+                        try {
+                          await api(
+                            `/admin/users/${u.id}`,
+                            { approved: !u.approved },
+                            "PATCH",
+                          );
+                          await loadUsers();
+                        } catch (e) {
+                          notify((e as Error).message);
+                        }
+                      }}
+                    >
+                      {u.approved ? t("Disable") : t("Approve")}
+                    </button>
+                    {u.localPassword && (
+                      <button
+                        className="text-button"
+                        disabled={busy || !config.password}
+                        onClick={() =>
+                          setMemberAction({ user: u, kind: "reset" })
+                        }
+                      >
+                        {t("Reset password")}
+                      </button>
+                    )}
+                    {u.role === "member" && (
+                      <button
+                        className="text-button"
+                        disabled={busy}
+                        onClick={() =>
+                          setMemberAction({ user: u, kind: "delete" })
+                        }
+                      >
+                        {t("Delete member")}
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             ))}
           </div>
+          {memberAction && (
+            <form
+              className="member-action-form"
+              key={`${memberAction.kind}:${memberAction.user.id}`}
+              aria-label={t(
+                memberAction.kind === "delete"
+                  ? "Delete member"
+                  : "Reset password",
+              )}
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const form = e.currentTarget;
+                const action = memberAction;
+                const password = new FormData(form).get("password");
+                setBusy(true);
+                try {
+                  if (action.kind === "delete")
+                    await api(
+                      `/admin/users/${action.user.id}`,
+                      undefined,
+                      "DELETE",
+                    );
+                  else
+                    await api("/admin/reset-password", {
+                      userId: action.user.id,
+                      password,
+                    });
+                  form.reset();
+                  setMemberAction(null);
+                  await loadUsers();
+                  notify(
+                    action.kind === "delete"
+                      ? "Member deleted."
+                      : "Password reset. Give the temporary password to the member; they must change it on their next login.",
+                  );
+                } catch (e) {
+                  notify((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <strong>{memberAction.user.name}</strong>
+              <p>
+                {t(
+                  memberAction.kind === "delete"
+                    ? "Delete this member and sign them out? This cannot be undone. Their SSO identity is not deleted; signing in again requires approval."
+                    : "Set a temporary password with at least 12 characters. The member will be signed out and must change it on their next login.",
+                )}
+              </p>
+              {memberAction.kind === "reset" && (
+                <label>
+                  {t("Temporary password")}
+                  <input
+                    name="password"
+                    type="password"
+                    required
+                    minLength={12}
+                    maxLength={128}
+                    autoComplete="new-password"
+                    disabled={busy}
+                  />
+                </label>
+              )}
+              <div className="member-actions">
+                <button
+                  type="button"
+                  className="text-button"
+                  disabled={busy}
+                  onClick={() => setMemberAction(null)}
+                >
+                  {t("Cancel")}
+                </button>
+                <button className="primary" disabled={busy}>
+                  {t(
+                    memberAction.kind === "delete"
+                      ? "Confirm deletion"
+                      : "Reset password",
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
           <details className="add-member">
             <summary>
               <Plus size={16} />
