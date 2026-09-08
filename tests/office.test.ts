@@ -19,6 +19,25 @@ function setup() {
   return { office, events, retired };
 }
 describe("office behavior", () => {
+  test("emotes accept one Unicode emoji and broadcast to all members without changing presence", () => {
+    const { office, events } = setup();
+    for (const emoji of ["😀", "👋🏽", "🇹🇭", "👨‍👩‍👧‍👦", "❤️", "1️⃣"]) {
+      const command = Command.parse({ type: "emote", emoji });
+      office.handle("a", command, Date.now());
+      for (const messages of Object.values(events))
+        expect(messages.at(-1)).toEqual({ type: "emote", from: "a", emoji });
+    }
+    for (const emoji of [
+      "",
+      "hello",
+      "😀😀",
+      "<script>",
+      "a😀",
+      "a".repeat(200),
+    ])
+      expect(Command.safeParse({ type: "emote", emoji }).success).toBe(false);
+    expect(office.members.get("a")?.status).toBe("available");
+  });
   test("nudges only target people in front, play sender acknowledgement, and have no cooldown", () => {
     const { office, events } = setup();
     const a = office.members.get("a")!,

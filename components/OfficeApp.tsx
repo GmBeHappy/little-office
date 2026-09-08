@@ -56,6 +56,9 @@ import {
 } from "@/shared/avatars";
 import type { Command } from "@/shared/protocol";
 import { MediaTracks, SpeakingIndicator, useOfficeMedia } from "./Media";
+import { Select } from "./Select";
+import { DeviceSelect } from "./DeviceSelect";
+import { ToolbarMenu } from "./ToolbarMenu";
 import { WorkspaceSettings } from "./WorkspaceSettings";
 import {
   DEFAULT_WORKSPACE,
@@ -66,6 +69,7 @@ const PixelMap = dynamic(() => import("./PixelMap"), {
   ssr: false,
   loading: MapLoading,
 });
+const EmotePicker = dynamic(() => import("./EmotePicker"), { ssr: false });
 const statusLabel = {
   available: "Available",
   busy: "Busy",
@@ -97,6 +101,9 @@ export default function OfficeApp() {
     ),
     [invites, setInvites] = useState<Invitation[]>([]),
     [waves, setWaves] = useState<Record<string, number>>({}),
+    [emotes, setEmotes] = useState<
+      Record<string, { emoji: string; until: number }>
+    >({}),
     [jumps, setJumps] = useState<Record<string, number>>({}),
     [nudges, setNudges] = useState<
       Record<string, { start: number; sender: boolean }>
@@ -197,6 +204,14 @@ export default function OfficeApp() {
           setWaves((v) => ({ ...v, [message.from]: Date.now() + 2600 }));
           if (message.to === user?.id && !message.silent)
             notify(`${message.name} waved at you. Say hello!`);
+        } else if (message.type === "emote") {
+          const now = Date.now();
+          setEmotes((previous) => ({
+            ...Object.fromEntries(
+              Object.entries(previous).filter(([, value]) => value.until > now),
+            ),
+            [message.from]: { emoji: message.emoji, until: now + 3000 },
+          }));
         } else if (message.type === "jump") {
           const now = performance.now();
           setJumps((previous) => ({
@@ -241,6 +256,7 @@ export default function OfficeApp() {
         setInvites([]);
         setJumps({});
         setNudges({});
+        setEmotes({});
         try {
           await api("/me");
           timer = setTimeout(connect, Math.min(1000 * 2 ** attempt++, 10000));
@@ -342,6 +358,16 @@ export default function OfficeApp() {
         <Brand />
         <span className="header-divider" />
         <div className="workspace-name">{workspace.name}</div>
+        <div
+          className="nav-location map-topline"
+          aria-label={t("Current location")}
+        >
+          {self?.zone === "floor" ? <Leaf size={16} /> : <DoorOpen size={16} />}
+          <strong>{t(currentZone.name)}</strong>
+          <span className="nav-location-kind">
+            {self?.zone === "floor" ? t("OPEN SPACE") : t("MEETING ROOM")}
+          </span>
+        </div>
         <div className="header-end">
           <span
             className={`connection ${connection === "Connected" ? "good" : ""}`}
@@ -463,25 +489,6 @@ export default function OfficeApp() {
           </h1>
           <div className="map-card">
             <div className="location-card">
-              <div className="map-topline">
-                <div>
-                  <span className="map-icon">
-                    <Leaf size={15} />
-                  </span>
-                  <strong>{t(currentZone.name)}</strong>
-                  <span className="room-tag">
-                    {self?.zone === "floor"
-                      ? t("OPEN SPACE")
-                      : t("MEETING ROOM")}
-                  </span>
-                </div>
-                <div className="map-top-actions">
-                  <span>
-                    <Users size={14} />{" "}
-                    {t("{count} here", { count: people.length })}
-                  </span>
-                </div>
-              </div>
               {self?.conversation && (
                 <section
                   className="voice-roster"
@@ -507,20 +514,6 @@ export default function OfficeApp() {
                     </span>
                   </div>
                   <div className="voice-roster-people">
-                    {media.connected && (
-                      <span
-                        className="voice-person"
-                        title={
-                          media.mic
-                            ? t("Your microphone is on")
-                            : t("Your microphone is muted")
-                        }
-                      >
-                        <Avatar color={self.avatar} />
-                        <span>{t("You")}</span>
-                        {media.mic ? <Mic size={12} /> : <MicOff size={12} />}
-                      </span>
-                    )}
                     {voicePeople.map((p) => (
                       <button
                         className="voice-person"
@@ -540,8 +533,8 @@ export default function OfficeApp() {
                     {media.connected && !voicePeople.length && (
                       <span className="muted">
                         {self.conversation === "floor"
-                          ? t("Move closer to a teammate to talk.")
-                          : t("Waiting for someone to join.")}
+                          ? t("No one nearby")
+                          : t("Waiting for teammates")}
                       </span>
                     )}
                   </div>
@@ -555,6 +548,7 @@ export default function OfficeApp() {
                 self={user.id}
                 speaking={media.speaking}
                 waves={waves}
+                emotes={emotes}
                 jumps={jumps}
                 nudges={nudges}
                 send={send}
@@ -893,27 +887,82 @@ export default function OfficeApp() {
           <ChevronDown size={15} />
         </button>
         <div className="media-controls">
-          <Control
-            icon={
-              media.speaking.includes(user.id) ? (
-                <SpeakingIndicator />
-              ) : media.mic ? (
-                <Mic />
-              ) : (
-                <MicOff />
-              )
-            }
-            label={t("Microphone")}
-            speaking={media.speaking.includes(user.id)}
-            on={media.mic}
-            onClick={() => void media.toggle("mic")}
-          />
-          <Control
-            icon={media.camera ? <Video /> : <VideoOff />}
-            label={t("Camera")}
-            on={media.camera}
-            onClick={() => void media.toggle("camera")}
-          />
+          <div className="device-control">
+            <Control
+              icon={
+                media.speaking.includes(user.id) ? (
+                  <SpeakingIndicator />
+                ) : media.mic ? (
+                  <Mic />
+                ) : (
+                  <MicOff />
+                )
+              }
+              label={t("Microphone")}
+              speaking={media.speaking.includes(user.id)}
+              on={media.mic}
+              onClick={() => void media.toggle("mic")}
+            />
+            <ToolbarMenu
+              label={t("Audio devices")}
+              onOpen={() => void media.enumerate()}
+            >
+              {() => (
+                <>
+                  <DeviceSelect media={media} kind="audioinput" />
+                  <DeviceSelect media={media} kind="audiooutput" />
+                  {!media.outputSupported && (
+                    <p className="muted">
+                      {t(
+                        "This browser uses your system output. Select your speakers or headphones in your system sound settings.",
+                      )}
+                    </p>
+                  )}
+                  {media.outputSupported && media.outputPickerSupported && (
+                    <button
+                      className="secondary"
+                      disabled={media.deviceBusy}
+                      onClick={() => void media.chooseOutput()}
+                    >
+                      {t("Choose another speaker…")}
+                    </button>
+                  )}
+                  <button
+                    className="secondary"
+                    disabled={media.deviceBusy}
+                    onClick={() => void media.enumerate(true)}
+                  >
+                    {t("Allow microphone access & refresh devices")}
+                  </button>
+                </>
+              )}
+            </ToolbarMenu>
+          </div>
+          <div className="device-control">
+            <Control
+              icon={media.camera ? <Video /> : <VideoOff />}
+              label={t("Camera")}
+              on={media.camera}
+              onClick={() => void media.toggle("camera")}
+            />
+            <ToolbarMenu
+              label={t("Camera devices")}
+              onOpen={() => void media.enumerate()}
+            >
+              {() => (
+                <>
+                  <DeviceSelect media={media} kind="videoinput" />
+                  <button
+                    className="secondary"
+                    disabled={media.deviceBusy}
+                    onClick={() => void media.enumerate("videoinput")}
+                  >
+                    {t("Allow camera access & refresh devices")}
+                  </button>
+                </>
+              )}
+            </ToolbarMenu>
+          </div>
           <Control
             icon={<MonitorUp />}
             label={isSharing ? t("Stop sharing") : t("Share screen")}
@@ -932,23 +981,16 @@ export default function OfficeApp() {
             }}
           />
           <span className="control-divider" />
-          <Control
-            icon={<Hand />}
-            label={t("Wave")}
-            onClick={() => {
-              if (selected && selected !== user.id)
-                send({ type: "wave", target: selected });
-              else {
-                setWaves((v) => ({ ...v, [user.id]: Date.now() + 2600 }));
-                notify("Select a teammate to send them a wave.");
-              }
-            }}
-          />
-          <Control
-            icon={<Smile />}
-            label={t("Status")}
-            onClick={() => setModal("profile")}
-          />
+          <ToolbarMenu label={t("Emote")} icon={<Smile />}>
+            {(close) => (
+              <EmotePicker
+                choose={(emoji) => {
+                  send({ type: "emote", emoji });
+                  close();
+                }}
+              />
+            )}
+          </ToolbarMenu>
         </div>
         <div className="audio-control">
           {media.soundBlocked && (
@@ -1523,16 +1565,15 @@ function Profile({
       </label>
       <label>
         {t("Availability")}
-        <select
+        <Select
+          label={t("Availability")}
           value={status}
-          onChange={(e) => setStatus(e.target.value as Availability)}
-        >
-          {Object.entries(statusLabel).map(([value, text]) => (
-            <option value={value} key={value}>
-              {t(text)}
-            </option>
-          ))}
-        </select>
+          onChange={(value) => setStatus(value as Availability)}
+          options={Object.entries(statusLabel).map(([value, text]) => ({
+            value,
+            label: t(text),
+          }))}
+        />
       </label>
       <label>
         {t("A little status")}
@@ -1669,73 +1710,8 @@ function SettingsPanel({
               "This reveals device names without turning your call microphone on.",
             )}
           </p>
-          <label>
-            {t("Microphone")}
-            <select
-              aria-label={t("Microphone")}
-              value={media.input}
-              disabled={media.deviceBusy}
-              onChange={(e) =>
-                void media.switchDevice("audioinput", e.target.value)
-              }
-            >
-              <option value="">{t("System default")}</option>
-              {media.input &&
-                !media.devices.some(
-                  (d) => d.kind === "audioinput" && d.deviceId === media.input,
-                ) && (
-                  <option value={media.input}>
-                    {t("Saved microphone · allow access or reconnect it")}
-                  </option>
-                )}
-              {media.devices
-                .filter(
-                  (d) =>
-                    d.kind === "audioinput" &&
-                    d.deviceId &&
-                    d.deviceId !== "default",
-                )
-                .map((d, i) => (
-                  <option key={d.deviceId || i} value={d.deviceId}>
-                    {d.label || t("Microphone {number}", { number: i + 1 })}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label>
-            {t("Speakers / headphones")}
-            <select
-              aria-label={t("Speakers / headphones")}
-              value={media.output}
-              disabled={!media.outputSupported || media.deviceBusy}
-              onChange={(e) =>
-                void media.switchDevice("audiooutput", e.target.value)
-              }
-            >
-              <option value="">{t("System default")}</option>
-              {media.output &&
-                !media.devices.some(
-                  (d) =>
-                    d.kind === "audiooutput" && d.deviceId === media.output,
-                ) && (
-                  <option value={media.output}>
-                    {t("Saved speaker · allow access or reconnect it")}
-                  </option>
-                )}
-              {media.devices
-                .filter(
-                  (d) =>
-                    d.kind === "audiooutput" &&
-                    d.deviceId &&
-                    d.deviceId !== "default",
-                )
-                .map((d, i) => (
-                  <option key={d.deviceId} value={d.deviceId}>
-                    {d.label || t("Speaker {number}", { number: i + 1 })}
-                  </option>
-                ))}
-            </select>
-          </label>
+          <DeviceSelect media={media} kind="audioinput" />
+          <DeviceSelect media={media} kind="audiooutput" />
           {!media.outputSupported && (
             <p className="muted">
               {t(
@@ -1752,53 +1728,17 @@ function SettingsPanel({
               {t("Choose another speaker…")}
             </button>
           )}
-          <label>
-            {t("Camera")}
-            <select
-              aria-label={t("Camera")}
-              value={media.videoInput}
-              disabled={media.deviceBusy}
-              onChange={(e) =>
-                void media.switchDevice("videoinput", e.target.value)
-              }
-            >
-              <option value="">{t("System default")}</option>
-              {media.videoInput &&
-                !media.devices.some(
-                  (d) =>
-                    d.kind === "videoinput" && d.deviceId === media.videoInput,
-                ) && (
-                  <option value={media.videoInput}>
-                    {t("Saved camera · allow access or reconnect it")}
-                  </option>
-                )}
-              {media.devices
-                .filter(
-                  (d) =>
-                    d.kind === "videoinput" &&
-                    d.deviceId &&
-                    d.deviceId !== "default",
-                )
-                .map((d, i) => (
-                  <option key={d.deviceId || i} value={d.deviceId}>
-                    {d.label || t("Camera {number}", { number: i + 1 })}
-                  </option>
-                ))}
-            </select>
-          </label>
+          <DeviceSelect media={media} kind="videoinput" />
           <label>
             {t("Video & screen quality")}
-            <select
-              aria-label={t("Video & screen quality")}
+            <Select
+              label={t("Video & screen quality")}
               value={media.quality}
-              onChange={(e) => media.chooseQuality(e.target.value)}
-            >
-              {Object.entries(MEDIA_QUALITY).map(([value, profile]) => (
-                <option key={value} value={value}>
-                  {t(profile.label)}
-                </option>
-              ))}
-            </select>
+              onChange={media.chooseQuality}
+              options={Object.entries(MEDIA_QUALITY).map(
+                ([value, profile]) => ({ value, label: t(profile.label) }),
+              )}
+            />
           </label>
           <p className="muted">
             {t(

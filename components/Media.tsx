@@ -389,12 +389,16 @@ export function useOfficeMedia(
     }
     bump((v) => v + 1);
   }
-  async function enumerate(requestAccess = false, resetMissing = false) {
+  async function enumerate(
+    requestAccess: boolean | "videoinput" = false,
+    resetMissing = false,
+  ) {
     try {
       if (requestAccess) {
         // Reveal device names without publishing audio or leaving a capture running.
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
+          audio: requestAccess !== "videoinput",
+          video: requestAccess === "videoinput",
         });
         stream.getTracks().forEach((track) => track.stop());
       }

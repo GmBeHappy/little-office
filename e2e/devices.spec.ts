@@ -1,3 +1,4 @@
+import { selectValues, selectValue } from "./select";
 import { test, expect, type Page } from "@playwright/test";
 const accounts = JSON.parse(process.env.E2E_ACCOUNTS || "[]") as {
   username: string;
@@ -56,17 +57,13 @@ test("device choices persist and route incoming call audio to the selected outpu
       name: "Speakers / headphones",
       exact: true,
     });
-    await expect.poll(() => mic.locator("option").count()).toBeGreaterThan(1);
-    const micId = await mic.locator("option").nth(1).getAttribute("value");
-    const outputId = await output
-      .locator("option")
-      .nth(1)
-      .getAttribute("value");
+    const micId = (await selectValues(a, mic))[1];
+    const outputId = (await selectValues(a, output))[1];
     expect(micId).toBeTruthy();
     expect(outputId).toBeTruthy();
-    await mic.selectOption(micId!);
-    await output.selectOption(outputId!);
-    await expect(output).toHaveValue(outputId!);
+    await selectValue(a, mic, micId!);
+    await selectValue(a, output, outputId!);
+    await expect(output).toHaveAttribute("data-value", outputId!);
     await expect
       .poll(() =>
         a.evaluate(() =>
@@ -81,8 +78,8 @@ test("device choices persist and route incoming call audio to the selected outpu
     await a.reload();
     await expect(a.locator(".pixel-map canvas")).toBeVisible();
     await settings(a);
-    await expect(mic).toHaveValue(micId!);
-    await expect(output).toHaveValue(outputId!);
+    await expect(mic).toHaveAttribute("data-value", micId!);
+    await expect(output).toHaveAttribute("data-value", outputId!);
     await a.screenshot({ path: "test-results/devices.png" });
     await a.getByRole("button", { name: "Close dialog" }).click();
     await login(b, 1);
@@ -117,11 +114,8 @@ test("device choices persist and route incoming call audio to the selected outpu
       .poll(() => incoming.evaluate((el: HTMLMediaElement) => el.sinkId))
       .toBe(outputId);
     await settings(a);
-    const secondMicId = await mic
-      .locator("option")
-      .nth(2)
-      .getAttribute("value");
-    await mic.selectOption(secondMicId!);
+    const secondMicId = (await selectValues(a, mic))[2];
+    await selectValue(a, mic, secondMicId!);
     await expect
       .poll(() =>
         a.evaluate(
@@ -135,11 +129,11 @@ test("device choices persist and route incoming call audio to the selected outpu
         ),
       )
       .toBe(secondMicId);
-    await output.selectOption("");
+    await selectValue(a, output, "");
     await expect
       .poll(() => incoming.evaluate((el: HTMLMediaElement) => el.sinkId))
       .toBe("");
-    await output.selectOption(outputId!);
+    await selectValue(a, output, outputId!);
     await a.getByRole("button", { name: "Close dialog" }).click();
     for (const page of [a, b])
       await page
@@ -158,11 +152,8 @@ test("device choices persist and route incoming call audio to the selected outpu
         (await enumerate()).filter((d) => d.deviceId !== missing);
       navigator.mediaDevices.dispatchEvent(new Event("devicechange"));
     }, secondMicId);
-    await expect(mic).toHaveValue("");
-    const rejectedOutput = await output
-      .locator("option")
-      .nth(2)
-      .getAttribute("value");
+    await expect(mic).toHaveAttribute("data-value", "");
+    const rejectedOutput = (await selectValues(a, output))[2];
     await a.evaluate((rejected) => {
       const setSinkId = HTMLMediaElement.prototype.setSinkId;
       HTMLMediaElement.prototype.setSinkId = function (id) {
@@ -173,8 +164,8 @@ test("device choices persist and route incoming call audio to the selected outpu
         return setSinkId.call(this, id);
       };
     }, rejectedOutput);
-    await output.selectOption(rejectedOutput!);
-    await expect(output).toHaveValue(outputId!);
+    await selectValue(a, output, rejectedOutput!);
+    await expect(output).toHaveAttribute("data-value", outputId!);
     await expect(a.getByRole("status")).toContainText(
       "Speaker permission denied",
     );

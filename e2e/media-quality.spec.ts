@@ -1,3 +1,4 @@
+import { selectValue } from "./select";
 import { test, expect } from "@playwright/test";
 const accounts = JSON.parse(process.env.E2E_ACCOUNTS || "[]");
 test.skip(
@@ -173,8 +174,8 @@ test("quality targets reach capture and real RTP encoders, persist, and leave vo
       name: "Video & screen quality",
       exact: true,
     });
-    await expect(quality).toHaveValue("maximum");
-    await quality.selectOption("balanced");
+    await expect(quality).toHaveAttribute("data-value", "maximum");
+    await selectValue(a, quality, "balanced");
     await expect(a.locator(".controlbar")).toHaveAttribute(
       "data-media-connected",
       "true",
@@ -215,7 +216,7 @@ test("quality targets reach capture and real RTP encoders, persist, and leave vo
     await expect(a.locator(".pixel-map canvas")).toBeVisible();
     await a.getByRole("button", { name: "Settings", exact: true }).click();
     await a.getByRole("button", { name: "Devices", exact: true }).click();
-    await expect(quality).toHaveValue("balanced");
+    await expect(quality).toHaveAttribute("data-value", "balanced");
     await a.getByRole("button", { name: "Close dialog", exact: true }).click();
     await a
       .getByRole("button", { name: "เปลี่ยนเป็นภาษาไทย", exact: true })
@@ -227,7 +228,7 @@ test("quality targets reach capture and real RTP encoders, persist, and leave vo
         name: "คุณภาพวิดีโอและการแชร์หน้าจอ",
         exact: true,
       }),
-    ).toHaveValue("balanced");
+    ).toHaveAttribute("data-value", "balanced");
     await a.setViewportSize({ width: 390, height: 844 });
     await a
       .getByRole("combobox", {

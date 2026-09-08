@@ -2,6 +2,10 @@ import { z } from "zod";
 export const Command = z.discriminatedUnion("type", [
   z.object({ type: z.literal("jump") }),
   z.object({
+    type: z.literal("emote"),
+    emoji: z.string().min(1).max(32).regex(new RegExp("^\\p{RGI_Emoji}$", "v")),
+  }),
+  z.object({
     type: z.literal("microphone"),
     room: z.string().max(200),
     enabled: z.boolean(),

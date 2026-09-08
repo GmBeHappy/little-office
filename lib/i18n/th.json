@@ -410,5 +410,15 @@
   "Delete this member and sign them out? This cannot be undone. Their SSO identity is not deleted; signing in again requires approval.": "ลบสมาชิกนี้และออกจากระบบให้สมาชิกหรือไม่? การลบไม่สามารถย้อนกลับได้ บัญชีที่ผู้ให้บริการ SSO จะไม่ถูกลบ และต้องได้รับการอนุมัติเมื่อเข้าสู่ระบบใหม่",
   "Set a temporary password with at least 12 characters. The member will be signed out and must change it on their next login.": "ตั้งรหัสผ่านชั่วคราวอย่างน้อย 12 ตัวอักษร สมาชิกจะออกจากระบบและต้องเปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งถัดไป",
   "Member not found or owner account protected.": "ไม่พบสมาชิก หรือบัญชีนี้เป็นเจ้าของซึ่งไม่สามารถลบได้",
-  "Only local password accounts can be reset here. Manage SSO passwords with your identity provider.": "รีเซ็ตรหัสผ่านได้เฉพาะบัญชีภายในระบบ สำหรับ SSO ให้จัดการรหัสผ่านกับผู้ให้บริการยืนยันตัวตน"
+  "Only local password accounts can be reset here. Manage SSO passwords with your identity provider.": "รีเซ็ตรหัสผ่านได้เฉพาะบัญชีภายในระบบ สำหรับ SSO ให้จัดการรหัสผ่านกับผู้ให้บริการยืนยันตัวตน",
+  "Current location": "ตำแหน่งปัจจุบัน",
+  "No one nearby": "ยังไม่มีคนอยู่ใกล้",
+  "Waiting for teammates": "กำลังรอเพื่อนร่วมทีม",
+  "Audio devices": "อุปกรณ์เสียง",
+  "Camera devices": "อุปกรณ์กล้อง",
+  "Allow camera access & refresh devices": "อนุญาตการเข้าถึงกล้องและรีเฟรชอุปกรณ์",
+  "Emote": "อีโมต",
+  "Search emoji": "ค้นหาอีโมจิ",
+  "Clear search": "ล้างการค้นหา",
+  "Close menu": "ปิดเมนู"
 }

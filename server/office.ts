@@ -338,6 +338,11 @@ export class Office {
         m.send({ type: "notice", message: `Nudged ${target.name}.` });
         break;
       }
+      case "emote": {
+        for (const person of this.members.values())
+          person.send({ type: "emote", from: id, emoji: command.emoji });
+        break;
+      }
       case "wave": {
         const target = this.members.get(command.target);
         if (!target) throw new Error("That person is offline.");

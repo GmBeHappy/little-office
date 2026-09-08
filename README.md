@@ -2,7 +2,7 @@
 
 A pixel-art office built with **Next.js, Elysia on Bun, PostgreSQL, Phaser, Better Auth, and LiveKit**.
 
-Walk with WASD/arrows and press Space to jump (or click the Space control on the map). Nearby voice joins automatically; turn your microphone on to talk to people in range. The top-left location card shows nearby voice participants with their avatars, names, and speaking activity. Join the Studio or Library for a meeting, share your screen, wave, summon a teammate with their consent, or start an accepted direct call. Microphone and camera start off.
+Walk with WASD/arrows and press Space to jump (or click the Space control on the map). Nearby voice joins automatically; turn your microphone on to talk to people in range. The navbar shows your current location. A compact, horizontally scrolling strip shows nearby teammates with avatars, names, and speaking activity. Join the Studio or Library for a meeting, share your screen, wave, summon a teammate with their consent, or start an accepted direct call. Microphone and camera start off.
 
 The map fills the browser window. Navigation, people/rooms, and media controls float above it. Press Z to nudge the closest person in a 90-degree cone in front of your character, within 120 map pixels, or select someone you are facing and choose Nudge. Both people hear a short chime, their avatars react, and the recipient sees a notification; Do Not Disturb blocks nudges; there is no nudge cooldown. On mobile, touch and drag anywhere on the map to walk with a floating joystick, then release to stop. Tap a room or person to interact. Close the people panel for more map space, reopen it from People or Rooms, or use the fullscreen button in the top navbar. The navbar also links to this GitHub repository.
 
@@ -303,3 +303,5 @@ The map uses original geometric pixel art and requires no downloaded sprite asse
 Owners can delete members or reset local (non-SSO) passwords in **Settings → Members**. Deletion requires confirmation, removes sessions and account records, and disconnects the member; owner accounts cannot be deleted. SSO identities remain at the identity provider and need office approval if they sign in again. Password resets revoke sessions and require changing the temporary password on next login. These actions require an owner sign-in within the last 10 minutes.
 
 Movement follows physical WASD keys, including **ไ / ฟ / ห / ก** on a Thai keyboard, as well as arrow keys. Typing in forms does not move your character.
+
+The control bar has an **Emote** picker (emoji-picker-react, with English/Thai search) that broadcasts a three-second emoji above your avatar. Microphone and camera arrows open device menus; microphone settings also include speakers/headphones. Devices can still be changed under Settings. All selectors use styled, keyboard-accessible Radix Select menus. Status remains available in your profile.

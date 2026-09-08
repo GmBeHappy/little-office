@@ -12,6 +12,7 @@ type Props = {
   self: string;
   speaking: string[];
   waves: Record<string, number>;
+  emotes: Record<string, { emoji: string; until: number }>;
   jumps: Record<string, number>;
   nudges: Record<string, { start: number; sender: boolean }>;
   send: (c: Command) => void;
@@ -71,7 +72,9 @@ export default function PixelMap(props: Props) {
       mapPointer(pointer: Phaser.Input.Pointer) {
         return (
           pointer.event?.target === this.game.canvas &&
-          !document.querySelector('[role="dialog"], .media-expanded')
+          !document.querySelector(
+            '[role="dialog"], dialog[open], [role="listbox"], .media-expanded',
+          )
         );
       }
       stopTouch() {
@@ -138,7 +141,9 @@ export default function PixelMap(props: Props) {
               !pointer.wasTouch ||
               !this.mapPointer(pointer) ||
               this.touch ||
-              document.querySelector('[role="dialog"], .media-expanded')
+              document.querySelector(
+                '[role="dialog"], dialog[open], [role="listbox"], .media-expanded',
+              )
             )
               return;
             this.touch = {
@@ -228,7 +233,9 @@ export default function PixelMap(props: Props) {
             (e.target.closest(
               'input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="dialog"]',
             ) ||
-              document.querySelector('[role="dialog"], .media-expanded'))
+              document.querySelector(
+                '[role="dialog"], dialog[open], [role="listbox"], .media-expanded',
+              ))
           )
             return;
           if (
@@ -319,7 +326,11 @@ export default function PixelMap(props: Props) {
       }
       update(time: number, delta: number) {
         const state = live.current;
-        if (document.querySelector('[role="dialog"], .media-expanded')) {
+        if (
+          document.querySelector(
+            '[role="dialog"], dialog[open], [role="listbox"], .media-expanded',
+          )
+        ) {
           this.keys.clear();
           this.stopTouch();
         }
@@ -363,10 +374,12 @@ export default function PixelMap(props: Props) {
                 resolution: 4,
               })
               .setOrigin(0.5);
-            const wave = this.add.text(17, -48, "", {
-              fontSize: "22px",
-              resolution: 4,
-            });
+            const wave = this.add
+              .text(0, -66, "", {
+                fontSize: "24px",
+                resolution: 4,
+              })
+              .setOrigin(0.5, 1);
             const micIcon = this.add.graphics();
             const container = this.add.container(p.x, p.y, [
               body,
@@ -456,7 +469,7 @@ export default function PixelMap(props: Props) {
                 Math.sin(((elapsed - 520) / (JUMP_DURATION - 520)) * Math.PI)
               : 0;
           a.label.y = -57 - height;
-          a.wave.y = -54 - height;
+          a.wave.y = -66 - height;
           a.label.setText(
             p.id === state.self ? t("{name} · you", { name: p.name }) : p.name,
           );
@@ -537,15 +550,17 @@ export default function PixelMap(props: Props) {
           a.wave.setText(
             reacting && !nudge?.sender
               ? "!"
-              : pose === "sleep"
-                ? "Zzz"
-                : (state.waves[p.id] || 0) > Date.now()
-                  ? "👋"
-                  : p.status === "dnd"
-                    ? "⏾"
-                    : p.status === "away"
-                      ? "z"
-                      : "",
+              : (state.emotes[p.id]?.until || 0) > Date.now()
+                ? state.emotes[p.id].emoji
+                : pose === "sleep"
+                  ? "Zzz"
+                  : (state.waves[p.id] || 0) > Date.now()
+                    ? "👋"
+                    : p.status === "dnd"
+                      ? "⏾"
+                      : p.status === "away"
+                        ? "z"
+                        : "",
           );
           if (p.id === state.self)
             this.cameras.main.centerOn(a.container.x, a.container.y);

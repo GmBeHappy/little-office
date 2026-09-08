@@ -39,8 +39,10 @@ test("Thai and English cover login, office and settings, persist, and switch wit
       .locator(".location-card")
       .getByRole("region", { name: "เสียงใกล้ตัว", exact: true }),
   ).toBeVisible();
-  await expect(page.locator("span.voice-person .pixel-avatar")).toHaveCount(1);
-  await expect(page.locator(".location-card")).toContainText("คุณ");
+  await expect(page.locator(".topbar .nav-location")).toBeVisible();
+  expect(
+    (await page.locator(".location-card").boundingBox())!.height,
+  ).toBeLessThan(80);
   await expect(
     page
       .locator(".topbar")
@@ -100,9 +102,13 @@ test("Thai and English cover login, office and settings, persist, and switch wit
   await expect(
     dialog.getByRole("button", { name: "รูปลักษณ์นักดูดาว" }),
   ).toBeVisible();
+  await dialog
+    .getByRole("combobox", { name: "สถานะความพร้อม", exact: true })
+    .click();
   await expect(
-    dialog.getByRole("option", { name: "ห้ามรบกวน", exact: true }),
+    page.getByRole("option", { name: "ห้ามรบกวน", exact: true }),
   ).toHaveCount(1);
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "ปิดหน้าต่าง", exact: true }).click();
   await page.getByRole("button", { name: "ออฟฟิศ", exact: true }).click();
   await page.evaluate(() => document.fonts.ready);
