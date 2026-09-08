@@ -13,6 +13,7 @@ import {
 type Peer = {
   userId: string;
   sessionId: string;
+  connectionId: string;
   scope: string;
   send: (message: unknown) => void;
   close: () => void;
@@ -29,6 +30,7 @@ export class Whiteboards {
       whiteboardEnabled(this.office.workspace) &&
       !!member &&
       member.sessionId === peer.sessionId &&
+      member.connectionId === peer.connectionId &&
       member.expires > Date.now() &&
       boardScope(this.office.workspace.mapId, member) === peer.scope
     );
@@ -46,6 +48,7 @@ export class Whiteboards {
     const peer: Peer = {
       userId,
       sessionId,
+      connectionId: member.connectionId,
       scope: boardScope(this.office.workspace.mapId, member),
       send,
       close,

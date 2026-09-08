@@ -21,13 +21,14 @@ import {
 } from "../shared/maps";
 type Member = Person & {
   send: (event: unknown) => void;
-  close: () => void;
+  close: (code?: number, reason?: string) => void;
   input: { dx: number; dy: number; at: number };
   seen: number;
   activity: number;
   manualStatus: Person["status"];
   role: string;
   sessionId: string;
+  connectionId: string;
   expires: number;
 };
 export class Office {
@@ -109,11 +110,9 @@ export class Office {
     expires: number,
     send: Member["send"],
     close: Member["close"],
+    connectionId = crypto.randomUUID(),
   ) {
-    if (this.members.has(user.id))
-      throw new Error(
-        "You already have an active office tab. Leave it before joining here.",
-      );
+    this.remove(user.id, 4001, "Office opened elsewhere");
     const status = ["available", "busy", "dnd", "away"].includes(
       user.availability || "",
     )
@@ -142,6 +141,7 @@ export class Office {
       manualStatus: status,
       role: user.role,
       sessionId,
+      connectionId,
       expires,
     };
     this.members.set(user.id, member);
@@ -188,11 +188,11 @@ export class Office {
       m.zone !== "floor" ? `zone:${m.zone}` : m.status !== "dnd" ? "floor" : "",
     );
   }
-  remove(id: string) {
+  remove(id: string, code?: number, reason?: string) {
     const member = this.members.get(id);
     if (!member) return;
     this.members.delete(id);
-    member.close();
+    member.close(code, reason);
     if (member.conversation) this.rotate(member.conversation);
     if (member.conversation.startsWith("call:"))
       for (const m of this.members.values())

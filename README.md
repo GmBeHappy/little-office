@@ -97,7 +97,7 @@ After updating an existing installation, run `bun db:migrate` before restarting 
 - **OIDC SSO:** discovery, Authorization Code + PKCE, ID-token verification, and explicit linking to an existing user through **Settings → Devices → Link your SSO account**.
 - **Settings → Authentication:** owner-only switches for password login and SSO. The backend enforces the switches and ends sessions authenticated through a disabled method. Disabling both methods is rejected. An owner must successfully sign in through the current SSO provider before passwords can be disabled.
 - New SSO users await owner approval under **Settings → Members**. Matching email addresses never automatically link accounts.
-- Each account can have one active office tab. Close or leave the existing tab before joining from another one.
+- Each account has one active office tab. Opening a new tab or signing in on another device replaces the old office connection and ends its calls. The old tab shows an “Opened elsewhere” notice and does not automatically reconnect; reload it to take over again. Authentication cookies are retained, so replacing a tab does not sign out other tabs sharing the same browser session.
 
 Set these when your SSO provider is ready:
 

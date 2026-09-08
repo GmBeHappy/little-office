@@ -399,18 +399,36 @@ describe("office behavior", () => {
     office.handle("a", { type: "leave" });
     expect(office.members.get("b")!.conversation).toBe("floor");
   });
-  test("duplicate office tabs cannot replace a live session", () => {
-    const { office } = setup();
-    expect(() =>
-      office.add(
+  test("new office connections replace old ones, including shared login sessions", () => {
+    for (const sessionId of ["same-session", "different-session"]) {
+      const events: unknown[] = [];
+      let closeCode: number | undefined;
+      const office = new Office();
+      const old = office.add(
         { id: "a", name: "a", role: "member" },
-        "other",
-        Date.now() + 5000,
+        "same-session",
+        Date.now() + 60000,
+        (event) => events.push(event),
+        (code) => {
+          closeCode = code;
+        },
+        "old-connection",
+      );
+      const replacement = office.add(
+        { id: "a", name: "a", role: "member" },
+        sessionId,
+        Date.now() + 60000,
         () => {},
         () => {},
-      ),
-    ).toThrow("active office tab");
-    expect(office.members.get("a")!.sessionId).toBe("a");
+        "new-connection",
+      );
+      expect(closeCode).toBe(4001);
+      expect(office.members.size).toBe(1);
+      expect(office.members.get("a")).toBe(replacement);
+      expect(replacement.sessionId).toBe(sessionId);
+      expect(replacement.connectionId).not.toBe(old.connectionId);
+      expect(replacement.room).not.toBe(old.room);
+    }
   });
   test("idle movement frames do not prevent auto-away and expired sessions are removed", () => {
     const { office } = setup();

@@ -269,7 +269,14 @@ describe("authentication and authorization", () => {
       elements: [rectangle("leak")],
     });
     expect(closed).toContain("b");
-    office.remove("a");
+    // A different office socket with the same login cookie must revoke the old board too.
+    office.add(
+      { id: "a", name: "a", role: "member" },
+      "a",
+      Date.now() + 60000,
+      () => {},
+      () => {},
+    );
     boards.prune();
     expect(closed).toContain("a");
     expect(

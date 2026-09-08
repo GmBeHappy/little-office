@@ -186,16 +186,18 @@ export default function OfficeApp() {
     if (!user?.approved || user.mustChangePassword) return;
     let disposed = false,
       timer: ReturnType<typeof setTimeout> | undefined,
-      attempt = 0;
+      attempt = 0,
+      takeover = true;
     function connect() {
       if (disposed) return;
       setConnection("Connecting");
       const ws = new WebSocket(
-        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/office`,
+        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/office${takeover ? "?takeover=1" : ""}`,
       );
       socket.current = ws;
       ws.onopen = () => {
         attempt = 0;
+        takeover = false;
         setConnection("Connected");
       };
       ws.onmessage = (event) => {
@@ -253,7 +255,7 @@ export default function OfficeApp() {
           });
         }
       };
-      ws.onclose = async () => {
+      ws.onclose = async (event) => {
         if (disposed) return;
         setConnection("Reconnecting");
         setSnapshot(null);
@@ -261,9 +263,14 @@ export default function OfficeApp() {
         setJumps({});
         setNudges({});
         setEmotes({});
+        if (event.code === 4001) {
+          setConnection("Opened elsewhere");
+          return;
+        }
         try {
           await api("/me");
-          timer = setTimeout(connect, Math.min(1000 * 2 ** attempt++, 10000));
+          if (!disposed)
+            timer = setTimeout(connect, Math.min(1000 * 2 ** attempt++, 10000));
         } catch {
           setUser(null);
           setConnection("Disconnected");
@@ -1051,6 +1058,18 @@ export default function OfficeApp() {
         />
       )}
       {notice && <Toast text={notice} close={() => setNotice("")} />}
+      {connection === "Opened elsewhere" && (
+        <div className="session-taken-over" role="status">
+          <strong>
+            {t("This office is now open in another tab or device.")}
+          </strong>
+          <span>
+            {t(
+              "This tab has disconnected. Reload it to use the office here again.",
+            )}
+          </span>
+        </div>
+      )}
       {invites[0] && (
         <div
           className="invitation-card"

@@ -328,7 +328,6 @@
   "Requested device not found": "ไม่พบอุปกรณ์ที่ต้องการ",
   "Permission dismissed": "ปิดหน้าต่างขออนุญาตแล้ว",
   "Interactive pixel office. Move with WASD or arrow keys, or touch and drag to walk. Release to stop. Press Space to jump. Tap a person or meeting room to interact, or use the Rooms list for keyboard-accessible navigation.": "ออฟฟิศพิกเซลแบบโต้ตอบ ใช้ WASD ปุ่มลูกศร หรือแตะแล้วลากเพื่อเดิน ปล่อยเพื่อหยุด กด Space เพื่อกระโดด แตะคนหรือห้องประชุมเพื่อโต้ตอบ หรือใช้รายชื่อห้องด้วยแป้นพิมพ์",
-  "You already have an active office tab. Leave it before joining here.": "คุณมีแท็บออฟฟิศที่ใช้งานอยู่แล้ว กรุณาออกจากแท็บนั้นก่อนเข้าที่นี่",
   "This meeting room is locked. Ask someone inside to summon you.": "ห้องประชุมนี้ล็อกอยู่ ขอให้คนข้างในเชิญคุณเข้าไป",
   "Little Office — a place to work together": "Little Office — พื้นที่ทำงานร่วมกัน",
   "A cozy pixel office for your team. Walk over, say hello, and work together.": "ออฟฟิศพิกเซลแสนอบอุ่นสำหรับทีม เดินไปทักทาย แล้วทำงานด้วยกัน",
@@ -519,5 +518,8 @@
   "File not found in your current area.": "ไม่พบไฟล์ในพื้นที่ปัจจุบันของคุณ",
   "Saved snapshots": "ภาพกระดานที่บันทึกไว้",
   "No snapshots saved in this area yet.": "ยังไม่มีภาพกระดานที่บันทึกในพื้นที่นี้",
-  "Close": "ปิด"
+  "Close": "ปิด",
+  "Opened elsewhere": "เปิดใช้งานจากที่อื่น",
+  "This office is now open in another tab or device.": "ออฟฟิศนี้เปิดใช้งานอยู่ในแท็บหรืออุปกรณ์อื่นแล้ว",
+  "This tab has disconnected. Reload it to use the office here again.": "แท็บนี้ตัดการเชื่อมต่อแล้ว รีโหลดเพื่อกลับมาใช้งานออฟฟิศในแท็บนี้"
 }

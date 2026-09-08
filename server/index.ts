@@ -589,6 +589,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
     },
   })
   .ws("/api/office", {
+    query: t.Object({ takeover: t.Optional(t.Literal("1")) }),
     beforeHandle({ request, identity, set }) {
       if (request.headers.get("origin") !== config.origin) {
         set.status = 403;
@@ -600,6 +601,10 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
     open(ws) {
       try {
         const s = requireSession(ws.data.identity);
+        if (office.members.has(s.user.id) && ws.data.query.takeover !== "1") {
+          ws.close(4001, "Office opened elsewhere");
+          return;
+        }
         office.add(
           s.user,
           s.session.id,
@@ -607,9 +612,10 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
           (event) => {
             ws.send(event);
           },
-          () => ws.close(),
+          (code, reason) => ws.close(code, reason),
+          ws.id,
         );
-        (ws.data as typeof ws.data & { connected: boolean }).connected = true;
+        whiteboards.prune();
       } catch (error) {
         ws.send({ type: "error", message: (error as Error).message });
         ws.close();
@@ -619,7 +625,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       const s = ws.data.identity;
       if (!s) return;
       const member = office.members.get(s.user.id);
-      if (!member || member.sessionId !== s.session.id) return;
+      if (!member || member.connectionId !== ws.id) return;
       const result = Command.safeParse(raw);
       if (!result.success) {
         ws.send({ type: "error", message: "Invalid office message." });
@@ -647,11 +653,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
     },
     close(ws) {
       const s = ws.data.identity;
-      if (
-        (ws.data as typeof ws.data & { connected?: boolean }).connected &&
-        s &&
-        office.members.get(s.user.id)?.sessionId === s.session.id
-      )
+      if (s && office.members.get(s.user.id)?.connectionId === ws.id)
         office.remove(s.user.id);
     },
   });
