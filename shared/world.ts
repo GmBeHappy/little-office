@@ -2,6 +2,7 @@ export const WORLD = { width: 1120, height: 720, spawn: { x: 740, y: 350 } };
 export const JUMP_DURATION = 650;
 export const NUDGE_RADIUS = 120;
 export type ZoneId = "floor" | "studio" | "library";
+export type Pose = "stand" | "sit" | "sleep";
 export type Availability = "available" | "busy" | "dnd" | "away";
 export const AVATARS = [
   "sage",
@@ -108,6 +109,30 @@ export function nearby(
     (a.zone !== "floor" || Math.hypot(a.x - b.x, a.y - b.y) <= radius)
   );
 }
+// A 90-degree forward cone; co-located people have no facing direction.
+export function canNudge(
+  from: Pick<Person, "x" | "y" | "zone" | "direction">,
+  to: Pick<Person, "x" | "y" | "zone">,
+) {
+  const dx = to.x - from.x,
+    dy = to.y - from.y;
+  const forward =
+    from.direction === "right"
+      ? dx
+      : from.direction === "left"
+        ? -dx
+        : from.direction === "down"
+          ? dy
+          : -dy;
+  const sideways =
+    from.direction === "left" || from.direction === "right" ? dy : dx;
+  return (
+    from.zone === to.zone &&
+    forward > 0 &&
+    Math.abs(sideways) <= forward &&
+    Math.hypot(dx, dy) <= NUDGE_RADIUS
+  );
+}
 export type Person = {
   id: string;
   name: string;
@@ -116,6 +141,8 @@ export type Person = {
   y: number;
   direction: "up" | "down" | "left" | "right";
   moving: boolean;
+  pose: Pose;
+  microphone: boolean;
   status: Availability;
   statusText: string;
   zone: ZoneId;

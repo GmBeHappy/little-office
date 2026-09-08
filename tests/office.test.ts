@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Office } from "../server/office";
 import { Command } from "../shared/protocol";
 import { JUMP_DURATION } from "../shared/world";
-import { walkable, WORLD, zoneAt } from "../shared/world";
+import { walkable, WORLD, zoneAt, canNudge } from "../shared/world";
 import { MAPS, getMap, mapBlocks, mapDesks, mapZones } from "../shared/maps";
 function setup() {
   const retired: string[] = [],
@@ -19,11 +19,13 @@ function setup() {
   return { office, events, retired };
 }
 describe("office behavior", () => {
-  test("nudges choose the closest teammate and enforce distance, DND, with no cooldown", () => {
+  test("nudges only target people in front, play sender acknowledgement, and have no cooldown", () => {
     const { office, events } = setup();
     const a = office.members.get("a")!,
       b = office.members.get("b")!,
       c = office.members.get("c")!;
+    a.direction = "right";
+    c.direction = "right";
     b.x = a.x + 30;
     c.x = a.x - 60;
     const now = Date.now();
@@ -32,20 +34,29 @@ describe("office behavior", () => {
       { type: "nudge", from: "a", name: "a" },
     ]);
     expect(events.c.filter((e) => e.type === "nudge")).toHaveLength(0);
+    expect(() =>
+      office.handle("a", { type: "nudge", target: "c" }, now),
+    ).toThrow("Face a nearby");
+    a.direction = "left";
     office.handle("a", { type: "nudge", target: "c" }, now);
+    a.direction = "right";
     office.handle("c", { type: "nudge", target: "b" }, now);
     office.handle("a", { type: "nudge", target: "b" }, now);
     expect(events.b.filter((e) => e.type === "nudge")).toHaveLength(3);
     expect(events.c.filter((e) => e.type === "nudge")).toHaveLength(1);
+    expect(events.a.filter((e) => e.type === "nudge-sent")).toHaveLength(3);
+    expect(events.c.filter((e) => e.type === "nudge-animation")).toHaveLength(
+      4,
+    );
     b.x = a.x + 121;
     expect(() =>
       office.handle("a", { type: "nudge", target: "b" }, now + 10000),
-    ).toThrow("Move next");
-    b.x = a.x;
+    ).toThrow("Face a nearby");
+    b.x = a.x + 30;
     b.zone = "studio";
     expect(() =>
       office.handle("a", { type: "nudge", target: "b" }, now + 10000),
-    ).toThrow("Move next");
+    ).toThrow("Face a nearby");
     b.zone = "floor";
     b.status = "dnd";
     expect(() =>
@@ -53,10 +64,53 @@ describe("office behavior", () => {
     ).toThrow("Do not disturb");
     expect(() =>
       office.handle("a", { type: "nudge", target: "a" }, now + 10000),
-    ).toThrow("Move next");
+    ).toThrow("Face a nearby");
     expect(() =>
       office.handle("a", { type: "nudge", target: "offline" }, now + 10000),
-    ).toThrow("Move next");
+    ).toThrow("Face a nearby");
+  });
+  test("facing cone works in all directions and excludes overlaps and sides", () => {
+    const origin = { x: 0, y: 0, zone: "floor" as const };
+    for (const [direction, x, y] of [
+      ["right", 80, 0],
+      ["left", -80, 0],
+      ["up", 0, -80],
+      ["down", 0, 80],
+    ] as const) {
+      const from = { ...origin, direction };
+      expect(canNudge(from, { ...origin, x, y })).toBe(true);
+      expect(canNudge(from, { ...origin, x: -x, y: -y })).toBe(false);
+      expect(canNudge(from, { ...origin, x: y, y: x })).toBe(false);
+      expect(canNudge(from, origin)).toBe(false);
+    }
+  });
+  test("poses and microphone indicators synchronize without changing voice or status", () => {
+    const { office } = setup();
+    const a = office.members.get("a")!;
+    const room = a.room;
+    office.handle("a", { type: "microphone", room, enabled: true });
+    for (const pose of ["sit", "sleep"] as const) {
+      office.handle("a", { type: "pose", pose });
+      expect(office.people().find((p) => p.id === "a")).toMatchObject({
+        pose,
+        microphone: true,
+        room,
+        status: "available",
+      });
+      office.handle("a", { type: "move", dx: 0, dy: 0, seq: a.seq + 1 });
+      expect(a.pose).toBe(pose);
+    }
+    office.handle("a", { type: "move", dx: 1, dy: 0, seq: a.seq + 1 });
+    expect(a.pose).toBe("stand");
+    office.handle("a", { type: "pose", pose: "sit" });
+    office.handle("a", { type: "jump" });
+    expect(a.pose).toBe("stand");
+    office.go(a, "studio");
+    expect(a.microphone).toBe(false);
+    office.handle("a", { type: "microphone", room, enabled: true });
+    expect(a.microphone).toBe(false);
+    office.handle("a", { type: "microphone", room: a.room, enabled: true });
+    expect(a.microphone).toBe(true);
   });
   test("all maps have the advertised seats and reachable safe entrances", () => {
     expect(MAPS.filter((map) => map.size === "small")).toHaveLength(6);

@@ -4,7 +4,7 @@ A pixel-art office built with **Next.js, Elysia on Bun, PostgreSQL, Phaser, Bett
 
 Walk with WASD/arrows and press Space to jump (or click the Space control on the map). Nearby voice joins automatically; turn your microphone on to talk to people in range. The top-left location card shows nearby voice participants with their avatars, names, and speaking activity. Join the Studio or Library for a meeting, share your screen, wave, summon a teammate with their consent, or start an accepted direct call. Microphone and camera start off.
 
-The map fills the browser window. Navigation, people/rooms, and media controls float above it. Press Z to nudge the closest person within 120 map pixels, or select a nearby person and choose Nudge. They receive a short chime and an in-app notification; Do Not Disturb blocks nudges; there is no nudge cooldown. On mobile, touch and drag anywhere on the map to walk with a floating joystick, then release to stop. Tap a room or person to interact. Close the people panel for more map space, reopen it from People or Rooms, or use the fullscreen button in the top navbar. The navbar also links to this GitHub repository.
+The map fills the browser window. Navigation, people/rooms, and media controls float above it. Press Z to nudge the closest person in a 90-degree cone in front of your character, within 120 map pixels, or select someone you are facing and choose Nudge. Both people hear a short chime, their avatars react, and the recipient sees a notification; Do Not Disturb blocks nudges; there is no nudge cooldown. On mobile, touch and drag anywhere on the map to walk with a floating joystick, then release to stop. Tap a room or person to interact. Close the people panel for more map space, reopen it from People or Rooms, or use the fullscreen button in the top navbar. The navbar also links to this GitHub repository.
 
 Switch between **English and Thai** using the language button in the navbar or on the login screen. Your choice stays saved in this browser and takes effect without disconnecting your call. Login, profiles, settings, map labels, and app notifications are translated. Thai uses bundled **IBM Plex Sans Thai** fonts (SIL Open Font License, included in `public/fonts/ibm-plex-sans-thai/OFL.txt`). Translation messages live in `lib/i18n/th.json`; English message keys provide the fallback.
 
@@ -59,6 +59,16 @@ livekit-server --dev --bind 127.0.0.1
 ```
 
 The map, presence, waves, summons, and authentication work without LiveKit. Calls need a reachable LiveKit server; failures appear in the UI. Opening this localhost setup from another computer requires correct public media addresses and HTTPS; use the production setup below for that.
+
+Press **Space** to jump, **1** to sit, and **2** to sleep, or use the map buttons. Press the same key again, walk, or jump to stand up. Sitting has a settling animation; sleeping shows a resting pose with gentle breathing and Zzz. Poses synchronize to everyone without changing availability or microphone state. Each avatar's name bar shows a microphone icon with a slash while muted; room changes reset it until microphone publication resumes.
+
+## Video quality
+
+Under **Settings → Devices → Video & screen quality**, choose Maximum (up to 3840×2160 at 60 fps, the default), High (up to 1920×1080 at 60 fps), or Balanced (up to 1280×720 at 30 fps). The preference stays saved per account in this browser. Turn the camera off/on or restart sharing to apply a change; microphone audio and the room connection stay active.
+
+Maximum allows camera encoding up to 20 Mbps and screen encoding up to 30 Mbps, with lower limits for High and Balanced. These are encoder ceilings, not guaranteed rates. Capture uses preferred dimensions rather than requiring a particular camera capability. Simulcast and adaptive subscriptions remain enabled, account for display pixel density, and select suitable streams for small tiles or expanded views. Screen sharing prioritizes readable detail. Safari/iOS 17 retains the SDK's native-resolution workaround.
+
+Actual resolution and frame rate depend on the capture source, browser, CPU/GPU, available uplink/downlink, and receiver display size. Static screens may send fewer frames. Use Balanced if a device overheats or video stutters; expanding a camera or screen lets adaptive streaming request a larger layer. No VM can recover detail that the camera or sharing source never captured.
 
 ## Workspace maps
 

@@ -3,6 +3,7 @@ import { translate } from "../lib/i18n/messages";
 import th from "../lib/i18n/th.json";
 import { MAPS } from "../shared/maps";
 import { CHARACTER_LOOKS } from "../shared/avatars";
+import { MEDIA_QUALITY } from "../lib/media-quality";
 import { ZONES } from "../shared/world";
 
 test("Thai messages preserve parameters and cover map and character descriptions", () => {
@@ -12,6 +13,8 @@ test("Thai messages preserve parameters and cover map and character descriptions
       [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort();
     expect(parameters(thai)).toEqual(parameters(english));
   }
+  for (const profile of Object.values(MEDIA_QUALITY))
+    expect(Object.hasOwn(th, profile.label)).toBe(true);
   for (const item of [...MAPS, ...CHARACTER_LOOKS, ...ZONES]) {
     expect(Object.hasOwn(th, item.name)).toBe(true);
     if ("description" in item)

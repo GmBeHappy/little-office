@@ -37,10 +37,11 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
+import { MEDIA_QUALITY } from "@/lib/media-quality";
 import { api, type User, type AppConfig } from "@/lib/api";
 import {
   JUMP_DURATION,
-  NUDGE_RADIUS,
+  canNudge,
   ZONES,
   nearby,
   type Invitation,
@@ -95,7 +96,10 @@ export default function OfficeApp() {
     ),
     [invites, setInvites] = useState<Invitation[]>([]),
     [waves, setWaves] = useState<Record<string, number>>({}),
-    [jumps, setJumps] = useState<Record<string, number>>({});
+    [jumps, setJumps] = useState<Record<string, number>>({}),
+    [nudges, setNudges] = useState<
+      Record<string, { start: number; sender: boolean }>
+    >({});
   const [settingsTab, setSettingsTab] = useState<"workspace" | "members">(
     "workspace",
   );
@@ -152,6 +156,21 @@ export default function OfficeApp() {
   const mediaRef = useRef(media);
   mediaRef.current = media;
   useEffect(() => {
+    if (!self || connection !== "Connected") return;
+    send({
+      type: "microphone",
+      room: self.room,
+      enabled: media.connected && media.room?.name === self.room && media.mic,
+    });
+  }, [
+    self?.room,
+    connection,
+    media.connected,
+    media.room?.name,
+    media.mic,
+    send,
+  ]);
+  useEffect(() => {
     if (!user?.approved || user.mustChangePassword) return;
     let disposed = false,
       timer: ReturnType<typeof setTimeout> | undefined,
@@ -187,6 +206,19 @@ export default function OfficeApp() {
             ),
             [message.from]: now,
           }));
+        } else if (message.type === "nudge-animation") {
+          const now = performance.now();
+          setNudges((previous) => ({
+            ...Object.fromEntries(
+              Object.entries(previous).filter(
+                ([, nudge]) => now - nudge.start < 600,
+              ),
+            ),
+            [message.from]: { start: now, sender: true },
+            [message.to]: { start: now, sender: false },
+          }));
+        } else if (message.type === "nudge-sent") {
+          void mediaRef.current.playNudge();
         } else if (message.type === "nudge") {
           notify(`${message.name} nudged you. They're nearby!`);
           void mediaRef.current.playNudge();
@@ -207,6 +239,7 @@ export default function OfficeApp() {
         setSnapshot(null);
         setInvites([]);
         setJumps({});
+        setNudges({});
         try {
           await api("/me");
           timer = setTimeout(connect, Math.min(1000 * 2 ** attempt++, 10000));
@@ -522,6 +555,7 @@ export default function OfficeApp() {
                 speaking={media.speaking}
                 waves={waves}
                 jumps={jumps}
+                nudges={nudges}
                 send={send}
                 select={(id) => {
                   setSelected(id);
@@ -539,6 +573,7 @@ export default function OfficeApp() {
                 <button
                   className="key"
                   aria-label={t("Jump")}
+                  title={t("Jump (Space)")}
                   onClick={() => send({ type: "jump" })}
                 >
                   Space
@@ -546,13 +581,43 @@ export default function OfficeApp() {
                 <span>{t("to jump")}</span>
                 <button
                   className="key"
-                  aria-label={t("Nudge nearest teammate")}
-                  title={t("Nudge nearest teammate (Z)")}
+                  aria-label={t("Nudge teammate in front")}
+                  title={t("Nudge teammate in front (Z)")}
                   onClick={() => send({ type: "nudge" })}
                 >
                   Z
                 </button>
                 <span>{t("to nudge")}</span>
+                <button
+                  className="key"
+                  aria-label={t(self?.pose === "sit" ? "Stand up" : "Sit")}
+                  title={t("Sit / stand (1)")}
+                  aria-pressed={self?.pose === "sit"}
+                  onClick={() =>
+                    send({
+                      type: "pose",
+                      pose: self?.pose === "sit" ? "stand" : "sit",
+                    })
+                  }
+                >
+                  1
+                </button>
+                <span>{t("to sit")}</span>
+                <button
+                  className="key"
+                  aria-label={t(self?.pose === "sleep" ? "Wake up" : "Sleep")}
+                  title={t("Sleep / wake (2)")}
+                  aria-pressed={self?.pose === "sleep"}
+                  onClick={() =>
+                    send({
+                      type: "pose",
+                      pose: self?.pose === "sleep" ? "stand" : "sleep",
+                    })
+                  }
+                >
+                  2
+                </button>
+                <span>{t("to sleep")}</span>
               </div>
               <div className="map-weather">
                 {getMap(workspace.mapId).theme === "space" ? "✦" : "☀"}{" "}
@@ -730,9 +795,7 @@ export default function OfficeApp() {
                         <button
                           disabled={
                             !self ||
-                            self.zone !== chosen.zone ||
-                            Math.hypot(self.x - chosen.x, self.y - chosen.y) >
-                              NUDGE_RADIUS ||
+                            !canNudge(self, chosen) ||
                             chosen.status === "dnd"
                           }
                           onClick={() =>
@@ -1004,7 +1067,7 @@ export default function OfficeApp() {
                   <p>
                     <strong>{t("A friendly nudge")}</strong>
                     {t(
-                      "Press Z to nudge the closest teammate, or select someone next to you and choose Nudge. They'll hear a chime and see your name. Summons and calls still need acceptance.",
+                      "Face someone nearby and press Z to nudge them. Both of you hear a chime, and the avatars react. Press 1 to sit or 2 to sleep; move or jump to stand up. These poses do not change your voice or availability.",
                     )}
                   </p>
                   <p>
@@ -1718,6 +1781,30 @@ function SettingsPanel({
                 ))}
             </select>
           </label>
+          <label>
+            {t("Video & screen quality")}
+            <select
+              aria-label={t("Video & screen quality")}
+              value={media.quality}
+              onChange={(e) => media.chooseQuality(e.target.value)}
+            >
+              {Object.entries(MEDIA_QUALITY).map(([value, profile]) => (
+                <option key={value} value={value}>
+                  {t(profile.label)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="muted">
+            {t(
+              "Applies the next time you turn on your camera or start sharing. Your microphone and current call stay connected.",
+            )}
+          </p>
+          <p className="muted">
+            {t(
+              "Maximum uses more bandwidth and processing power. Actual resolution and frame rate depend on your device, browser, shared content, and connection. Choose Balanced if video stutters.",
+            )}
+          </p>
           {config.sso && (
             <button
               className="secondary"

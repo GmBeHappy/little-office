@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
-import { WORLD, ZONES, type Person } from "../shared/world";
+import { WORLD, type Person } from "../shared/world";
 
+import { getMap, mapZones } from "../shared/maps";
 const accounts = JSON.parse(process.env.E2E_ACCOUNTS || "[]");
 test.skip(!accounts.length, "Run through bun scripts/e2e.ts rooms.spec.ts");
 
@@ -9,12 +10,15 @@ test("clicking a meeting room on the map teleports inside and Space still jumps"
 }) => {
   let self: Person | undefined;
   let jumps = 0;
+  let mapId = "nature-small";
   page.on("websocket", (socket) => {
     if (!socket.url().includes("/api/office")) return;
     socket.on("framereceived", ({ payload }) => {
       const message = JSON.parse(String(payload));
-      if (message.type === "snapshot")
+      if (message.type === "snapshot") {
         self = message.people.find((p: Person) => p.id === accounts[0].id);
+        mapId = message.workspace.mapId;
+      }
       if (message.type === "jump" && message.from === accounts[0].id) jumps++;
     });
   });
@@ -27,7 +31,9 @@ test("clicking a meeting room on the map teleports inside and Space still jumps"
   await expect.poll(() => self?.id).toBe(accounts[0].id);
   await page.getByRole("button", { name: "Office", exact: true }).click();
 
-  for (const zone of ZONES.filter((zone) => zone.id !== "floor")) {
+  for (const zone of mapZones(getMap(mapId)).filter(
+    (zone) => zone.id !== "floor",
+  )) {
     const bounds = (await canvas.boundingBox())!;
     const zoom = Math.max(
       bounds.width / WORLD.width,
@@ -49,8 +55,8 @@ test("clicking a meeting room on the map teleports inside and Space still jumps"
     );
     await canvas.click({
       position: {
-        x: (zone.x + zone.w / 2 - scrollX) * zoom,
-        y: (zone.y + zone.h / 2 - scrollY) * zoom,
+        x: (zone.x + zone.w - 30 - scrollX) * zoom,
+        y: (zone.y + zone.h - 40 - scrollY) * zoom,
       },
     });
     await expect.poll(() => self?.zone).toBe(zone.id);

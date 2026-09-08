@@ -13,6 +13,7 @@ type Props = {
   speaking: string[];
   waves: Record<string, number>;
   jumps: Record<string, number>;
+  nudges: Record<string, { start: number; sender: boolean }>;
   send: (c: Command) => void;
   select: (id: string) => void;
 };
@@ -47,9 +48,12 @@ export default function PixelMap(props: Props) {
           container: Phaser.GameObjects.Container;
           body: Phaser.GameObjects.Graphics;
           label: Phaser.GameObjects.Text;
+          micIcon: Phaser.GameObjects.Graphics;
           wave: Phaser.GameObjects.Text;
           color: string;
           walkTime: number;
+          pose: Person["pose"];
+          poseSince: number;
         }
       >();
       keys = new Set<string>();
@@ -64,6 +68,12 @@ export default function PixelMap(props: Props) {
         dy: number;
         dragged: boolean;
       };
+      mapPointer(pointer: Phaser.Input.Pointer) {
+        return (
+          pointer.event?.target === this.game.canvas &&
+          !document.querySelector('[role="dialog"], .media-expanded')
+        );
+      }
       stopTouch() {
         if (this.touch) {
           this.touch = undefined;
@@ -114,7 +124,7 @@ export default function PixelMap(props: Props) {
               live.current.send({ type: "zone", zone: room.id }),
             )
             .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-              if (!pointer.wasTouch)
+              if (!pointer.wasTouch && this.mapPointer(pointer))
                 live.current.send({ type: "zone", zone: room.id });
             });
         }
@@ -126,6 +136,7 @@ export default function PixelMap(props: Props) {
           ) => {
             if (
               !pointer.wasTouch ||
+              !this.mapPointer(pointer) ||
               this.touch ||
               document.querySelector('[role="dialog"], .media-expanded')
             )
@@ -220,6 +231,27 @@ export default function PixelMap(props: Props) {
               document.querySelector('[role="dialog"], .media-expanded'))
           )
             return;
+          if (
+            ["Digit1", "Numpad1", "Digit2", "Numpad2"].includes(e.code) &&
+            !e.ctrlKey &&
+            !e.metaKey &&
+            !e.altKey
+          ) {
+            e.preventDefault();
+            if (!e.repeat) {
+              const self = live.current.people.find(
+                (p) => p.id === live.current.self,
+              );
+              const pose = ["Digit1", "Numpad1"].includes(e.code)
+                ? "sit"
+                : "sleep";
+              live.current.send({
+                type: "pose",
+                pose: self?.pose === pose ? "stand" : pose,
+              });
+            }
+            return;
+          }
           if (e.code === "KeyZ" && !e.ctrlKey && !e.metaKey && !e.altKey) {
             e.preventDefault();
             if (!e.repeat) live.current.send({ type: "nudge" });
@@ -327,7 +359,7 @@ export default function PixelMap(props: Props) {
                 fontStyle: "bold",
                 color: "#3b4839",
                 backgroundColor: "#faf7e9",
-                padding: { x: 6, y: 4 },
+                padding: { left: 6, right: 24, top: 4, bottom: 4 },
                 resolution: 4,
               })
               .setOrigin(0.5);
@@ -335,15 +367,32 @@ export default function PixelMap(props: Props) {
               fontSize: "22px",
               resolution: 4,
             });
-            const container = this.add.container(p.x, p.y, [body, label, wave]);
+            const micIcon = this.add.graphics();
+            const container = this.add.container(p.x, p.y, [
+              body,
+              label,
+              micIcon,
+              wave,
+            ]);
             container
               .setSize(44, 65)
               .setInteractive()
               .setData("tap", () => live.current.select(p.id))
               .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-                if (!pointer.wasTouch) live.current.select(p.id);
+                if (!pointer.wasTouch && this.mapPointer(pointer))
+                  live.current.select(p.id);
               });
-            a = { container, body, label, wave, color: "", walkTime: 0 };
+            a = {
+              container,
+              body,
+              label,
+              micIcon,
+              wave,
+              color: "",
+              walkTime: 0,
+              pose: p.pose || "stand",
+              poseSince: time,
+            };
             this.avatars.set(p.id, a);
           }
           a.container.x = Phaser.Math.Linear(
@@ -357,6 +406,41 @@ export default function PixelMap(props: Props) {
             Math.min(1, delta / 65),
           );
           a.container.setDepth(1000 + p.y);
+          const pose = p.pose || "stand";
+          if (a.pose !== pose) {
+            a.pose = pose;
+            a.poseSince = time;
+          }
+          const settle =
+            reducedMotion || pose === "stand"
+              ? 0
+              : -4 * Math.max(0, 1 - (time - a.poseSince) / 250);
+          const breathe =
+            !reducedMotion && pose === "sleep" ? Math.sin(time / 650) : 0;
+          const nudge = state.nudges[p.id];
+          const nudgeTime = nudge ? performance.now() - nudge.start : 600;
+          const reacting = nudgeTime >= 0 && nudgeTime < 500;
+          const motion =
+            !reducedMotion && reacting
+              ? Math.sin((nudgeTime / 500) * Math.PI)
+              : 0;
+          const push = nudge?.sender
+            ? motion * 8
+            : motion * Math.sin(nudgeTime / 35) * 4;
+          const nudgeX = nudge?.sender
+            ? p.direction === "left"
+              ? -push
+              : p.direction === "right"
+                ? push
+                : 0
+            : push;
+          const nudgeY = nudge?.sender
+            ? p.direction === "up"
+              ? -push
+              : p.direction === "down"
+                ? push
+                : 0
+            : 0;
           const jumpStart = state.jumps[p.id];
           const elapsed =
             jumpStart === undefined
@@ -378,6 +462,10 @@ export default function PixelMap(props: Props) {
           );
           const g = a.body;
           g.clear();
+          if (reacting) {
+            g.lineStyle(2, 0xefb865, 1 - nudgeTime / 500);
+            g.strokeEllipse(0, 3, 40 + motion * 15, 19 + motion * 5);
+          }
           const r = (x: number, y: number, w: number, h: number, c: number) => {
             g.fillStyle(c);
             g.fillRect(x, y, w, h);
@@ -394,6 +482,21 @@ export default function PixelMap(props: Props) {
             a.label.setBackgroundColor(labelBackground);
             a.label.setColor(isSpeaking ? "#ffffff" : "#3b4839");
           }
+          const micColor = isSpeaking
+            ? 0xffffff
+            : p.microphone
+              ? 0x487950
+              : 0x9b766b;
+          a.micIcon.setPosition(a.label.width / 2 - 13, a.label.y);
+          a.micIcon.clear().lineStyle(1.5, micColor, 1);
+          a.micIcon.strokeRoundedRect(-2, -7, 5, 9, 2);
+          a.micIcon.lineBetween(-5, -2, -5, 2);
+          a.micIcon.lineBetween(-5, 2, 0, 5);
+          a.micIcon.lineBetween(0, 5, 5, 2);
+          a.micIcon.lineBetween(5, 2, 5, -2);
+          a.micIcon.lineBetween(0, 5, 0, 8);
+          a.micIcon.lineBetween(-3, 8, 3, 8);
+          if (!p.microphone) a.micIcon.lineBetween(-7, -8, 7, 8);
           if (isSpeaking) {
             const pulse = reducedMotion ? 0 : Math.sin(time / 150);
             g.lineStyle(3, 0x40ba78, 0.85);
@@ -419,21 +522,30 @@ export default function PixelMap(props: Props) {
             c: number,
           ) =>
             r(
-              (p.direction === "left" ? -x - w : x) * (1 + squash / 2),
-              8 + (y + bob - 8) * (1 - squash) - height,
+              (p.direction === "left" ? -x - w : x) * (1 + squash / 2) + nudgeX,
+              8 +
+                (y + bob - 8) * (1 - squash) -
+                height +
+                nudgeY +
+                settle +
+                breathe,
               w * (1 + squash / 2),
               h * (1 - squash),
               c,
             );
-          drawCharacter(p.avatar, p.direction, stride, pixel);
+          drawCharacter(p.avatar, p.direction, stride, pixel, pose);
           a.wave.setText(
-            (state.waves[p.id] || 0) > Date.now()
-              ? "👋"
-              : p.status === "dnd"
-                ? "⏾"
-                : p.status === "away"
-                  ? "z"
-                  : "",
+            reacting && !nudge?.sender
+              ? "!"
+              : pose === "sleep"
+                ? "Zzz"
+                : (state.waves[p.id] || 0) > Date.now()
+                  ? "👋"
+                  : p.status === "dnd"
+                    ? "⏾"
+                    : p.status === "away"
+                      ? "z"
+                      : "",
           );
           if (p.id === state.self)
             this.cameras.main.centerOn(a.container.x, a.container.y);

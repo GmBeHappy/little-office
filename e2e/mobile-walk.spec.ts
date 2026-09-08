@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { WORLD, type Person } from "../shared/world";
+import { getMap, mapZones } from "../shared/maps";
 const accounts = JSON.parse(process.env.E2E_ACCOUNTS || "[]");
 test.skip(!accounts.length, "Run with bun scripts/e2e.ts mobile-walk.spec.ts");
 test("touch joystick walks, stops on release/cancel, and distinguishes room taps from drags", async ({
@@ -14,14 +15,17 @@ test("touch joystick walks, stops on release/cancel, and distinguishes room taps
   try {
     const page = await context.newPage();
     let self: Person | undefined;
+    let mapId = "nature-small";
     const moves: { dx: number; dy: number }[] = [];
     const zones: string[] = [];
     page.on("websocket", (socket) => {
       if (!socket.url().includes("/api/office")) return;
       socket.on("framereceived", ({ payload }) => {
         const message = JSON.parse(String(payload));
-        if (message.type === "snapshot")
+        if (message.type === "snapshot") {
           self = message.people.find((p: Person) => p.id === accounts[0].id);
+          mapId = message.workspace.mapId;
+        }
       });
       socket.on("framesent", ({ payload }) => {
         const command = JSON.parse(String(payload));
@@ -79,7 +83,17 @@ test("touch joystick walks, stops on release/cancel, and distinguishes room taps
     await expect(joystick).toBeHidden();
     await expect.poll(() => moves.at(-1)).toMatchObject({ dx: 0, dy: 0 });
 
-    // Compute the visible studio edge from the camera's documented bounds.
+    // Pick a visible edge of the nearest room in the selected map.
+    const room = mapZones(getMap(mapId))
+      .filter((z) => z.id !== "floor")
+      .sort((a, b) => {
+        const distance = (z: typeof a) =>
+          Math.hypot(
+            Math.max(z.x + 20, Math.min(z.x + z.w - 20, self!.x)) - self!.x,
+            Math.max(z.y + 30, Math.min(z.y + z.h - 30, self!.y)) - self!.y,
+          );
+        return distance(a) - distance(b);
+      })[0];
     const bounds = (await canvas.boundingBox())!;
     const zoom = Math.max(
       bounds.width / WORLD.width,
@@ -101,8 +115,16 @@ test("touch joystick walks, stops on release/cancel, and distinguishes room taps
         ),
       );
       return {
-        x: bounds.x + (850 - scrollX) * zoom,
-        y: bounds.y + (275 - scrollY) * zoom,
+        x:
+          bounds.x +
+          (Math.max(room.x + 20, Math.min(room.x + room.w - 20, self!.x)) -
+            scrollX) *
+            zoom,
+        y:
+          bounds.y +
+          (Math.max(room.y + 30, Math.min(room.y + room.h - 30, self!.y)) -
+            scrollY) *
+            zoom,
       };
     };
     await page.waitForTimeout(300);
@@ -115,8 +137,8 @@ test("touch joystick walks, stops on release/cancel, and distinguishes room taps
     await page.waitForTimeout(300);
     point = roomPoint();
     await page.touchscreen.tap(point.x, point.y);
-    await expect.poll(() => self?.zone).toBe("studio");
-    expect(zones).toEqual(["studio"]);
+    await expect.poll(() => self?.zone).toBe(room.id);
+    expect(zones).toEqual([room.id]);
     await page.getByRole("button", { name: "Settings", exact: true }).tap();
     await expect(joystick).toBeHidden();
     expect(

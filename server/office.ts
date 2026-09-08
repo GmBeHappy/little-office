@@ -2,7 +2,7 @@ import {
   AVATARS,
   WORLD,
   JUMP_DURATION,
-  NUDGE_RADIUS,
+  canNudge,
   nearby,
   walkable,
   zoneAt,
@@ -59,6 +59,8 @@ export class Office {
         member.y = WORLD.spawn.y + (Math.floor(i / 2) % 8) * 32;
         i++;
         member.zone = "floor";
+        member.pose = "stand";
+        member.microphone = false;
         member.conversation = "";
         member.room = "";
         this.syncConversation(member);
@@ -126,6 +128,8 @@ export class Office {
       ...WORLD.spawn,
       direction: "down",
       moving: false,
+      pose: "stand",
+      microphone: false,
       status,
       statusText: user.statusText || "",
       zone: "floor",
@@ -154,13 +158,17 @@ export class Office {
     delete this.presenters[group];
     this.retire(old);
     for (const member of this.members.values())
-      if (member.conversation === group) member.room = this.room(group);
+      if (member.conversation === group) {
+        member.room = this.room(group);
+        member.microphone = false;
+      }
   }
   assign(member: Member, group: string) {
     const old = member.conversation;
     if (old === group) return;
     member.conversation = group;
     member.room = this.room(group);
+    member.microphone = false;
     if (old) {
       if (this.presenters[old] === member.id) delete this.presenters[old];
       this.rotate(old);
@@ -251,6 +259,7 @@ export class Office {
     m.x = arrival.x;
     m.y = arrival.y;
     m.zone = zone;
+    m.pose = "stand";
     m.input = { dx: 0, dy: 0, at: 0 };
     if (m.conversation.startsWith("call:")) this.assign(m, "");
     this.syncConversation(m);
@@ -261,15 +270,27 @@ export class Office {
     if (!m) return;
     m.seen = now;
     if (command.type === "ping") return;
-    if (command.type !== "move" || command.dx || command.dy) {
+    if (
+      command.type !== "microphone" &&
+      (command.type !== "move" || command.dx || command.dy)
+    ) {
       m.activity = now;
       if (m.status === "away" && m.manualStatus !== "away")
         m.status = m.manualStatus;
     }
     switch (command.type) {
+      case "microphone":
+        if (command.room === m.room) m.microphone = !!m.room && command.enabled;
+        break;
+      case "pose":
+        m.pose = command.pose;
+        m.moving = false;
+        m.input = { dx: 0, dy: 0, at: 0 };
+        break;
       case "jump": {
         const key = `jump:${id}`;
         if (now < (this.cooldowns.get(key) || 0)) return;
+        m.pose = "stand";
         this.cooldowns.set(key, now + JUMP_DURATION);
         for (const person of this.members.values())
           person.send({ type: "jump", from: id });
@@ -278,6 +299,7 @@ export class Office {
       case "move":
         if (command.seq > m.seq) {
           m.seq = command.seq;
+          if (command.dx || command.dy) m.pose = "stand";
           m.input = { dx: command.dx, dy: command.dy, at: now };
         }
         break;
@@ -301,25 +323,18 @@ export class Office {
         const target = command.target
           ? this.members.get(command.target)
           : [...this.members.values()]
-              .filter(
-                (p) =>
-                  p.id !== id &&
-                  p.zone === m.zone &&
-                  distance(p) <= NUDGE_RADIUS,
-              )
+              .filter((p) => p.id !== id && canNudge(m, p))
               .sort(
                 (a, b) => distance(a) - distance(b) || a.id.localeCompare(b.id),
               )[0];
-        if (
-          !target ||
-          target.id === id ||
-          target.zone !== m.zone ||
-          distance(target) > NUDGE_RADIUS
-        )
-          throw new Error("Move next to a teammate to nudge them.");
+        if (!target || target.id === id || !canNudge(m, target))
+          throw new Error("Face a nearby teammate to nudge them.");
         if (target.status === "dnd")
           throw new Error("They have Do not disturb enabled.");
         target.send({ type: "nudge", from: id, name: m.name });
+        m.send({ type: "nudge-sent", to: target.id });
+        for (const person of this.members.values())
+          person.send({ type: "nudge-animation", from: id, to: target.id });
         m.send({ type: "notice", message: `Nudged ${target.name}.` });
         break;
       }
@@ -511,6 +526,8 @@ export class Office {
         y,
         direction,
         moving,
+        pose,
+        microphone,
         status,
         statusText,
         zone,
@@ -525,6 +542,8 @@ export class Office {
         y,
         direction,
         moving,
+        pose,
+        microphone,
         status,
         statusText,
         zone,

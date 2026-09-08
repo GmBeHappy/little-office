@@ -54,9 +54,26 @@ export function drawCharacter(
   direction: Person["direction"],
   stride: number,
   pixel: (x: number, y: number, w: number, h: number, color: number) => void,
+  pose: Person["pose"] = "stand",
 ) {
   const look = characterLook(id);
   const { skin, hair, pants } = look;
+  const draw = pixel;
+  if (pose === "sit") {
+    draw(-16, 9, 32, 5, 0x879774);
+    draw(-13, 4, 26, 8, pants);
+    draw(-15, 8, 9, 4, 0x343d37);
+    draw(6, 8, 9, 4, 0x343d37);
+    pixel = (x, y, w, h, color) => {
+      if (y < 0) draw(x, y + 8, w, Math.min(h, -y), color);
+    };
+  } else if (pose === "sleep") {
+    draw(-26, 10, 53, 5, 0x879774);
+    draw(12, -11, 19, 21, 0xeee4c9);
+    pixel = (x, y, w, h, color) => draw(-y - h - 18, x, h, w, color);
+    direction = "down";
+    stride = 0;
+  }
   const shirt = parseInt(COLORS[look.id].slice(1), 16);
   const side = direction === "left" || direction === "right";
   const longHair = look.id === "coral";
@@ -88,8 +105,20 @@ export function drawCharacter(
     pixel(-11, -38, 23, 7, hair);
     pixel(-11, -33, 5, 10, hair);
     if (direction === "down") {
-      pixel(0, -27, 3, 3, 0x332f30);
-      pixel(6, -27, 3, 3, 0x332f30);
+      pixel(
+        0,
+        -27,
+        pose === "sleep" ? 4 : 3,
+        pose === "sleep" ? 1 : 3,
+        0x332f30,
+      );
+      pixel(
+        6,
+        -27,
+        pose === "sleep" ? 4 : 3,
+        pose === "sleep" ? 1 : 3,
+        0x332f30,
+      );
       pixel(1, -20, 4, 2, 0xb76c5a);
     } else pixel(-8, -34, 17, 15, hair);
     if (longHair) {

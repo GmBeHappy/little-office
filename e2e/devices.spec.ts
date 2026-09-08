@@ -90,6 +90,7 @@ test("device choices persist and route incoming call audio to the selected outpu
       await page
         .getByRole("button", { name: "Join The Studio", exact: true })
         .click();
+      await expect(page.locator(".map-topline")).toContainText("The Studio");
       await expect(page.locator(".controlbar")).toHaveAttribute(
         "data-media-connected",
         "true",

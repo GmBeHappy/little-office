@@ -14,10 +14,13 @@ import {
   RoomEvent,
   Track,
   createLocalScreenTracks,
+  ScreenSharePresets,
+  getBrowser,
   type LocalTrack,
   type TrackPublication,
 } from "livekit-client";
 import { api } from "@/lib/api";
+import { MEDIA_QUALITY, type MediaQuality } from "@/lib/media-quality";
 import { nearby, type Person } from "@/shared/world";
 
 type DeviceChoices = Record<MediaDeviceKind, string>;
@@ -51,6 +54,9 @@ export function useOfficeMedia(
   const [chimeBlocked, setChimeBlocked] = useState(false);
   const chime = useRef<HTMLAudioElement | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [quality, setQuality] = useState<MediaQuality>("maximum");
+  const qualityPreference = useRef<MediaQuality>("maximum");
+  const pendingScreenQuality = useRef<MediaQuality>("maximum");
   const [choices, setChoices] = useState<DeviceChoices>(defaultDevices);
   const preferences = useRef<DeviceChoices>(defaultDevices);
   const [outputSupported, setOutputSupported] = useState(false);
@@ -86,6 +92,16 @@ export function useOfficeMedia(
     } catch {
       /* Unavailable storage uses system defaults. */
     }
+    let savedQuality: MediaQuality = "maximum";
+    try {
+      const value = localStorage.getItem(`office-media-quality:${userId}`);
+      if (value && Object.hasOwn(MEDIA_QUALITY, value))
+        savedQuality = value as MediaQuality;
+    } catch {
+      /* Use maximum quality when storage is unavailable. */
+    }
+    qualityPreference.current = savedQuality;
+    setQuality(savedQuality);
     preferences.current = saved;
     setChoices(saved);
     setOutputSupported("setSinkId" in HTMLMediaElement.prototype);
@@ -143,7 +159,7 @@ export function useOfficeMedia(
         }
         if (cancelled) return;
         next = new Room({
-          adaptiveStream: true,
+          adaptiveStream: { pixelDensity: "screen" },
           dynacast: true,
           audioCaptureDefaults: {
             deviceId: preferences.current.audioinput || undefined,
@@ -154,7 +170,7 @@ export function useOfficeMedia(
               : undefined,
           videoCaptureDefaults: {
             deviceId: preferences.current.videoinput || undefined,
-            resolution: { width: 640, height: 360, frameRate: 20 },
+            resolution: MEDIA_QUALITY[qualityPreference.current].resolution,
           },
         });
         current.current = next;
@@ -206,7 +222,7 @@ export function useOfficeMedia(
             setMic(true);
           }
           if (wanted.current.camera) {
-            await next.localParticipant.setCameraEnabled(true);
+            await enableCamera(next);
             setCamera(true);
           }
         } catch {
@@ -252,6 +268,40 @@ export function useOfficeMedia(
       );
     }
   }, [room, self, people, revision]);
+  function chooseQuality(value: string) {
+    if (!Object.hasOwn(MEDIA_QUALITY, value)) return;
+    qualityPreference.current = value as MediaQuality;
+    setQuality(value as MediaQuality);
+    try {
+      if (userId) localStorage.setItem(`office-media-quality:${userId}`, value);
+    } catch {
+      notify(
+        "Quality changed, but this browser could not save your preference.",
+      );
+    }
+  }
+  async function enableCamera(target: Room) {
+    const profile = MEDIA_QUALITY[qualityPreference.current];
+    // A muted publication retains its old encoder limits. Recreate only the camera.
+    const old = target.localParticipant.getTrackPublication(
+      Track.Source.Camera,
+    )?.track;
+    if (old) await target.localParticipant.unpublishTrack(old);
+    await target.localParticipant.setCameraEnabled(
+      true,
+      {
+        deviceId: preferences.current.videoinput || undefined,
+        resolution: profile.resolution,
+      },
+      {
+        simulcast: true,
+        videoEncoding: {
+          maxBitrate: profile.cameraBitrate,
+          maxFramerate: profile.resolution.frameRate,
+        },
+      },
+    );
+  }
   async function toggle(kind: "mic" | "camera") {
     const active = kind === "mic" ? mic : camera;
     if (!current.current || !connected) {
@@ -261,7 +311,9 @@ export function useOfficeMedia(
     try {
       if (kind === "mic")
         await current.current.localParticipant.setMicrophoneEnabled(!active);
-      else await current.current.localParticipant.setCameraEnabled(!active);
+      else if (active)
+        await current.current.localParticipant.setCameraEnabled(false);
+      else await enableCamera(current.current);
       wanted.current[kind] = !active;
       if (kind === "mic") setMic(!active);
       else setCamera(!active);
@@ -279,7 +331,20 @@ export function useOfficeMedia(
     preparing.current = true;
     const target = current.current;
     try {
-      const tracks = await createLocalScreenTracks({ audio: true });
+      pendingScreenQuality.current = qualityPreference.current;
+      const profile = MEDIA_QUALITY[pendingScreenQuality.current];
+      const browser = getBrowser();
+      // Retain LiveKit's uncapped capture workaround for Safari/iOS 17.
+      const safari17 =
+        (browser?.name === "Safari" && parseInt(browser.version) === 17) ||
+        (browser?.os === "iOS" && parseInt(browser.osVersion || "") === 17);
+      const tracks = await createLocalScreenTracks({
+        audio: true,
+        resolution: safari17 ? undefined : profile.resolution,
+      });
+      for (const track of tracks)
+        if (track.source === Track.Source.ScreenShare)
+          track.mediaStreamTrack.contentHint = "detail";
       if (target !== current.current) {
         tracks.forEach((t) => t.stop());
         throw new Error("The conversation changed. Choose your screen again.");
@@ -299,8 +364,16 @@ export function useOfficeMedia(
       const tracks = pendingScreen.current;
       pendingScreen.current = [];
       try {
+        const profile = MEDIA_QUALITY[pendingScreenQuality.current];
         for (const track of tracks)
-          await current.current.localParticipant.publishTrack(track);
+          await current.current.localParticipant.publishTrack(track, {
+            simulcast: true,
+            screenShareEncoding: {
+              maxBitrate: profile.screenBitrate,
+              maxFramerate: profile.resolution.frameRate,
+            },
+            screenShareSimulcastLayers: [ScreenSharePresets.h720fps30],
+          });
       } catch (e) {
         for (const track of tracks) {
           await current.current.localParticipant.unpublishTrack(track);
@@ -453,6 +526,8 @@ export function useOfficeMedia(
     input: choices.audioinput,
     output: choices.audiooutput,
     videoInput: choices.videoinput,
+    quality,
+    chooseQuality,
     outputSupported,
     outputPickerSupported,
     chooseOutput,
