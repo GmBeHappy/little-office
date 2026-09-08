@@ -99,6 +99,7 @@ test("Thai and English cover login, office and settings, persist, and switch wit
   await page
     .getByRole("button", { name: "โปรไฟล์ของคุณ", exact: true })
     .click();
+  await dialog.getByText("เริ่มจากอวาตาร์สำเร็จรูป", { exact: true }).click();
   await expect(
     dialog.getByRole("button", { name: "รูปลักษณ์นักดูดาว" }),
   ).toBeVisible();

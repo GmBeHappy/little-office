@@ -49,14 +49,11 @@ import {
   type Snapshot,
   type Availability,
 } from "@/shared/world";
-import {
-  CHARACTER_LOOKS,
-  characterLook,
-  drawCharacter,
-} from "@/shared/avatars";
 import type { Command } from "@/shared/protocol";
 import { MediaTracks, SpeakingIndicator, useOfficeMedia } from "./Media";
 import { Select } from "./Select";
+import { Avatar } from "./Avatar";
+import { AvatarEditor } from "./AvatarEditor";
 import { DeviceSelect } from "./DeviceSelect";
 import { ToolbarMenu } from "./ToolbarMenu";
 import { WorkspaceSettings } from "./WorkspaceSettings";
@@ -1169,32 +1166,6 @@ function Brand() {
     </div>
   );
 }
-export function Avatar({ color = "sage" }: { color?: string }) {
-  const look = characterLook(color);
-  const pixels: React.ReactNode[] = [];
-  drawCharacter(look.id, "down", 0, (x, y, width, height, fill) => {
-    pixels.push(
-      <rect
-        key={pixels.length}
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        fill={"#" + fill.toString(16).padStart(6, "0")}
-      />,
-    );
-  });
-  return (
-    <svg
-      className={"pixel-avatar avatar-" + look.id}
-      viewBox="-20 -48 40 60"
-      shapeRendering="crispEdges"
-      aria-hidden="true"
-    >
-      {pixels}
-    </svg>
-  );
-}
 function Control({
   icon,
   label,
@@ -1532,37 +1503,7 @@ function Profile({
     >
       <div className="eyebrow">{t("A LITTLE BIT OF YOU")}</div>
       <h2>{t("Your office self.")}</h2>
-      <div className="character-preview">
-        <Avatar color={avatar} />
-        <div>
-          <span className="eyebrow">{t("YOUR CHARACTER")}</span>
-          <h3>{t(characterLook(avatar).name)}</h3>
-          <p>{t(characterLook(avatar).description)}</p>
-        </div>
-      </div>
-      <p className="character-picker-label">
-        {t("Choose your look. Save to wear it in the office.")}
-      </p>
-      <div
-        className="avatar-picker"
-        role="group"
-        aria-label={t("Character skins")}
-      >
-        {CHARACTER_LOOKS.map((look) => (
-          <button
-            type="button"
-            key={look.id}
-            className={avatar === look.id ? "picked" : ""}
-            aria-label={t("{name} skin", { name: t(look.name) })}
-            aria-pressed={avatar === look.id}
-            onClick={() => setAvatar(look.id)}
-          >
-            <Avatar color={look.id} />
-            <span>{t(look.name)}</span>
-            {avatar === look.id && <Check className="skin-check" size={13} />}
-          </button>
-        ))}
-      </div>
+      <AvatarEditor value={avatar} onChange={setAvatar} />
       <label>
         {t("Your name")}
         <input name="name" defaultValue={user.name} maxLength={40} required />

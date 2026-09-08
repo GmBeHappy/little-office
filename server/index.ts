@@ -5,7 +5,7 @@ import { db, settings, workspaceSettings } from "./db";
 import { Office } from "./office";
 import { mediaConfigured, retireRoom, setPresenter, tokenFor } from "./media";
 import { Command } from "../shared/protocol";
-import { AVATARS } from "../shared/world";
+import { AVATAR_PATTERN } from "../shared/appearance";
 import { MAPS } from "../shared/maps";
 
 export const office = new Office(retireRoom, setPresenter);
@@ -129,7 +129,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 16384 } })
       const member = office.members.get(s.user.id);
       if (member) {
         member.name = body.name;
-        member.avatar = body.avatar;
+        member.avatar = body.avatar as import("../shared/appearance").AvatarId;
         office.broadcast();
       }
       return { ok: true };
@@ -137,7 +137,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 16384 } })
     {
       body: t.Object({
         name: t.String({ minLength: 1, maxLength: 40 }),
-        avatar: t.Union(AVATARS.map((a) => t.Literal(a))),
+        avatar: t.String({ pattern: AVATAR_PATTERN, maxLength: 32 }),
       }),
     },
   )

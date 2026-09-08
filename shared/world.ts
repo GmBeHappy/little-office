@@ -1,3 +1,4 @@
+import type { AvatarId } from "./appearance";
 export const WORLD = { width: 1120, height: 720, spawn: { x: 740, y: 350 } };
 export const JUMP_DURATION = 650;
 export const NUDGE_RADIUS = 120;
@@ -136,7 +137,7 @@ export function canNudge(
 export type Person = {
   id: string;
   name: string;
-  avatar: keyof typeof COLORS;
+  avatar: AvatarId;
   x: number;
   y: number;
   direction: "up" | "down" | "left" | "right";

@@ -1,5 +1,5 @@
+import { isAvatar } from "../shared/appearance";
 import {
-  AVATARS,
   WORLD,
   JUMP_DURATION,
   canNudge,
@@ -122,9 +122,7 @@ export class Office {
     const member: Member = {
       id: user.id,
       name: user.name,
-      avatar: AVATARS.includes(user.avatar as never)
-        ? (user.avatar as Person["avatar"])
-        : "sage",
+      avatar: isAvatar(user.avatar) ? user.avatar : "sage",
       ...WORLD.spawn,
       direction: "down",
       moving: false,

@@ -115,11 +115,15 @@ test("two teammates can wave, summon, enter rooms, publish media, and leave", as
     ["Stargazer", "plum"],
   ]) {
     await a.getByRole("button", { name: "Your profile", exact: true }).click();
+    await a.getByText("Start from a preset", { exact: true }).click();
     await expect(
       a.getByRole("group", { name: "Character skins" }).getByRole("button"),
     ).toHaveCount(5);
     await a.getByRole("button", { name: `${name} skin`, exact: true }).click();
-    await expect(a.locator(".character-preview h3")).toHaveText(name);
+    await expect(a.locator(".avatar-preview-stage svg")).toHaveAttribute(
+      "data-avatar",
+      id,
+    );
     if (id === "plum")
       await a
         .locator(".modal")
@@ -260,6 +264,7 @@ test("two teammates can wave, summon, enter rooms, publish media, and leave", as
   ).toBe(true);
   await a.reload();
   await a.getByRole("button", { name: "Your profile", exact: true }).click();
+  await a.getByText("Start from a preset", { exact: true }).click();
   await expect(
     a.getByRole("button", { name: "Stargazer skin", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");

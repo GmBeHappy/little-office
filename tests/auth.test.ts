@@ -166,6 +166,28 @@ describe("authentication and authorization", () => {
       (await request("/admin/workspace", body, ownerCookie, "PATCH")).status,
     ).toBe(400);
   });
+  test("custom avatar profile updates persist and reject invalid combinations", async () => {
+    const body = { name: "Custom owner", avatar: "custom:4:2:5:1" };
+    expect((await request("/profile", body, ownerCookie, "PATCH")).status).toBe(
+      200,
+    );
+    expect(
+      (await request("/me", undefined, ownerCookie)).data.user.avatar,
+    ).toBe(body.avatar);
+    expect(
+      (
+        await request(
+          "/profile",
+          { ...body, avatar: "custom:9:2:5:1" },
+          ownerCookie,
+          "PATCH",
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (await request("/me", undefined, ownerCookie)).data.user.avatar,
+    ).toBe(body.avatar);
+  });
   test("last-login and unconfigured SSO switches cannot lock the owner out", async () => {
     expect(
       (

@@ -305,3 +305,5 @@ Owners can delete members or reset local (non-SSO) passwords in **Settings → M
 Movement follows physical WASD keys, including **ไ / ฟ / ห / ก** on a Thai keyboard, as well as arrow keys. Typing in forms does not move your character.
 
 The control bar has an **Emote** picker (emoji-picker-react, with English/Thai search) that broadcasts a three-second emoji above your avatar. Microphone and camera arrows open device menus; microphone settings also include speakers/headphones. Devices can still be changed under Settings. All selectors use styled, keyboard-accessible Radix Select menus. Status remains available in your profile.
+
+Customize your avatar under **Your profile**: five skin tones, five hairstyles, five outfits, and five headwear options plus no hat. Rotate the live preview, mix the pieces, then save. Existing presets remain available as starting points. The chosen appearance persists with your account and synchronizes across the map, portraits, and animation poses.
