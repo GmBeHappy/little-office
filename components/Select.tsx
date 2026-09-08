@@ -1,78 +1,67 @@
 "use client";
-import * as SelectPrimitive from "@radix-ui/react-select";
-import { Check, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
-
+import {
+  Select as SelectRoot,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "./ui/select";
 export type SelectOption = { value: string; label: string };
 const DEFAULT = "__office_default__";
 export function Select({
+  id,
   label,
   value,
   onChange,
+  onBlur,
   options,
   disabled = false,
 }: {
+  id?: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
   options: SelectOption[];
   disabled?: boolean;
 }) {
   const [trigger, setTrigger] = useState<HTMLButtonElement | null>(null);
+  const boundary = trigger?.closest<HTMLElement>('[role="dialog"], dialog');
   return (
-    <SelectPrimitive.Root
+    <SelectRoot
       value={value || DEFAULT}
-      onValueChange={(v) => onChange(v === DEFAULT ? "" : v)}
+      onValueChange={(value) => onChange(value === DEFAULT ? "" : value)}
       disabled={disabled}
     >
-      <SelectPrimitive.Trigger
+      <SelectTrigger
         ref={setTrigger}
-        className="select-trigger"
+        id={id}
         aria-label={label}
         data-value={value}
+        onBlur={onBlur}
+        className="select-trigger"
       >
-        <SelectPrimitive.Value />
-        <SelectPrimitive.Icon>
-          <ChevronDown size={16} />
-        </SelectPrimitive.Icon>
-      </SelectPrimitive.Trigger>
-      <SelectPrimitive.Portal
-        container={trigger?.closest("dialog") || trigger?.closest(".app-shell")}
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent
+        className="select-menu"
+        container={boundary || trigger?.closest<HTMLElement>(".app-shell")}
+        collisionBoundary={boundary || undefined}
+        collisionPadding={8}
+        sideOffset={6}
       >
-        <SelectPrimitive.Content
-          className="select-menu"
-          position="popper"
-          sideOffset={6}
-          collisionBoundary={
-            trigger?.closest('dialog, [role="dialog"]') || undefined
-          }
-          collisionPadding={8}
-        >
-          <SelectPrimitive.ScrollUpButton className="select-scroll">
-            <ChevronUp size={16} />
-          </SelectPrimitive.ScrollUpButton>
-          <SelectPrimitive.Viewport>
-            {options.map((option) => (
-              <SelectPrimitive.Item
-                key={option.value}
-                value={option.value || DEFAULT}
-                data-value={option.value}
-                className="select-option"
-              >
-                <SelectPrimitive.ItemText>
-                  {option.label}
-                </SelectPrimitive.ItemText>
-                <SelectPrimitive.ItemIndicator>
-                  <Check size={16} />
-                </SelectPrimitive.ItemIndicator>
-              </SelectPrimitive.Item>
-            ))}
-          </SelectPrimitive.Viewport>
-          <SelectPrimitive.ScrollDownButton className="select-scroll">
-            <ChevronDown size={16} />
-          </SelectPrimitive.ScrollDownButton>
-        </SelectPrimitive.Content>
-      </SelectPrimitive.Portal>
-    </SelectPrimitive.Root>
+        {options.map((option) => (
+          <SelectItem
+            key={option.value}
+            value={option.value || DEFAULT}
+            data-value={option.value}
+            className="select-option"
+          >
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </SelectRoot>
   );
 }

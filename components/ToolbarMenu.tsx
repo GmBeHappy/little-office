@@ -1,8 +1,15 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronUp, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-
+import { Button } from "./ui/button";
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogTitle,
+  DialogClose,
+} from "./ui/dialog";
 export function ToolbarMenu({
   label,
   icon,
@@ -15,90 +22,48 @@ export function ToolbarMenu({
   children: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button
-        className={icon ? "control" : "device-menu-trigger"}
-        aria-label={label}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => {
-          onOpen?.();
-          setOpen(true);
-        }}
-      >
-        {icon ? (
-          <>
-            <span>{icon}</span>
-            <small>{label}</small>
-          </>
-        ) : (
-          <ChevronUp size={14} />
-        )}
-      </button>
-      {open && (
-        <ToolbarDialog label={label} close={() => setOpen(false)}>
-          {children(() => setOpen(false))}
-        </ToolbarDialog>
-      )}
-    </>
-  );
-}
-function ToolbarDialog({
-  label,
-  close,
-  children,
-}: {
-  label: string;
-  close: () => void;
-  children: ReactNode;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
   const { t } = useI18n();
-  useEffect(() => {
-    ref.current?.showModal();
-  }, []);
   return (
-    <dialog
-      ref={ref}
-      className="toolbar-menu"
-      aria-label={label}
-      onKeyDownCapture={(e) => {
-        if (
-          e.key === "Escape" &&
-          !e.currentTarget.querySelector('[role="listbox"]')
-        ) {
-          e.preventDefault();
-          e.stopPropagation();
-          close();
-        }
-      }}
-      onCancel={close}
-      onClose={close}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          const rect = e.currentTarget.getBoundingClientRect();
-          if (
-            e.clientX < rect.left ||
-            e.clientX > rect.right ||
-            e.clientY < rect.top ||
-            e.clientY > rect.bottom
-          )
-            close();
-        }
-      }}
-    >
-      <div className="toolbar-menu-heading">
-        <strong>{label}</strong>
-        <button
-          className="icon-button"
-          aria-label={t("Close menu")}
-          onClick={close}
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="plain"
+          className={icon ? "control" : "device-menu-trigger"}
+          aria-label={label}
+          onClick={onOpen}
         >
-          <X size={18} />
-        </button>
-      </div>
-      {children}
-    </dialog>
+          {icon ? (
+            <>
+              <span>{icon}</span>
+              <small>{label}</small>
+            </>
+          ) : (
+            <ChevronUp size={14} />
+          )}
+        </Button>
+      </DialogTrigger>
+      <DialogContent
+        className="toolbar-menu top-auto bottom-[max(108px,calc(env(safe-area-inset-bottom)+100px))] max-h-[calc(100dvh-150px)] w-[360px] max-w-[calc(100vw-24px)] translate-y-0 rounded-[18px] bg-[#fafbf4] p-4 sm:p-4 max-[700px]:bottom-[max(92px,calc(env(safe-area-inset-bottom)+84px))] max-[700px]:p-3 [@media(max-height:500px)]:bottom-4 [@media(max-height:500px)]:max-h-[calc(100dvh-32px)]"
+        overlayClassName="bg-[#24352a]/5 backdrop-blur-none"
+        showClose={false}
+      >
+        <div className="toolbar-menu-heading">
+          <DialogTitle className="m-0 text-sm font-semibold tracking-normal">
+            {label}
+          </DialogTitle>
+          <DialogClose asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="icon-button"
+              aria-label={t("Close menu")}
+            >
+              <X size={18} />
+            </Button>
+          </DialogClose>
+        </div>
+        {children(() => setOpen(false))}
+      </DialogContent>
+    </Dialog>
   );
 }

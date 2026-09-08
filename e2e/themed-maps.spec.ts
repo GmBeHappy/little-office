@@ -41,7 +41,7 @@ for (const map of [
     try {
       await page.getByRole("button", { name: "Settings", exact: true }).click();
       await page
-        .getByRole("button", { name: "Workspace", exact: true })
+        .getByRole("tab", { name: "Workspace", exact: true })
         .click();
       await page.getByRole("button", { name: /4–8 people/ }).click();
       await expect(

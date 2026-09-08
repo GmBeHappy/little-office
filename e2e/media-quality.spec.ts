@@ -169,7 +169,7 @@ test("quality targets reach capture and real RTP encoders, persist, and leave vo
       )
       .toBeGreaterThanOrEqual(1920);
     await a.getByRole("button", { name: "Settings", exact: true }).click();
-    await a.getByRole("button", { name: "Devices", exact: true }).click();
+    await a.getByRole("tab", { name: "Devices", exact: true }).click();
     const quality = a.getByRole("combobox", {
       name: "Video & screen quality",
       exact: true,
@@ -215,14 +215,14 @@ test("quality targets reach capture and real RTP encoders, persist, and leave vo
     await a.reload();
     await expect(a.locator(".pixel-map canvas")).toBeVisible();
     await a.getByRole("button", { name: "Settings", exact: true }).click();
-    await a.getByRole("button", { name: "Devices", exact: true }).click();
+    await a.getByRole("tab", { name: "Devices", exact: true }).click();
     await expect(quality).toHaveAttribute("data-value", "balanced");
     await a.getByRole("button", { name: "Close dialog", exact: true }).click();
     await a
       .getByRole("button", { name: "เปลี่ยนเป็นภาษาไทย", exact: true })
       .click();
     await a.getByRole("button", { name: "ตั้งค่า", exact: true }).click();
-    await a.getByRole("button", { name: "อุปกรณ์", exact: true }).click();
+    await a.getByRole("tab", { name: "อุปกรณ์", exact: true }).click();
     await expect(
       a.getByRole("combobox", {
         name: "คุณภาพวิดีโอและการแชร์หน้าจอ",

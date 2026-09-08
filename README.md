@@ -1,6 +1,6 @@
 # Little Office
 
-A pixel-art office built with **Next.js, Elysia on Bun, PostgreSQL, Phaser, Better Auth, and LiveKit**.
+A pixel-art office built with **Next.js, Elysia on Bun, PostgreSQL, Phaser, Better Auth, and LiveKit**. The interface uses **Tailwind CSS 4 + shadcn/ui**, with **React Hook Form + Zod** for forms.
 
 Walk with WASD/arrows and press Space to jump (or click the Space control on the map). Nearby voice joins automatically; turn your microphone on to talk to people in range. The navbar shows your current location. A compact, horizontally scrolling strip shows nearby teammates with avatars, names, and speaking activity. Join the Studio or Library for a meeting, share your screen, wave, summon a teammate with their consent, or start an accepted direct call. Microphone and camera start off.
 
@@ -13,6 +13,14 @@ Use the grid button on a camera tile to open the expanded **Camera grid**. Use t
 Speaking activity appears as green highlights and animated sound bars on characters, the people list, and video tiles. Your microphone control also shows “Speaking” when it detects sound. Indicators follow your current conversation and nearby-audio range, and clear during silence, mute, or disconnection. Reduced-motion preferences keep the bars still.
 
 Choose your microphone, speakers/headphones, and camera in **Settings → Devices**, before or during a call. Choices are remembered per account on this browser and apply when changing rooms. Use **Allow microphone access & refresh devices** to reveal device names; the permission check stops its capture immediately and does not unmute your call. Browsers with an output-device picker also offer **Choose another speaker**. Where output switching is unsupported, use your system sound settings. Disconnected devices fall back to the system default when available.
+
+## UI and forms
+
+The existing cream-and-sage theme, DM Sans / Manrope and IBM Plex Sans Thai fonts, pixel maps, and avatar animations are preserved. Theme tokens and Tailwind component styles live in `app/globals.css`; scene illustrations and animations retain their custom CSS and Phaser rendering.
+
+Reusable shadcn/ui components live in `components/ui`: buttons, inputs, labels, fields, dialogs, tabs, switches, and selects. They use Radix primitives for keyboard navigation, focus management, and accessible semantics. `components.json` configures the shadcn CLI, and `lib/utils.ts` provides `cn()` for combining Tailwind classes. Keep new UI on these shared components rather than adding separate control styles. The upstream MIT license is included in `public/licenses/shadcn-ui.txt`.
+
+Login, temporary-password replacement, profile editing, member creation/password reset, and workspace settings use React Hook Form with Zod schemas in `shared/forms.ts`. `FormInput` connects labels, descriptions, and translated inline errors to each field. Invalid forms stay on screen, failed saves retain edits, and submitting buttons prevent duplicate requests. Controlled avatar/status inputs use `Controller`; immediate device and feature switches keep their existing actions. API validation and owner authorization remain enforced on the server.
 
 ## Run locally
 

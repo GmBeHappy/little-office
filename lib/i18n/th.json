@@ -521,5 +521,20 @@
   "Close": "ปิด",
   "Opened elsewhere": "เปิดใช้งานจากที่อื่น",
   "This office is now open in another tab or device.": "ออฟฟิศนี้เปิดใช้งานอยู่ในแท็บหรืออุปกรณ์อื่นแล้ว",
-  "This tab has disconnected. Reload it to use the office here again.": "แท็บนี้ตัดการเชื่อมต่อแล้ว รีโหลดเพื่อกลับมาใช้งานออฟฟิศในแท็บนี้"
+  "This tab has disconnected. Reload it to use the office here again.": "แท็บนี้ตัดการเชื่อมต่อแล้ว รีโหลดเพื่อกลับมาใช้งานออฟฟิศในแท็บนี้",
+  "Enter a name.": "กรุณากรอกชื่อ",
+  "Use 40 characters or fewer.": "กรอกได้ไม่เกิน 40 ตัวอักษร",
+  "Use 3–30 letters, numbers or underscores.": "ใช้ตัวอักษรภาษาอังกฤษ ตัวเลข หรือขีดล่าง 3–30 ตัว",
+  "Use at least 12 characters.": "ใช้รหัสผ่านอย่างน้อย 12 ตัวอักษร",
+  "Use 128 characters or fewer.": "กรอกได้ไม่เกิน 128 ตัวอักษร",
+  "Enter your username.": "กรุณากรอกชื่อผู้ใช้",
+  "Enter your password.": "กรุณากรอกรหัสผ่าน",
+  "Enter your temporary password.": "กรุณากรอกรหัสผ่านชั่วคราว",
+  "Passwords do not match.": "รหัสผ่านไม่ตรงกัน",
+  "Choose a valid character.": "กรุณาเลือกตัวละครที่ถูกต้อง",
+  "Use 80 characters or fewer.": "กรอกได้ไม่เกิน 80 ตัวอักษร",
+  "Use 60 characters or fewer.": "กรอกได้ไม่เกิน 60 ตัวอักษร",
+  "Choose a valid map.": "กรุณาเลือกแผนที่ที่ถูกต้อง",
+  "Confirm new password": "ยืนยันรหัสผ่านใหม่",
+  "Use 12–128 characters.": "ใช้รหัสผ่าน 12–128 ตัวอักษร"
 }

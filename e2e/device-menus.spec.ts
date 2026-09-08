@@ -186,7 +186,7 @@ test("permission buttons track grants and revocation independently", async ({
   await expect(camera).toBeVisible();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("button", { name: "Devices", exact: true }).click();
+  await page.getByRole("tab", { name: "Devices", exact: true }).click();
   await expect(mic).toHaveCount(0);
 });
 

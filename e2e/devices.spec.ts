@@ -21,7 +21,7 @@ async function login(page: Page, index: number) {
 }
 async function settings(page: Page) {
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("button", { name: "Devices", exact: true }).click();
+  await page.getByRole("tab", { name: "Devices", exact: true }).click();
 }
 test("device choices persist and route incoming call audio to the selected output", async ({
   browser,

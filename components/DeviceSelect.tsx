@@ -2,6 +2,8 @@
 import { useI18n } from "@/lib/i18n";
 import type { useOfficeMedia } from "./Media";
 import { Select } from "./Select";
+import { useId } from "react";
+import { Field, FieldLabel } from "./ui/field";
 export function DeviceSelect({
   media,
   kind,
@@ -10,6 +12,7 @@ export function DeviceSelect({
   kind: MediaDeviceKind;
 }) {
   const { t } = useI18n();
+  const id = useId();
   const [label, value, saved, numbered] =
     kind === "audioinput"
       ? [
@@ -35,9 +38,10 @@ export function DeviceSelect({
     (d) => d.kind === kind && d.deviceId && d.deviceId !== "default",
   );
   return (
-    <label>
-      {t(label)}
+    <Field>
+      <FieldLabel htmlFor={id}>{t(label)}</FieldLabel>
       <Select
+        id={id}
         label={t(label)}
         value={value}
         disabled={
@@ -55,6 +59,6 @@ export function DeviceSelect({
           })),
         ]}
       />
-    </label>
+    </Field>
   );
 }

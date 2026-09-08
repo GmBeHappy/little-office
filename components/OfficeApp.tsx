@@ -1,6 +1,23 @@
 "use client";
+import { FormProvider, useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  loginSchema,
+  passwordChangeSchema,
+  profileSchema,
+} from "@/shared/forms";
+import { FormInput, FormError } from "./FormInput";
+import { Field, FieldLabel } from "./ui/field";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Switch } from "./ui/switch";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
+import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
+import { CreateMemberForm, MemberActionForm } from "./MemberForms";
 import { useI18n, LanguageToggle } from "@/lib/i18n";
 import dynamic from "next/dynamic";
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -336,8 +353,7 @@ export default function OfficeApp() {
         {notice && <Toast text={notice} close={() => setNotice("")} />}
       </>
     );
-  if (user.mustChangePassword)
-    return <PasswordChange onDone={refresh} notify={notify} />;
+  if (user.mustChangePassword) return <PasswordChange onDone={refresh} />;
   if (!user.approved)
     return (
       <main className="login-page">
@@ -352,12 +368,12 @@ export default function OfficeApp() {
               "Your SSO account is ready. An office owner needs to approve your membership.",
             )}
           </p>
-          <button className="primary" onClick={refresh}>
+          <Button variant="default" className="primary" onClick={refresh}>
             {t("Check approval")}
-          </button>
-          <button className="text-button" onClick={logout}>
+          </Button>
+          <Button variant="link" className="text-button" onClick={logout}>
             {t("Sign out")}
-          </button>
+          </Button>
         </div>
       </main>
     );
@@ -388,7 +404,9 @@ export default function OfficeApp() {
           </span>
           <span className="header-divider" />
           <LanguageToggle />
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             className="icon-button nav-fullscreen"
             aria-label={
               fullscreen ? t("Exit fullscreen") : t("Enter fullscreen")
@@ -407,7 +425,7 @@ export default function OfficeApp() {
             }}
           >
             {fullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
-          </button>
+          </Button>
           <a
             className="icon-button github-link"
             href="https://github.com/GmBeHappy/little-office"
@@ -419,25 +437,29 @@ export default function OfficeApp() {
             <CodeXml size={21} />
             <span className="visually-hidden">GitHub</span>
           </a>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             className="icon-button"
             aria-label={t("Help")}
             onClick={() => setModal("help")}
           >
             <HelpCircle size={19} />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="plain"
             className="header-avatar"
             onClick={() => setModal("profile")}
             aria-label={t("Your profile")}
           >
             <Avatar color={user.avatar} />
-          </button>
+          </Button>
         </div>
       </header>
       <div className="body-shell">
         <nav className="rail" aria-label={t("Office navigation")}>
-          <button
+          <Button
+            variant="plain"
             className="rail-item active"
             aria-label={t("Office")}
             onClick={() => {
@@ -447,8 +469,9 @@ export default function OfficeApp() {
           >
             <Home size={22} />
             <span>{t("Office")}</span>
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="plain"
             className={`rail-item ${panel === "rooms" ? "sub-active" : ""}`}
             aria-label={t("Rooms")}
             aria-expanded={sidebarOpen && panel === "rooms"}
@@ -459,8 +482,9 @@ export default function OfficeApp() {
           >
             <DoorOpen size={22} />
             <span>{t("Rooms")}</span>
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="plain"
             className="rail-item"
             aria-label={t("People")}
             aria-expanded={sidebarOpen && panel === "people"}
@@ -471,9 +495,10 @@ export default function OfficeApp() {
           >
             <Users size={22} />
             <span>{t("People")}</span>
-          </button>
+          </Button>
           <div className="rail-bottom">
-            <button
+            <Button
+              variant="plain"
               className="rail-item"
               onClick={() => {
                 setSettingsTab("workspace");
@@ -483,15 +508,16 @@ export default function OfficeApp() {
             >
               <Settings size={21} />
               <span>{t("Settings")}</span>
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="plain"
               className="rail-item"
               onClick={logout}
               aria-label={t("Sign out")}
             >
               <LogOut size={20} />
               <span>{t("Leave")}</span>
-            </button>
+            </Button>
           </div>
         </nav>
         <main className="office-main">
@@ -526,7 +552,8 @@ export default function OfficeApp() {
                   </div>
                   <div className="voice-roster-people">
                     {voicePeople.map((p) => (
-                      <button
+                      <Button
+                        variant="plain"
                         className="voice-person"
                         key={p.id}
                         data-speaking={media.speaking.includes(p.id)}
@@ -539,7 +566,7 @@ export default function OfficeApp() {
                         <Avatar color={p.avatar} />
                         <span>{p.name}</span>
                         {media.speaking.includes(p.id) && <SpeakingIndicator />}
-                      </button>
+                      </Button>
                     ))}
                     {media.connected && !voicePeople.length && (
                       <span className="muted">
@@ -576,25 +603,28 @@ export default function OfficeApp() {
                 <span className="key keyboard-walk-hint">D</span>
                 <span className="keyboard-walk-hint">{t("to move ·")}</span>
                 <span className="touch-walk-hint">{t("Drag to walk ·")}</span>
-                <button
+                <Button
+                  variant="plain"
                   className="key"
                   aria-label={t("Jump")}
                   title={t("Jump (Space)")}
                   onClick={() => send({ type: "jump" })}
                 >
                   Space
-                </button>
+                </Button>
                 <span>{t("to jump")}</span>
-                <button
+                <Button
+                  variant="plain"
                   className="key"
                   aria-label={t("Nudge teammate in front")}
                   title={t("Nudge teammate in front (Z)")}
                   onClick={() => send({ type: "nudge" })}
                 >
                   Z
-                </button>
+                </Button>
                 <span>{t("to nudge")}</span>
-                <button
+                <Button
+                  variant="plain"
                   className="key"
                   aria-label={t(self?.pose === "sit" ? "Stand up" : "Sit")}
                   title={t("Sit / stand (1)")}
@@ -607,9 +637,10 @@ export default function OfficeApp() {
                   }
                 >
                   1
-                </button>
+                </Button>
                 <span>{t("to sit")}</span>
-                <button
+                <Button
+                  variant="plain"
                   className="key"
                   aria-label={t(self?.pose === "sleep" ? "Wake up" : "Sleep")}
                   title={t("Sleep / wake (2)")}
@@ -622,7 +653,7 @@ export default function OfficeApp() {
                   }
                 >
                   2
-                </button>
+                </Button>
                 <span>{t("to sleep")}</span>
               </div>
               <div className="map-weather">
@@ -655,10 +686,14 @@ export default function OfficeApp() {
                     : t("a little room to focus")}
                 </span>
               </span>
-              <button className="text-button" onClick={() => setModal("help")}>
+              <Button
+                variant="link"
+                className="text-button"
+                onClick={() => setModal("help")}
+              >
                 {t("How it works")}
                 <ArrowUpRight size={13} />
-              </button>
+              </Button>
             </div>
           </div>
           {media.error && (
@@ -668,27 +703,33 @@ export default function OfficeApp() {
                 {t("Media connection:")}
                 {t(media.error)}
               </span>
-              <button onClick={media.retry}>{t("Retry audio")}</button>
+              <Button variant="plain" onClick={media.retry}>
+                {t("Retry audio")}
+              </Button>
             </div>
           )}
         </main>
         {sidebarOpen && (
           <aside className="sidebar" aria-label={t("People and rooms")}>
             <div className="sidebar-tabs">
-              <button
+              <Button
+                variant="plain"
                 className={panel === "people" ? "selected" : ""}
                 onClick={() => setPanel("people")}
               >
                 {t("People")}
                 <span>{people.length}</span>
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="plain"
                 className={panel === "rooms" ? "selected" : ""}
                 onClick={() => setPanel("rooms")}
               >
                 {t("Rooms")}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 className="icon-button"
                 aria-label={t("Office settings")}
                 onClick={() => {
@@ -697,17 +738,20 @@ export default function OfficeApp() {
                 }}
               >
                 <MoreHorizontal size={19} />
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 className="icon-button"
                 aria-label={t("Close people and rooms")}
                 onClick={() => setSidebarOpen(false)}
               >
                 <X size={18} />
-              </button>
+              </Button>
             </div>
             {user.role === "owner" && (
-              <button
+              <Button
+                variant="plain"
                 className="invite-button"
                 onClick={() => {
                   setSettingsTab("members");
@@ -716,14 +760,15 @@ export default function OfficeApp() {
               >
                 <Plus size={16} />
                 {t("Invite teammate")}
-              </button>
+              </Button>
             )}
             <div className="sidebar-content">
               {panel === "people" ? (
                 <>
                   <label className="search">
                     <Search size={16} />
-                    <input
+                    <Input
+                      className="min-h-0 rounded-none border-0 bg-transparent p-0 text-[11px] shadow-none focus-visible:ring-0"
                       aria-label={t("Find your people")}
                       placeholder={t("Find your people")}
                       value={search}
@@ -736,7 +781,8 @@ export default function OfficeApp() {
                   </div>
                   <div className="people-list">
                     {filtered.map((p) => (
-                      <button
+                      <Button
+                        variant="plain"
                         key={p.id}
                         className={`person ${selected === p.id ? "person-selected" : ""}`}
                         data-speaking={media.speaking.includes(p.id)}
@@ -779,7 +825,7 @@ export default function OfficeApp() {
                                 : t("Library")}
                           </span>
                         )}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                   {chosen && chosen.id !== user.id && (
@@ -790,15 +836,17 @@ export default function OfficeApp() {
                         })}
                       </strong>
                       <div>
-                        <button
+                        <Button
+                          variant="plain"
                           onClick={() =>
                             send({ type: "wave", target: chosen.id })
                           }
                         >
                           <Hand size={16} />
                           {t("Wave")}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="plain"
                           disabled={
                             !self ||
                             !canNudge(self, chosen) ||
@@ -810,8 +858,9 @@ export default function OfficeApp() {
                         >
                           <BellRing size={16} />
                           {t("Nudge")}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="plain"
                           onClick={() =>
                             send({
                               type: "invite",
@@ -822,8 +871,9 @@ export default function OfficeApp() {
                         >
                           <ArrowUpRight size={16} />
                           {t("Summon")}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="plain"
                           onClick={() =>
                             send({
                               type: "invite",
@@ -834,7 +884,7 @@ export default function OfficeApp() {
                         >
                           <Video size={16} />
                           {t("Call")}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -870,13 +920,14 @@ export default function OfficeApp() {
                     locks={snapshot?.locks || {}}
                     send={send}
                   />
-                  <button
+                  <Button
+                    variant="plain"
                     className="commons-button"
                     onClick={() => send({ type: "zone", zone: "floor" })}
                   >
                     <Leaf size={17} />
                     {t("Back to the commons")} <ArrowRight size={14} />
-                  </button>
+                  </Button>
                 </>
               )}
             </div>
@@ -884,7 +935,11 @@ export default function OfficeApp() {
         )}
       </div>
       <footer className="controlbar" data-media-connected={media.connected}>
-        <button className="self-control" onClick={() => setModal("profile")}>
+        <Button
+          variant="plain"
+          className="self-control"
+          onClick={() => setModal("profile")}
+        >
           <Avatar color={self?.avatar || user.avatar} />
           <div>
             <strong>{user.name}</strong>
@@ -896,7 +951,7 @@ export default function OfficeApp() {
             </span>
           </div>
           <ChevronDown size={15} />
-        </button>
+        </Button>
         <div className="media-controls">
           <div className="device-control">
             <Control
@@ -930,22 +985,24 @@ export default function OfficeApp() {
                     </p>
                   )}
                   {media.outputSupported && media.outputPickerSupported && (
-                    <button
+                    <Button
+                      variant="secondary"
                       className="secondary"
                       disabled={media.deviceBusy}
                       onClick={() => void media.chooseOutput()}
                     >
                       {t("Choose another speaker…")}
-                    </button>
+                    </Button>
                   )}
                   {!media.microphoneAllowed && (
-                    <button
+                    <Button
+                      variant="secondary"
                       className="secondary"
                       disabled={media.deviceBusy}
                       onClick={() => void media.enumerate(true)}
                     >
                       {t("Allow microphone access & refresh devices")}
-                    </button>
+                    </Button>
                   )}
                 </>
               )}
@@ -966,13 +1023,14 @@ export default function OfficeApp() {
                 <>
                   <DeviceSelect media={media} kind="videoinput" />
                   {!media.cameraAllowed && (
-                    <button
+                    <Button
+                      variant="secondary"
                       className="secondary"
                       disabled={media.deviceBusy}
                       onClick={() => void media.enumerate("videoinput")}
                     >
                       {t("Allow camera access & refresh devices")}
-                    </button>
+                    </Button>
                   )}
                 </>
               )}
@@ -1023,21 +1081,24 @@ export default function OfficeApp() {
         </div>
         <div className="audio-control">
           {media.soundBlocked && (
-            <button
+            <Button
+              variant="secondary"
               className="secondary enable-sound"
               onClick={() => void media.enableSound()}
             >
               {t("Enable sound")}
-            </button>
+            </Button>
           )}
           {self?.conversation && self.conversation !== "floor" && (
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               className="icon-button leave-call"
               aria-label={t("Leave conversation")}
               onClick={() => send({ type: "leave" })}
             >
               <LogOut size={17} />
-            </button>
+            </Button>
           )}
         </div>
       </footer>
@@ -1099,15 +1160,17 @@ export default function OfficeApp() {
               t("Accepting changes your current conversation.")}
           </p>
           <div>
-            <button
+            <Button
+              variant="secondary"
               className="secondary"
               onClick={() =>
                 send({ type: "respond", id: invites[0].id, accept: false })
               }
             >
               {t("Not now")}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="default"
               className="primary"
               onClick={() =>
                 send({ type: "respond", id: invites[0].id, accept: true })
@@ -1115,36 +1178,28 @@ export default function OfficeApp() {
             >
               {t("Join them")}
               <ArrowRight size={15} />
-            </button>
+            </Button>
           </div>
         </div>
       )}
-      {modal && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setModal(null);
-          }}
-        >
-          <section
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label={
-              modal === "settings"
+      <Dialog
+        open={!!modal}
+        onOpenChange={(open) => {
+          if (!open) setModal(null);
+        }}
+      >
+        {modal && (
+          <DialogContent
+            className={`modal ${modal === "settings" ? "max-w-[920px]" : modal === "profile" ? "max-w-[740px]" : ""}`}
+            closeLabel={t("Close dialog")}
+          >
+            <DialogTitle className="sr-only">
+              {modal === "settings"
                 ? t("Office settings")
                 : modal === "profile"
                   ? t("Your profile")
-                  : t("Office guide")
-            }
-          >
-            <button
-              className="modal-close icon-button"
-              onClick={() => setModal(null)}
-              aria-label={t("Close dialog")}
-            >
-              <X size={19} />
-            </button>
+                  : t("Office guide")}
+            </DialogTitle>
             {modal === "help" ? (
               <>
                 <div className="eyebrow">
@@ -1183,7 +1238,6 @@ export default function OfficeApp() {
                 user={user}
                 self={self}
                 send={send}
-                notify={notify}
                 saved={async () => {
                   await refresh();
                   setModal(null);
@@ -1200,9 +1254,9 @@ export default function OfficeApp() {
                 media={media}
               />
             )}
-          </section>
-        </div>
-      )}
+          </DialogContent>
+        )}
+      </Dialog>
     </div>
   );
 }
@@ -1237,7 +1291,8 @@ function Control({
 }) {
   const { t } = useI18n();
   return (
-    <button
+    <Button
+      variant="plain"
       className={`control ${on ? "control-on" : ""}`}
       onClick={onClick}
       aria-pressed={on}
@@ -1246,20 +1301,37 @@ function Control({
     >
       <span>{icon}</span>
       <small>{speaking ? t("Speaking") : t(label)}</small>
-    </button>
+    </Button>
   );
 }
 function Toast({ text, close }: { text: string; close: () => void }) {
   const { t } = useI18n();
-  return (
-    <div className="toast" role="status">
+  const [dialog, setDialog] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    // Keep notifications within the active dialog's pointer and focus boundary.
+    const root = document.querySelector(".app-shell");
+    if (!root) return;
+    const update = () =>
+      setDialog(
+        Array.from(
+          root.querySelectorAll<HTMLElement>('[data-slot="dialog-content"]'),
+        ).at(-1) ?? null,
+      );
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(root, { childList: true });
+    return () => observer.disconnect();
+  }, []);
+  const content = (
+    <div className="toast" data-in-dialog={!!dialog} role="status">
       <Leaf size={17} />
       <span>{t(text)}</span>
-      <button onClick={close} aria-label={t("Dismiss")}>
+      <Button variant="plain" onClick={close} aria-label={t("Dismiss")}>
         <X size={16} />
-      </button>
+      </Button>
     </div>
   );
+  return dialog ? createPortal(content, dialog) : content;
 }
 function RoomCards({
   people,
@@ -1296,7 +1368,9 @@ function RoomCards({
             </span>
           </div>
           {self?.zone === z.id ? (
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               className="icon-button"
               aria-label={t(locks[z.id] ? "Unlock {room}" : "Lock {room}", {
                 room: t(z.name),
@@ -1310,15 +1384,17 @@ function RoomCards({
               }
             >
               {locks[z.id] ? <Lock size={16} /> : <DoorOpen size={16} />}
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               className="icon-button"
               aria-label={t("Join {room}", { room: t(z.name) })}
               onClick={() => send({ type: "zone", zone: z.id })}
             >
               {locks[z.id] ? <Lock size={16} /> : <ChevronRight size={16} />}
-            </button>
+            </Button>
           )}
         </div>
       ))}
@@ -1335,21 +1411,18 @@ function Login({
   notify: (s: string) => void;
 }) {
   const { t } = useI18n();
-  const [busy, setBusy] = useState(false);
-  async function login(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setBusy(true);
-    const form = new FormData(e.currentTarget);
+  const form = useForm({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { username: "", password: "" },
+  });
+  const busy = form.formState.isSubmitting;
+  async function login(values: z.infer<typeof loginSchema>) {
+    form.clearErrors("root");
     try {
-      await api("/auth/sign-in/username", {
-        username: form.get("username"),
-        password: form.get("password"),
-      });
+      await api("/auth/sign-in/username", values);
       await refresh();
-    } catch (e) {
-      notify((e as Error).message);
-    } finally {
-      setBusy(false);
+    } catch (error) {
+      form.setError("root", { message: (error as Error).message });
     }
   }
   return (
@@ -1394,36 +1467,40 @@ function Login({
         </h1>
         <p>{t("Step inside. Your people are just a few pixels away.")}</p>
         {config?.password && (
-          <form onSubmit={login}>
-            <label>
-              {t("Username")}
-              <input
+          <FormProvider {...form}>
+            <form
+              noValidate
+              onSubmit={form.handleSubmit(login)}
+              className="space-y-5"
+            >
+              <FormInput
                 name="username"
+                label={t("Username")}
                 autoComplete="username"
                 required
                 placeholder={t("Your username")}
               />
-            </label>
-            <label>
-              {t("Password")}
-              <input
+              <FormInput
                 name="password"
+                label={t("Password")}
                 type="password"
                 autoComplete="current-password"
                 required
                 placeholder={t("Your password")}
               />
-            </label>
-            <button className="primary" disabled={busy}>
-              {busy ? t("Opening the door…") : t("Enter the office")}
-              <ArrowRight size={17} />
-            </button>
-          </form>
+              <FormError />
+              <Button type="submit" className="primary w-full" disabled={busy}>
+                {busy ? t("Opening the door…") : t("Enter the office")}
+                <ArrowRight size={17} />
+              </Button>
+            </form>
+          </FormProvider>
         )}
         {config?.sso && (
           <>
             <div className="login-or">{config.password ? t("or") : ""}</div>
-            <button
+            <Button
+              variant="secondary"
               className="secondary sso-button"
               onClick={async () => {
                 try {
@@ -1432,14 +1509,14 @@ function Login({
                     callbackURL: location.origin,
                   });
                   location.assign(r.url);
-                } catch (e) {
-                  notify((e as Error).message);
+                } catch (error) {
+                  notify((error as Error).message);
                 }
               }}
             >
               <Shield size={17} />
               {t("Sign in with SSO")}
-            </button>
+            </Button>
           </>
         )}
         {!config && (
@@ -1458,68 +1535,81 @@ function Login({
     </main>
   );
 }
-function PasswordChange({
-  onDone,
-  notify,
-}: {
-  onDone: () => Promise<void>;
-  notify: (s: string) => void;
-}) {
+function PasswordChange({ onDone }: { onDone: () => Promise<void> }) {
   const { t } = useI18n();
-  const [error, setError] = useState("");
+  const form = useForm({
+    resolver: zodResolver(passwordChangeSchema),
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    },
+  });
   return (
     <main className="login-page">
       <div className="login-language">
         <LanguageToggle />
       </div>
-      <form
-        className="login-card"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const f = new FormData(e.currentTarget);
-          try {
-            await api("/auth/change-password", {
-              currentPassword: f.get("current"),
-              newPassword: f.get("next"),
-              revokeOtherSessions: true,
-            });
-            await onDone();
-          } catch (e) {
-            setError((e as Error).message);
-          }
-        }}
-      >
-        <Brand />
-        <h1>{t("Make it yours.")}</h1>
-        <p>
-          {t("Replace your temporary password before entering the office.")}
-        </p>
-        <label>
-          {t("Temporary password")}
-          <input
-            name="current"
+      <FormProvider {...form}>
+        <form
+          noValidate
+          className="login-card space-y-5"
+          onSubmit={form.handleSubmit(
+            async ({ currentPassword, newPassword }) => {
+              form.clearErrors("root");
+              try {
+                await api("/auth/change-password", {
+                  currentPassword,
+                  newPassword,
+                  revokeOtherSessions: true,
+                });
+                await onDone();
+              } catch (error) {
+                form.setError("root", { message: (error as Error).message });
+              }
+            },
+          )}
+        >
+          <Brand />
+          <h1>{t("Make it yours.")}</h1>
+          <p>
+            {t("Replace your temporary password before entering the office.")}
+          </p>
+          <FormInput
+            name="currentPassword"
+            label={t("Temporary password")}
             type="password"
             autoComplete="current-password"
             required
           />
-        </label>
-        <label>
-          {t("New password")}
-          <input
-            name="next"
+          <FormInput
+            name="newPassword"
+            label={t("New password")}
             type="password"
-            minLength={12}
-            maxLength={128}
             autoComplete="new-password"
             required
+            maxLength={128}
+            description={t("Use 12–128 characters.")}
           />
-        </label>
-        {error && <p className="error-text">{t(error)}</p>}
-        <button className="primary">
-          {t("Save password")}
-          <ArrowRight size={16} />
-        </button>
-      </form>
+          <FormInput
+            name="confirmPassword"
+            label={t("Confirm new password")}
+            type="password"
+            autoComplete="new-password"
+            required
+            maxLength={128}
+          />
+          <FormError />
+          <Button
+            type="submit"
+            className="primary"
+            disabled={form.formState.isSubmitting}
+          >
+            {t("Save password")}
+            <ArrowRight size={16} />
+          </Button>
+        </form>
+      </FormProvider>
     </main>
   );
 }
@@ -1527,69 +1617,96 @@ function Profile({
   user,
   self,
   send,
-  notify,
   saved,
 }: {
   user: User;
   self?: Person;
   send: (c: Command) => void;
-  notify: (s: string) => void;
   saved: () => Promise<void>;
 }) {
   const { t } = useI18n();
-  const [avatar, setAvatar] = useState(user.avatar),
-    [status, setStatus] = useState<Availability>(self?.status || "available");
+  const form = useForm({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      name: user.name,
+      avatar: user.avatar,
+      status: self?.status || "available",
+      statusText: self?.statusText || "",
+    },
+  });
   return (
-    <form
-      onSubmit={async (e) => {
-        e.preventDefault();
-        const f = new FormData(e.currentTarget);
-        try {
-          await api("/profile", { name: f.get("name"), avatar }, "PATCH");
-          send({
-            type: "status",
-            status,
-            text: String(f.get("statusText") || ""),
-          });
-          await saved();
-        } catch (e) {
-          notify((e as Error).message);
-        }
-      }}
-    >
-      <div className="eyebrow">{t("A LITTLE BIT OF YOU")}</div>
-      <h2>{t("Your office self.")}</h2>
-      <AvatarEditor value={avatar} onChange={setAvatar} />
-      <label>
-        {t("Your name")}
-        <input name="name" defaultValue={user.name} maxLength={40} required />
-      </label>
-      <label>
-        {t("Availability")}
-        <Select
-          label={t("Availability")}
-          value={status}
-          onChange={(value) => setStatus(value as Availability)}
-          options={Object.entries(statusLabel).map(([value, text]) => ({
-            value,
-            label: t(text),
-          }))}
+    <FormProvider {...form}>
+      <form
+        noValidate
+        className="space-y-5"
+        onSubmit={form.handleSubmit(
+          async ({ name, avatar, status, statusText }) => {
+            form.clearErrors("root");
+            try {
+              await api("/profile", { name, avatar }, "PATCH");
+              send({ type: "status", status, text: statusText });
+              await saved();
+            } catch (error) {
+              form.setError("root", { message: (error as Error).message });
+            }
+          },
+        )}
+      >
+        <div className="eyebrow">{t("A LITTLE BIT OF YOU")}</div>
+        <h2>{t("Your office self.")}</h2>
+        <Controller
+          control={form.control}
+          name="avatar"
+          render={({ field }) => (
+            <AvatarEditor value={field.value} onChange={field.onChange} />
+          )}
         />
-      </label>
-      <label>
-        {t("A little status")}
-        <input
+        <FormInput
+          name="name"
+          label={t("Your name")}
+          maxLength={40}
+          required
+          autoComplete="name"
+        />
+        <Controller
+          control={form.control}
+          name="status"
+          render={({ field }) => (
+            <Field>
+              <FieldLabel htmlFor="profile-availability">
+                {t("Availability")}
+              </FieldLabel>
+              <Select
+                id="profile-availability"
+                label={t("Availability")}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                options={Object.entries(statusLabel).map(([value, text]) => ({
+                  value,
+                  label: t(text),
+                }))}
+              />
+            </Field>
+          )}
+        />
+        <FormInput
           name="statusText"
+          label={t("A little status")}
           placeholder={t("Making something good…")}
-          defaultValue={self?.statusText || ""}
           maxLength={80}
         />
-      </label>
-      <button className="primary">
-        {t("Save changes")}
-        <Check size={16} />
-      </button>
-    </form>
+        <FormError />
+        <Button
+          type="submit"
+          className="primary"
+          disabled={form.formState.isSubmitting}
+        >
+          {t("Save changes")}
+          <Check size={16} />
+        </Button>
+      </form>
+    </FormProvider>
   );
 }
 function SettingsPanel({
@@ -1650,383 +1767,261 @@ function SettingsPanel({
     }
   }
   return (
-    <>
+    <Tabs value={tab} onValueChange={(value) => setTab(value as typeof tab)}>
       <div className="eyebrow">{t("KEEP THINGS FEELING RIGHT")}</div>
       <h2>{t("Office settings.")}</h2>
-      <div className="settings-tabs">
+      <TabsList
+        className="settings-tabs justify-start rounded-none bg-transparent p-0"
+        aria-label={t("Office settings")}
+      >
         {user.role === "owner" && (
-          <button
-            className={tab === "workspace" ? "active" : ""}
-            onClick={() => setTab("workspace")}
-          >
-            {t("Workspace")}
-          </button>
+          <TabsTrigger value="workspace">{t("Workspace")}</TabsTrigger>
         )}
-        <button
-          className={tab === "audio" ? "active" : ""}
-          onClick={() => setTab("audio")}
-        >
-          {t("Devices")}
-        </button>
+        <TabsTrigger value="audio">{t("Devices")}</TabsTrigger>
         {user.role === "owner" && (
           <>
-            <button
-              className={tab === "members" ? "active" : ""}
-              onClick={() => setTab("members")}
-            >
-              {t("Members")}
-            </button>
-            <button
-              className={tab === "auth" ? "active" : ""}
-              onClick={() => setTab("auth")}
-            >
-              {t("Authentication")}
-            </button>
+            <TabsTrigger value="members">{t("Members")}</TabsTrigger>
+            <TabsTrigger value="auth">{t("Authentication")}</TabsTrigger>
           </>
         )}
-      </div>
-      {tab === "workspace" && (
-        <WorkspaceSettings
-          workspace={workspace}
-          refresh={refresh}
-          notify={notify}
-        />
-      )}
-      {tab === "audio" && (
-        <div>
-          <p className="muted">
-            {t(
-              "Choose your microphone and speakers before or during a conversation. Choices are saved for your account on this browser.",
-            )}
-          </p>
-          {!media.microphoneAllowed && (
-            <>
-              <button
-                className="secondary"
-                disabled={media.deviceBusy}
-                onClick={() => void media.enumerate(true)}
-              >
-                {t("Allow microphone access & refresh devices")}
-              </button>
-              <p className="muted">
-                {t(
-                  "This reveals device names without turning your call microphone on.",
-                )}
-              </p>
-            </>
-          )}
-          <DeviceSelect media={media} kind="audioinput" />
-          <DeviceSelect media={media} kind="audiooutput" />
-          {!media.outputSupported && (
+      </TabsList>
+      <TabsContent value={tab} className="mt-0">
+        {tab === "workspace" && (
+          <WorkspaceSettings
+            workspace={workspace}
+            refresh={refresh}
+            notify={notify}
+          />
+        )}
+        {tab === "audio" && (
+          <div>
             <p className="muted">
               {t(
-                "This browser uses your system output. Select your speakers or headphones in your system sound settings.",
+                "Choose your microphone and speakers before or during a conversation. Choices are saved for your account on this browser.",
               )}
             </p>
-          )}
-          {media.outputSupported && media.outputPickerSupported && (
-            <button
-              className="secondary"
-              disabled={media.deviceBusy}
-              onClick={() => void media.chooseOutput()}
-            >
-              {t("Choose another speaker…")}
-            </button>
-          )}
-          <DeviceSelect media={media} kind="videoinput" />
-          <label>
-            {t("Video & screen quality")}
-            <Select
-              label={t("Video & screen quality")}
-              value={media.quality}
-              onChange={media.chooseQuality}
-              options={Object.entries(MEDIA_QUALITY).map(
-                ([value, profile]) => ({ value, label: t(profile.label) }),
-              )}
-            />
-          </label>
-          <p className="muted">
-            {t(
-              "Applies the next time you turn on your camera or start sharing. Your microphone and current call stay connected.",
-            )}
-          </p>
-          <p className="muted">
-            {t(
-              "Maximum uses more bandwidth and processing power. Actual resolution and frame rate depend on your device, browser, shared content, and connection. Choose Balanced if video stutters.",
-            )}
-          </p>
-          {config.sso && (
-            <button
-              className="secondary"
-              onClick={async () => {
-                try {
-                  const result = await api<{ url: string }>(
-                    "/auth/link-social",
-                    { provider: config.provider, callbackURL: location.origin },
-                  );
-                  location.assign(result.url);
-                } catch (e) {
-                  notify((e as Error).message);
-                }
-              }}
-            >
-              <Shield size={16} />
-              {t("Link your SSO account")}
-            </button>
-          )}
-        </div>
-      )}
-      {tab === "auth" && (
-        <>
-          <p className="muted">
-            {t(
-              "Choose how your team enters the office. Disabled methods also end their existing sessions.",
-            )}
-          </p>
-          {(["password", "sso"] as const).map((method) => (
-            <div className="setting-row" key={method}>
-              <div>
-                <strong>
-                  {method === "password"
-                    ? t("Username & password")
-                    : t("OIDC single sign-on")}
-                </strong>
-                <p>
-                  {method === "password"
-                    ? t("Local accounts for your team.")
-                    : config.ssoConfigured
-                      ? t("Your identity provider is configured.")
-                      : t(
-                          "Add your OIDC issuer and client credentials to the server first.",
-                        )}
+            {!media.microphoneAllowed && (
+              <>
+                <Button
+                  variant="secondary"
+                  className="secondary"
+                  disabled={media.deviceBusy}
+                  onClick={() => void media.enumerate(true)}
+                >
+                  {t("Allow microphone access & refresh devices")}
+                </Button>
+                <p className="muted">
+                  {t(
+                    "This reveals device names without turning your call microphone on.",
+                  )}
                 </p>
-              </div>
-              <button
-                className={`toggle ${config[method] ? "on" : ""}`}
-                role="switch"
-                aria-label={t(
-                  method === "password"
-                    ? "Enable username/password login"
-                    : "Enable OIDC SSO login",
-                )}
-                aria-checked={config[method]}
-                disabled={busy || (method === "sso" && !config.ssoConfigured)}
-                onClick={() => void toggle(method)}
-              />
-            </div>
-          ))}
-          <div className="settings-note">
-            <Shield size={17} />
-            <p>
-              {t(
-                "Sign in as an owner through SSO before switching passwords off. At least one working owner login stays enabled.",
-              )}
-            </p>
-          </div>
-        </>
-      )}
-      {tab === "members" && (
-        <>
-          <div className="admin-users">
-            {users.map((u) => (
-              <div key={u.id} data-member-id={u.id}>
-                <Avatar color="sage" />
-                <span>
-                  <strong>{u.name}</strong>
-                  <small>
-                    {u.username || t("SSO account")} · {t(u.role)}
-                    {!u.localPassword && u.username
-                      ? ` · ${t("SSO account")}`
-                      : ""}
-                  </small>
-                </span>
-                {u.id !== user.id && (
-                  <div className="member-actions">
-                    <button
-                      className="text-button"
-                      disabled={busy}
-                      onClick={async () => {
-                        try {
-                          await api(
-                            `/admin/users/${u.id}`,
-                            { approved: !u.approved },
-                            "PATCH",
-                          );
-                          await loadUsers();
-                        } catch (e) {
-                          notify((e as Error).message);
-                        }
-                      }}
-                    >
-                      {u.approved ? t("Disable") : t("Approve")}
-                    </button>
-                    {u.localPassword && (
-                      <button
-                        className="text-button"
-                        disabled={busy || !config.password}
-                        onClick={() =>
-                          setMemberAction({ user: u, kind: "reset" })
-                        }
-                      >
-                        {t("Reset password")}
-                      </button>
-                    )}
-                    {u.role === "member" && (
-                      <button
-                        className="text-button"
-                        disabled={busy}
-                        onClick={() =>
-                          setMemberAction({ user: u, kind: "delete" })
-                        }
-                      >
-                        {t("Delete member")}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          {memberAction && (
-            <form
-              className="member-action-form"
-              key={`${memberAction.kind}:${memberAction.user.id}`}
-              aria-label={t(
-                memberAction.kind === "delete"
-                  ? "Delete member"
-                  : "Reset password",
-              )}
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const form = e.currentTarget;
-                const action = memberAction;
-                const password = new FormData(form).get("password");
-                setBusy(true);
-                try {
-                  if (action.kind === "delete")
-                    await api(
-                      `/admin/users/${action.user.id}`,
-                      undefined,
-                      "DELETE",
-                    );
-                  else
-                    await api("/admin/reset-password", {
-                      userId: action.user.id,
-                      password,
-                    });
-                  form.reset();
-                  setMemberAction(null);
-                  await loadUsers();
-                  notify(
-                    action.kind === "delete"
-                      ? "Member deleted."
-                      : "Password reset. Give the temporary password to the member; they must change it on their next login.",
-                  );
-                } catch (e) {
-                  notify((e as Error).message);
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              <strong>{memberAction.user.name}</strong>
-              <p>
+              </>
+            )}
+            <DeviceSelect media={media} kind="audioinput" />
+            <DeviceSelect media={media} kind="audiooutput" />
+            {!media.outputSupported && (
+              <p className="muted">
                 {t(
-                  memberAction.kind === "delete"
-                    ? "Delete this member and sign them out? This cannot be undone. Their SSO identity is not deleted; signing in again requires approval."
-                    : "Set a temporary password with at least 12 characters. The member will be signed out and must change it on their next login.",
+                  "This browser uses your system output. Select your speakers or headphones in your system sound settings.",
                 )}
               </p>
-              {memberAction.kind === "reset" && (
-                <label>
-                  {t("Temporary password")}
-                  <input
-                    name="password"
-                    type="password"
-                    required
-                    minLength={12}
-                    maxLength={128}
-                    autoComplete="new-password"
-                    disabled={busy}
-                  />
-                </label>
+            )}
+            {media.outputSupported && media.outputPickerSupported && (
+              <Button
+                variant="secondary"
+                className="secondary"
+                disabled={media.deviceBusy}
+                onClick={() => void media.chooseOutput()}
+              >
+                {t("Choose another speaker…")}
+              </Button>
+            )}
+            <DeviceSelect media={media} kind="videoinput" />
+            <label>
+              {t("Video & screen quality")}
+              <Select
+                label={t("Video & screen quality")}
+                value={media.quality}
+                onChange={media.chooseQuality}
+                options={Object.entries(MEDIA_QUALITY).map(
+                  ([value, profile]) => ({ value, label: t(profile.label) }),
+                )}
+              />
+            </label>
+            <p className="muted">
+              {t(
+                "Applies the next time you turn on your camera or start sharing. Your microphone and current call stay connected.",
               )}
-              <div className="member-actions">
-                <button
-                  type="button"
-                  className="text-button"
-                  disabled={busy}
-                  onClick={() => setMemberAction(null)}
-                >
-                  {t("Cancel")}
-                </button>
-                <button className="primary" disabled={busy}>
-                  {t(
-                    memberAction.kind === "delete"
-                      ? "Confirm deletion"
-                      : "Reset password",
+            </p>
+            <p className="muted">
+              {t(
+                "Maximum uses more bandwidth and processing power. Actual resolution and frame rate depend on your device, browser, shared content, and connection. Choose Balanced if video stutters.",
+              )}
+            </p>
+            {config.sso && (
+              <Button
+                variant="secondary"
+                className="secondary"
+                onClick={async () => {
+                  try {
+                    const result = await api<{ url: string }>(
+                      "/auth/link-social",
+                      {
+                        provider: config.provider,
+                        callbackURL: location.origin,
+                      },
+                    );
+                    location.assign(result.url);
+                  } catch (e) {
+                    notify((e as Error).message);
+                  }
+                }}
+              >
+                <Shield size={16} />
+                {t("Link your SSO account")}
+              </Button>
+            )}
+          </div>
+        )}
+        {tab === "auth" && (
+          <>
+            <p className="muted">
+              {t(
+                "Choose how your team enters the office. Disabled methods also end their existing sessions.",
+              )}
+            </p>
+            {(["password", "sso"] as const).map((method) => (
+              <div className="setting-row" key={method}>
+                <div>
+                  <strong>
+                    {method === "password"
+                      ? t("Username & password")
+                      : t("OIDC single sign-on")}
+                  </strong>
+                  <p>
+                    {method === "password"
+                      ? t("Local accounts for your team.")
+                      : config.ssoConfigured
+                        ? t("Your identity provider is configured.")
+                        : t(
+                            "Add your OIDC issuer and client credentials to the server first.",
+                          )}
+                  </p>
+                </div>
+                <Switch
+                  aria-label={t(
+                    method === "password"
+                      ? "Enable username/password login"
+                      : "Enable OIDC SSO login",
                   )}
-                </button>
-              </div>
-            </form>
-          )}
-          <details className="add-member">
-            <summary>
-              <Plus size={16} />
-              {t("Add a teammate")}
-            </summary>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const form = e.currentTarget,
-                  f = new FormData(form);
-                setBusy(true);
-                try {
-                  await api("/admin/users", {
-                    username: f.get("username"),
-                    name: f.get("name"),
-                    password: f.get("password"),
-                  });
-                  form.reset();
-                  await loadUsers();
-                  notify(
-                    "Teammate added. They will change their temporary password on first login.",
-                  );
-                } catch (e) {
-                  notify((e as Error).message);
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              <label>
-                {t("Name")}
-                <input name="name" required maxLength={40} />
-              </label>
-              <label>
-                {t("Username")}
-                <input name="username" required pattern="[a-zA-Z0-9_]{3,30}" />
-              </label>
-              <label>
-                {t("Temporary password")}
-                <input
-                  name="password"
-                  type="password"
-                  minLength={12}
-                  maxLength={128}
-                  required
-                  autoComplete="new-password"
+                  checked={config[method]}
+                  disabled={busy || (method === "sso" && !config.ssoConfigured)}
+                  onCheckedChange={() => void toggle(method)}
                 />
-              </label>
-              <button className="primary" disabled={busy || !config.password}>
-                {t("Create account")}
+              </div>
+            ))}
+            <div className="settings-note">
+              <Shield size={17} />
+              <p>
+                {t(
+                  "Sign in as an owner through SSO before switching passwords off. At least one working owner login stays enabled.",
+                )}
+              </p>
+            </div>
+          </>
+        )}
+        {tab === "members" && (
+          <>
+            <div className="admin-users">
+              {users.map((u) => (
+                <div key={u.id} data-member-id={u.id}>
+                  <Avatar color="sage" />
+                  <span>
+                    <strong>{u.name}</strong>
+                    <small>
+                      {u.username || t("SSO account")} · {t(u.role)}
+                      {!u.localPassword && u.username
+                        ? ` · ${t("SSO account")}`
+                        : ""}
+                    </small>
+                  </span>
+                  {u.id !== user.id && (
+                    <div className="member-actions">
+                      <Button
+                        variant="link"
+                        className="text-button"
+                        disabled={busy}
+                        onClick={async () => {
+                          try {
+                            await api(
+                              `/admin/users/${u.id}`,
+                              { approved: !u.approved },
+                              "PATCH",
+                            );
+                            await loadUsers();
+                          } catch (e) {
+                            notify((e as Error).message);
+                          }
+                        }}
+                      >
+                        {u.approved ? t("Disable") : t("Approve")}
+                      </Button>
+                      {u.localPassword && (
+                        <Button
+                          variant="link"
+                          className="text-button"
+                          disabled={busy || !config.password}
+                          onClick={() =>
+                            setMemberAction({ user: u, kind: "reset" })
+                          }
+                        >
+                          {t("Reset password")}
+                        </Button>
+                      )}
+                      {u.role === "member" && (
+                        <Button
+                          variant="link"
+                          className="text-button"
+                          disabled={busy}
+                          onClick={() =>
+                            setMemberAction({ user: u, kind: "delete" })
+                          }
+                        >
+                          {t("Delete member")}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {memberAction && (
+              <MemberActionForm
+                key={`${memberAction.kind}:${memberAction.user.id}`}
+                action={memberAction}
+                onCancel={() => setMemberAction(null)}
+                saved={async () => {
+                  setMemberAction(null);
+                  await loadUsers();
+                }}
+                notify={notify}
+              />
+            )}
+            <details className="add-member">
+              <summary>
                 <Plus size={16} />
-              </button>
-            </form>
-          </details>
-        </>
-      )}
-    </>
+                {t("Add a teammate")}
+              </summary>
+              <CreateMemberForm
+                passwordEnabled={config.password}
+                saved={loadUsers}
+                notify={notify}
+              />
+            </details>
+          </>
+        )}
+      </TabsContent>
+    </Tabs>
   );
 }
 

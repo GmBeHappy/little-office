@@ -285,7 +285,7 @@ test("two teammates can wave, summon, enter rooms, publish media, and leave", as
   try {
     for (const map of MAPS) {
       await a.getByRole("button", { name: "Settings", exact: true }).click();
-      await a.getByRole("button", { name: "Workspace", exact: true }).click();
+      await a.getByRole("tab", { name: "Workspace", exact: true }).click();
       await a.getByRole("button", { name: new RegExp(map.people) }).click();
       await expect(
         a.getByRole("group", { name: "Workspace maps" }).getByRole("button"),

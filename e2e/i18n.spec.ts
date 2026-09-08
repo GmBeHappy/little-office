@@ -81,19 +81,19 @@ test("Thai and English cover login, office and settings, persist, and switch wit
   await expect(
     dialog.getByRole("button", { name: "แผนที่สถานีวงโคจร" }),
   ).toBeVisible();
-  await dialog.getByRole("button", { name: "อุปกรณ์", exact: true }).click();
+  await dialog.getByRole("tab", { name: "อุปกรณ์", exact: true }).click();
   await expect(
     dialog.getByLabel("ลำโพง / หูฟัง", { exact: true }),
   ).toBeVisible();
   await dialog
-    .getByRole("button", { name: "การเข้าสู่ระบบ", exact: true })
+    .getByRole("tab", { name: "การเข้าสู่ระบบ", exact: true })
     .click();
   await expect(
     dialog.getByRole("switch", {
       name: "เปิดการเข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสผ่าน",
     }),
   ).toBeVisible();
-  await dialog.getByRole("button", { name: "สมาชิก", exact: true }).click();
+  await dialog.getByRole("tab", { name: "สมาชิก", exact: true }).click();
   await expect(dialog).toContainText("เจ้าของ");
   await page.getByRole("button", { name: "ปิดหน้าต่าง", exact: true }).click();
   await page

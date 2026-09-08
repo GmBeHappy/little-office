@@ -66,9 +66,11 @@ test("repeated Space presses keep the character connected and at its position", 
   await page
     .getByRole("button", { name: "Join The Studio", exact: true })
     .focus();
-  await page
-    .locator(".pixel-map canvas")
-    .click({ position: { x: 200, y: 200 } });
+  // The lower-left edge is outside meeting-room hit areas on every map.
+  // The old fixed point (200, 200) is inside Summer Cove's surf club.
+  const canvas = page.locator(".pixel-map canvas");
+  const bounds = (await canvas.boundingBox())!;
+  await canvas.click({ position: { x: 110, y: bounds.height - 120 } });
   await page.keyboard.press("Space");
   await page.waitForTimeout(80);
   await page.keyboard.press("Space");

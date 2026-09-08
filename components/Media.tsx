@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -717,7 +718,8 @@ export function MediaTracks({
           {shared ? t(" · presenting") : ""}
         </span>
         {expandable && (
-          <button
+          <Button
+            variant="plain"
             className="video-expand"
             data-video-expand
             aria-label={
@@ -729,7 +731,7 @@ export function MediaTracks({
             }
           >
             {shared ? <Maximize2 size={17} /> : <Grid2X2 size={17} />}
-          </button>
+          </Button>
         )}
       </div>
     );
@@ -760,14 +762,15 @@ export function MediaTracks({
             aria-label={t("Expanded video")}
           >
             <header className="media-view-header">
-              <button
+              <Button
+                variant="plain"
                 ref={back}
                 className="media-view-button"
                 onClick={closeView}
               >
                 <ArrowLeft size={18} />
                 {t("Back to map")}
-              </button>
+              </Button>
               <div className="media-view-title">
                 <h2>
                   {view === "screen" && screen
@@ -778,26 +781,29 @@ export function MediaTracks({
               </div>
               <div className="media-view-actions">
                 {!!cameras.length && (
-                  <button
+                  <Button
+                    variant="plain"
                     className="media-view-button"
                     aria-pressed={view === "grid"}
                     onClick={() => setView("grid")}
                   >
                     <Grid2X2 size={18} />
                     <span>{t("Camera grid")}</span>
-                  </button>
+                  </Button>
                 )}
                 {!!screens.length && (
-                  <button
+                  <Button
+                    variant="plain"
                     className="media-view-button"
                     aria-pressed={view === "screen"}
                     onClick={() => openScreen(screens[0].pub.trackSid)}
                   >
                     <Monitor size={18} />
                     <span>{t("Shared screen")}</span>
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button
+                  variant="plain"
                   className="media-view-button"
                   aria-label={
                     fullscreen ? t("Exit fullscreen") : t("Enter fullscreen")
@@ -812,7 +818,7 @@ export function MediaTracks({
                   ) : (
                     <Maximize2 size={19} />
                   )}
-                </button>
+                </Button>
               </div>
             </header>
             {fullscreenError && (

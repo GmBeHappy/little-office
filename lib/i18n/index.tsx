@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 import {
   createContext,
   useCallback,
@@ -62,7 +63,8 @@ export const useI18n = () => useContext(I18nContext);
 export function LanguageToggle() {
   const { locale, setLocale } = useI18n();
   return (
-    <button
+    <Button
+      variant="plain"
       type="button"
       className="language-toggle"
       aria-label={locale === "en" ? "เปลี่ยนเป็นภาษาไทย" : "Switch to English"}
@@ -71,6 +73,6 @@ export function LanguageToggle() {
     >
       <Languages size={17} />
       <span lang={locale}>{locale === "en" ? "EN" : "ไทย"}</span>
-    </button>
+    </Button>
   );
 }

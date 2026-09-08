@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import {
   Excalidraw,
@@ -331,7 +332,8 @@ export default function Whiteboard({
       data-board-status={status}
     >
       <header className="whiteboard-header">
-        <button
+        <Button
+          variant="plain"
           ref={closeButton}
           className="secondary"
           onClick={() => {
@@ -342,7 +344,7 @@ export default function Whiteboard({
         >
           <ArrowLeft size={16} />
           <span>{t("Back to map")}</span>
-        </button>
+        </Button>
         <div className="whiteboard-title">
           <PencilRuler size={21} />
           <div>
@@ -359,16 +361,20 @@ export default function Whiteboard({
         <span className="whiteboard-save" role="status">
           {active ? t(status) : t("Location changed")}
         </span>
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           className="icon-button"
           aria-label={t("Export PNG")}
           title={t("Export PNG")}
           onClick={() => void download("png")}
         >
           <Download size={18} />
-        </button>
+        </Button>
         {storageConfigured && (
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             className="icon-button"
             disabled={uploading || !active}
             aria-label={t("Save snapshot to storage")}
@@ -376,16 +382,20 @@ export default function Whiteboard({
             onClick={() => void saveSnapshot()}
           >
             <CloudUpload size={18} />
-          </button>
+          </Button>
         )}
       </header>
       {archives && (
         <div className="whiteboard-archives">
           <div>
             <strong>{t("Saved snapshots")}</strong>
-            <button className="secondary" onClick={() => setArchives(null)}>
+            <Button
+              variant="secondary"
+              className="secondary"
+              onClick={() => setArchives(null)}
+            >
               {t("Close")}
-            </button>
+            </Button>
           </div>
           {archives.length ? (
             archives.map((file) => (
@@ -426,9 +436,13 @@ export default function Whiteboard({
                 ? "Your location changed. Reopen the whiteboard in your current area."
                 : error,
           )}{" "}
-          <button className="secondary" onClick={() => void download("json")}>
+          <Button
+            variant="secondary"
+            className="secondary"
+            onClick={() => void download("json")}
+          >
             {t("Download editable copy")}
-          </button>
+          </Button>
         </div>
       )}
       {confirmClose && (
@@ -438,15 +452,23 @@ export default function Whiteboard({
               "Some changes are not saved yet. Keep this open to reconnect, or download a copy before closing.",
             )}
           </span>
-          <button className="secondary" onClick={() => setConfirmClose(false)}>
+          <Button
+            variant="secondary"
+            className="secondary"
+            onClick={() => setConfirmClose(false)}
+          >
             {t("Keep open")}
-          </button>
-          <button className="secondary" onClick={() => void download("json")}>
+          </Button>
+          <Button
+            variant="secondary"
+            className="secondary"
+            onClick={() => void download("json")}
+          >
             {t("Download editable copy")}
-          </button>
-          <button className="secondary" onClick={onClose}>
+          </Button>
+          <Button variant="secondary" className="secondary" onClick={onClose}>
             {t("Close whiteboard")}
-          </button>
+          </Button>
         </div>
       )}
       <div

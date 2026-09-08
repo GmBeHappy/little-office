@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { Check, RotateCw } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -45,14 +46,15 @@ export function AvatarEditor({
         <div className="avatar-preview-stage">
           <Avatar color={value} direction={directions[facing]} />
         </div>
-        <button
+        <Button
+          variant="plain"
           type="button"
           className="secondary avatar-turn"
           onClick={() => setFacing((facing + 1) % directions.length)}
         >
           <RotateCw size={14} />
           {t("Rotate preview")}
-        </button>
+        </Button>
         <p>{t("Mix your look. Save to wear it in the office.")}</p>
       </div>
       <div className="avatar-options">
@@ -60,7 +62,8 @@ export function AvatarEditor({
           <legend>{t("Skin tone")}</legend>
           <div className="skin-tone-options">
             {SKIN_TONES.map((tone, index) => (
-              <button
+              <Button
+                variant="plain"
                 type="button"
                 key={tone.name}
                 aria-label={t("{name} skin tone", { name: t(tone.name) })}
@@ -83,7 +86,7 @@ export function AvatarEditor({
                   {appearance.skin === index && <Check size={16} />}
                 </span>
                 <small>{t(tone.name)}</small>
-              </button>
+              </Button>
             ))}
           </div>
         </fieldset>
@@ -97,7 +100,8 @@ export function AvatarEditor({
                   [group.key]: index,
                 } as Appearance;
                 return (
-                  <button
+                  <Button
+                    variant="plain"
                     type="button"
                     key={name}
                     aria-label={t(name)}
@@ -113,7 +117,7 @@ export function AvatarEditor({
                     {appearance[group.key] === index && (
                       <Check className="appearance-check" size={12} />
                     )}
-                  </button>
+                  </Button>
                 );
               })}
             </div>
@@ -127,7 +131,8 @@ export function AvatarEditor({
             aria-label={t("Character skins")}
           >
             {CHARACTER_LOOKS.map((look) => (
-              <button
+              <Button
+                variant="plain"
                 type="button"
                 key={look.id}
                 className={value === look.id ? "picked" : ""}
@@ -137,7 +142,7 @@ export function AvatarEditor({
               >
                 <Avatar color={look.id} />
                 <span>{t(look.name)}</span>
-              </button>
+              </Button>
             ))}
           </div>
         </details>

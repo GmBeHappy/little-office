@@ -96,6 +96,27 @@ test("owner resets and deletes a member, and Thai physical keys move only on the
     await expect(
       member.getByRole("heading", { name: "Make it yours." }),
     ).toBeVisible();
+    const replacement = crypto.randomUUID() + "Permanent!";
+    await member
+      .getByLabel("Temporary password", { exact: true })
+      .fill(temporary);
+    await member.getByLabel("New password", { exact: true }).fill(replacement);
+    await member
+      .getByLabel("Confirm new password", { exact: true })
+      .fill("different");
+    await member
+      .getByRole("button", { name: "Save password", exact: true })
+      .click();
+    await expect(member.locator(".login-card").getByRole("alert")).toHaveText(
+      "Passwords do not match.",
+    );
+    await member
+      .getByLabel("Confirm new password", { exact: true })
+      .fill(replacement);
+    await member
+      .getByRole("button", { name: "Save password", exact: true })
+      .click();
+    await expect(member.locator(".pixel-map canvas")).toBeVisible();
     await row.getByRole("button", { name: "Delete member" }).click();
     const deleteForm = owner.getByRole("form", { name: "Delete member" });
     await deleteForm.getByRole("button", { name: "Cancel" }).click();
