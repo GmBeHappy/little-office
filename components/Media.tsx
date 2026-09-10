@@ -199,6 +199,8 @@ export function useOfficeMedia(
         next = new Room({
           adaptiveStream: { pixelDensity: "screen" },
           dynacast: true,
+          // Release browser microphone capture while muted; LiveKit reacquires it on unmute.
+          publishDefaults: { stopMicTrackOnMute: true },
           audioCaptureDefaults: {
             deviceId: preferences.current.audioinput || undefined,
           },

@@ -23,6 +23,58 @@ async function settings(page: Page) {
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("tab", { name: "Devices", exact: true }).click();
 }
+test("muting releases microphone capture and unmuting reacquires it", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const capture = navigator.mediaDevices.getUserMedia.bind(
+      navigator.mediaDevices,
+    );
+    const tracks: MediaStreamTrack[] = [];
+    Object.assign(window, { capturedMicrophoneTracks: tracks });
+    navigator.mediaDevices.getUserMedia = async (constraints) => {
+      const stream = await capture(constraints);
+      tracks.push(...stream.getAudioTracks());
+      return stream;
+    };
+  });
+  const liveMicrophones = () =>
+    page.evaluate(() =>
+      (
+        window as unknown as {
+          capturedMicrophoneTracks: MediaStreamTrack[];
+        }
+      ).capturedMicrophoneTracks.filter((track) => track.readyState === "live")
+        .length,
+    );
+  await login(page, 0);
+  const controls = page.locator(".controlbar");
+  await expect(controls).toHaveAttribute("data-media-connected", "true");
+  const mic = page.getByRole("button", { name: "Microphone", exact: true });
+  await expect(mic).toHaveAttribute("aria-pressed", "false");
+  await expect.poll(liveMicrophones).toBe(0);
+
+  // Check release and reacquisition both on the floor and after changing rooms.
+  for (const room of [null, "The Studio"]) {
+    if (room) {
+      await page
+        .getByRole("button", { name: `Join ${room}`, exact: true })
+        .click();
+      await expect(page.locator(".map-topline")).toContainText(room);
+      await expect(controls).toHaveAttribute("data-media-connected", "true");
+    }
+    for (let cycle = 0; cycle < 2; cycle++) {
+      await mic.click();
+      await expect(mic).toHaveAttribute("aria-pressed", "true");
+      await expect.poll(liveMicrophones).toBe(1);
+      await mic.click();
+      await expect(mic).toHaveAttribute("aria-pressed", "false");
+      await expect.poll(liveMicrophones).toBe(0);
+      await expect(controls).toHaveAttribute("data-media-connected", "true");
+    }
+  }
+});
+
 test("device choices persist and route incoming call audio to the selected output", async ({
   browser,
 }) => {
