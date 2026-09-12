@@ -5,6 +5,7 @@ import { Command } from "../shared/protocol";
 import { JUMP_DURATION } from "../shared/world";
 import { walkable, WORLD, zoneAt, canNudge } from "../shared/world";
 import { MAPS, getMap, mapBlocks, mapDesks, mapZones } from "../shared/maps";
+import { FARM_EGG_SPOTS, FARM_PLOTS, FARM_POND } from "../shared/farm";
 function setup() {
   const retired: string[] = [],
     events: Record<string, any[]> = { a: [], b: [], c: [] };
@@ -133,7 +134,7 @@ describe("office behavior", () => {
     expect(a.microphone).toBe(true);
   });
   test("all maps have the advertised seats and reachable safe entrances", () => {
-    expect(MAPS.filter((map) => map.size === "small")).toHaveLength(6);
+    expect(MAPS.filter((map) => map.size === "small")).toHaveLength(7);
     expect(MAPS.filter((map) => map.size === "large")).toHaveLength(3);
     for (const map of MAPS) {
       const blocks = mapBlocks(map);
@@ -156,7 +157,9 @@ describe("office behavior", () => {
         expect(walkable(x, y, blocks)).toBe(true);
         expect(zoneAt(x, y, mapZones(map))).toBe("floor");
       }
-      expect(mapDesks(map).length * 2).toBe(map.size === "small" ? 8 : 12);
+      expect(mapDesks(map).length * 2).toBe(
+        map.theme === "farm" ? 0 : map.size === "small" ? 8 : 12,
+      );
       expect(walkable(WORLD.spawn.x, WORLD.spawn.y, blocks)).toBe(true);
       for (const zone of mapZones(map))
         expect(walkable(zone.arrival.x, zone.arrival.y, blocks)).toBe(true);
@@ -194,6 +197,48 @@ describe("office behavior", () => {
       for (const desk of mapDesks(map))
         expect(walkable(desk.x + 20, desk.y + 20, blocks)).toBe(false);
     }
+  });
+  test("sunny acres keeps every mini-game spot walkable, reachable, and near a bank to fish from", () => {
+    const map = getMap("farm-small");
+    const blocks = mapBlocks(map);
+    const reachable = new Set<string>([`${WORLD.spawn.x},${WORLD.spawn.y}`]);
+    const queue = [{ ...WORLD.spawn }];
+    for (let i = 0; i < queue.length; i++) {
+      const point = queue[i];
+      for (const [dx, dy] of [
+        [10, 0],
+        [-10, 0],
+        [0, 10],
+        [0, -10],
+      ]) {
+        const x = point.x + dx,
+          y = point.y + dy,
+          key = `${x},${y}`;
+        if (!reachable.has(key) && walkable(x, y, blocks)) {
+          reachable.add(key);
+          queue.push({ x, y });
+        }
+      }
+    }
+    for (const [x, y] of [...FARM_EGG_SPOTS, ...FARM_PLOTS]) {
+      expect(walkable(x, y, blocks)).toBe(true);
+      expect(reachable.has(`${x},${y}`)).toBe(true);
+    }
+    // Each pond edge needs a reachable bank point within casting distance.
+    const banks = [
+      [FARM_POND.x - 30, FARM_POND.y + FARM_POND.h / 2],
+      [FARM_POND.x + FARM_POND.w + 30, FARM_POND.y + FARM_POND.h / 2],
+      [FARM_POND.x + FARM_POND.w / 2, FARM_POND.y - 30],
+      [FARM_POND.x + FARM_POND.w / 2, FARM_POND.y + FARM_POND.h + 30],
+    ];
+    for (const [x, y] of banks)
+      expect(
+        [...reachable].some((key) => {
+          const [rx, ry] = key.split(",").map(Number);
+          return Math.hypot(rx - x, ry - y) <= 40;
+        }),
+      ).toBe(true);
+    expect(mapDesks(map)).toEqual([]);
   });
   test("zen garden uses its relocated rooms for walking, teleporting, locks, and safe map changes", () => {
     const { office } = setup();

@@ -11,6 +11,7 @@ for (const map of [
   { id: "zen-small", name: "Sakura Garden", thai: "สวนซากุระ" },
   { id: "temple-small", name: "Siam Courtyard", thai: "ลานสยาม" },
   { id: "beach-small", name: "Summer Cove", thai: "อ่าวฤดูร้อน" },
+  { id: "farm-small", name: "Sunny Acres", thai: "ไร่แสงอรุณ" },
 ])
   test(`${map.name} can be selected and its relocated meeting rooms can be clicked`, async ({
     page,
@@ -40,13 +41,11 @@ for (const map of [
       .workspace;
     try {
       await page.getByRole("button", { name: "Settings", exact: true }).click();
-      await page
-        .getByRole("tab", { name: "Workspace", exact: true })
-        .click();
+      await page.getByRole("tab", { name: "Workspace", exact: true }).click();
       await page.getByRole("button", { name: /4–8 people/ }).click();
       await expect(
         page.getByRole("group", { name: "Workspace maps" }).getByRole("button"),
-      ).toHaveCount(6);
+      ).toHaveCount(7);
       await page
         .getByRole("button", { name: `${map.name} map`, exact: true })
         .click();
