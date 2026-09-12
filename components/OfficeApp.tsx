@@ -112,6 +112,42 @@ export default function OfficeApp() {
   const [config, setConfig] = useState<AppConfig | null>(null),
     [user, setUser] = useState<User | null>(null),
     [loading, setLoading] = useState(true);
+  const [mapEffectsPreference, setMapEffectsPreference] = useState<
+    string | null
+  >(null);
+  const [reduceMapMotion, setReduceMapMotion] = useState(true);
+  useEffect(() => {
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReduceMapMotion(motion.matches);
+    update();
+    motion.addEventListener("change", update);
+    return () => motion.removeEventListener("change", update);
+  }, []);
+  const mapEffectsEnabled =
+    mapEffectsPreference === "on" ||
+    (mapEffectsPreference !== "off" && !reduceMapMotion);
+  useEffect(() => {
+    let preference: string | null = null;
+    try {
+      if (user)
+        preference = localStorage.getItem(`office-map-effects:${user.id}`);
+    } catch {
+      /* Browser storage may be unavailable. */
+    }
+    setMapEffectsPreference(preference);
+  }, [user?.id]);
+  const changeMapEffects = (enabled: boolean) => {
+    setMapEffectsPreference(enabled ? "on" : "off");
+    try {
+      if (user)
+        localStorage.setItem(
+          `office-map-effects:${user.id}`,
+          enabled ? "on" : "off",
+        );
+    } catch {
+      /* The preference still applies for this visit. */
+    }
+  };
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null),
     [connection, setConnection] = useState("Connecting"),
     [notice, setNotice] = useState("");
@@ -610,6 +646,7 @@ export default function OfficeApp() {
             <div className="map-stage">
               <PixelMap
                 mapId={workspace.mapId}
+                effectsEnabled={mapEffectsEnabled}
                 people={people}
                 self={user.id}
                 speaking={media.speaking}
@@ -683,6 +720,24 @@ export default function OfficeApp() {
                   2
                 </Button>
                 <span>{t("to sleep")}</span>
+                <Button
+                  variant="plain"
+                  className="key"
+                  aria-label={t(
+                    self?.pose === "fish" ? "Stop fishing" : "Fish",
+                  )}
+                  title={t("Fish / stop (3)")}
+                  aria-pressed={self?.pose === "fish"}
+                  onClick={() =>
+                    send({
+                      type: "pose",
+                      pose: self?.pose === "fish" ? "stand" : "fish",
+                    })
+                  }
+                >
+                  3
+                </Button>
+                <span>{t("to fish")}</span>
               </div>
               <div className="map-weather">
                 {getMap(workspace.mapId).theme === "space" ? "✦" : "☀"}{" "}
@@ -1251,6 +1306,9 @@ export default function OfficeApp() {
                     <strong>{t("A friendly nudge")}</strong>
                     {t(
                       "Face someone nearby and press Z to nudge them. Both of you hear a chime, and the avatars react. Press 1 to sit or 2 to sleep; move or jump to stand up. These poses do not change your voice or availability.",
+                    )}{" "}
+                    {t(
+                      "Face nearby water and press 3 to fish. Press 3 again, move, or jump to stop. After catching a fish, you return to idle.",
                     )}
                   </p>
                   <p>
@@ -1276,6 +1334,8 @@ export default function OfficeApp() {
                 key={user.role}
                 workspace={workspace}
                 initialTab={settingsTab}
+                mapEffectsEnabled={mapEffectsEnabled}
+                changeMapEffects={changeMapEffects}
                 user={user}
                 config={config!}
                 refresh={refresh}
@@ -1739,6 +1799,8 @@ function Profile({
   );
 }
 function SettingsPanel({
+  mapEffectsEnabled,
+  changeMapEffects,
   workspace,
   initialTab,
   user,
@@ -1747,6 +1809,8 @@ function SettingsPanel({
   notify,
   media,
 }: {
+  mapEffectsEnabled: boolean;
+  changeMapEffects: (enabled: boolean) => void;
   workspace: Workspace;
   initialTab: "workspace" | "members";
   user: User;
@@ -1757,7 +1821,7 @@ function SettingsPanel({
 }) {
   const { t } = useI18n();
   const [tab, setTab] = useState<
-      "audio" | "auth" | "members" | "workspace" | "activity"
+      "audio" | "display" | "auth" | "members" | "workspace" | "activity"
     >(user.role === "owner" ? initialTab : "audio"),
     [users, setUsers] = useState<AdminUser[]>([]),
     [busy, setBusy] = useState(false);
@@ -1807,6 +1871,7 @@ function SettingsPanel({
           <TabsTrigger value="workspace">{t("Workspace")}</TabsTrigger>
         )}
         <TabsTrigger value="audio">{t("Devices")}</TabsTrigger>
+        <TabsTrigger value="display">{t("Display")}</TabsTrigger>
         {user.role === "owner" && (
           <>
             <TabsTrigger value="members">{t("Members")}</TabsTrigger>
@@ -1816,6 +1881,33 @@ function SettingsPanel({
         )}
       </TabsList>
       <TabsContent value={tab} className="mt-0">
+        {tab === "display" && (
+          <div className="workspace-feature-card">
+            <div className="workspace-feature-icon">
+              <Leaf size={25} />
+            </div>
+            <div>
+              <h4 id="map-effects-label">{t("Map effects")}</h4>
+              <p id="map-effects-description">
+                {t(
+                  "Moving water and falling leaves or petals. Saved for your account on this browser.",
+                )}
+              </p>
+              <small>
+                {t(
+                  "Off by default when your device requests reduced motion. You can turn effects on here.",
+                )}
+              </small>
+            </div>
+            <Switch
+              className="feature-switch"
+              aria-labelledby="map-effects-label"
+              aria-describedby="map-effects-description"
+              checked={mapEffectsEnabled}
+              onCheckedChange={changeMapEffects}
+            />
+          </div>
+        )}
         {tab === "activity" && user.role === "owner" && <ActivityLog />}
         {tab === "workspace" && (
           <WorkspaceSettings

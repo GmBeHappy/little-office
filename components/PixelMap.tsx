@@ -4,10 +4,13 @@ import { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import { WORLD, JUMP_DURATION, type Person } from "@/shared/world";
 import { drawOfficeMap, getMap, mapZones, type MapId } from "@/shared/maps";
+import { drawFishing, fishingPhase } from "@/shared/fishing";
+import { drawMapEffects, type MapEffect } from "@/shared/map-effects";
 import { drawCharacter } from "@/shared/avatars";
 import type { Command } from "@/shared/protocol";
 type Props = {
   mapId: MapId;
+  effectsEnabled: boolean;
   people: Person[];
   self: string;
   speaking: string[];
@@ -26,9 +29,14 @@ export default function PixelMap(props: Props) {
   useEffect(() => {
     // Render at display density; the office artwork stays in world coordinates.
     const density = Math.min(window.devicePixelRatio || 1, 2);
-    const reducedMotion = window.matchMedia(
+    const motionPreference = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
-    ).matches;
+    );
+    let reducedMotion = motionPreference.matches;
+    const motionChange = () => {
+      reducedMotion = motionPreference.matches;
+    };
+    motionPreference.addEventListener("change", motionChange);
     // Each React effect owns its mount, including Strict Mode's trial mount.
     const parent = document.createElement("div");
     parent.style.cssText = "width:100%;height:100%;position:absolute;inset:0";
@@ -57,6 +65,10 @@ export default function PixelMap(props: Props) {
           poseSince: number;
         }
       >();
+      effects: MapEffect[] = [];
+      ambient?: Phaser.GameObjects.Graphics;
+      lastAmbient = -Infinity;
+      ambientStill?: boolean;
       keys = new Set<string>();
       seq = 0;
       lastInput = 0;
@@ -94,7 +106,7 @@ export default function PixelMap(props: Props) {
       }
       create() {
         if (disposed) return;
-        const g = this.add.graphics();
+        const g = this.add.graphics().setDepth(-2);
         drawOfficeMap(
           getMap(props.mapId),
           (x, y, w, h, color) => {
@@ -115,7 +127,9 @@ export default function PixelMap(props: Props) {
               })
               .setOrigin(0.5);
           },
+          (effect) => this.effects.push(effect),
         );
+        this.ambient = this.add.graphics().setDepth(-1);
         for (const room of mapZones(getMap(props.mapId)).filter(
           (zone) => zone.id !== "floor",
         )) {
@@ -239,7 +253,14 @@ export default function PixelMap(props: Props) {
           )
             return;
           if (
-            ["Digit1", "Numpad1", "Digit2", "Numpad2"].includes(e.code) &&
+            [
+              "Digit1",
+              "Numpad1",
+              "Digit2",
+              "Numpad2",
+              "Digit3",
+              "Numpad3",
+            ].includes(e.code) &&
             !e.ctrlKey &&
             !e.metaKey &&
             !e.altKey
@@ -251,7 +272,9 @@ export default function PixelMap(props: Props) {
               );
               const pose = ["Digit1", "Numpad1"].includes(e.code)
                 ? "sit"
-                : "sleep";
+                : ["Digit2", "Numpad2"].includes(e.code)
+                  ? "sleep"
+                  : "fish";
               live.current.send({
                 type: "pose",
                 pose: self?.pose === pose ? "stand" : pose,
@@ -325,6 +348,27 @@ export default function PixelMap(props: Props) {
         this.events.once("destroy", cleanupInput);
       }
       update(time: number, delta: number) {
+        const still = !live.current.effectsEnabled;
+        if (
+          this.ambient &&
+          !document.hidden &&
+          (this.ambientStill !== still ||
+            (!still &&
+              this.effects.length > 0 &&
+              time - this.lastAmbient >= 80))
+        ) {
+          this.ambient.clear();
+          drawMapEffects(
+            this.effects,
+            time,
+            still,
+            (x, y, w, h, color, alpha = 1) => {
+              this.ambient!.fillStyle(color, alpha).fillRect(x, y, w, h);
+            },
+          );
+          this.lastAmbient = time;
+          this.ambientStill = still;
+        }
         const state = live.current;
         if (
           document.querySelector(
@@ -425,7 +469,7 @@ export default function PixelMap(props: Props) {
             a.poseSince = time;
           }
           const settle =
-            reducedMotion || pose === "stand"
+            reducedMotion || pose === "stand" || pose === "fish"
               ? 0
               : -4 * Math.max(0, 1 - (time - a.poseSince) / 250);
           const breathe =
@@ -468,8 +512,16 @@ export default function PixelMap(props: Props) {
               ? 0.16 *
                 Math.sin(((elapsed - 520) / (JUMP_DURATION - 520)) * Math.PI)
               : 0;
-          a.label.y = -57 - height;
-          a.wave.y = -66 - height;
+          const fishing = pose === "fish" ? p.fishing : undefined;
+          const fishingTime = Date.now();
+          const fishingSpace =
+            fishing &&
+            p.direction === "up" &&
+            fishingPhase(fishing, fishingTime) !== "idle"
+              ? 28
+              : 0;
+          a.label.y = -57 - height - fishingSpace;
+          a.wave.y = -66 - height - fishingSpace;
           a.label.setText(
             p.id === state.self ? t("{name} · you", { name: p.name }) : p.name,
           );
@@ -546,7 +598,11 @@ export default function PixelMap(props: Props) {
               h * (1 - squash),
               c,
             );
+          if (fishing && p.direction === "up")
+            drawFishing(fishing, p.avatar, fishingTime, reducedMotion, r);
           drawCharacter(p.avatar, p.direction, stride, pixel, pose);
+          if (fishing && p.direction !== "up")
+            drawFishing(fishing, p.avatar, fishingTime, reducedMotion, r);
           a.wave.setText(
             reacting && !nudge?.sender
               ? "!"
@@ -594,6 +650,7 @@ export default function PixelMap(props: Props) {
       // Phaser destruction does not emit shutdown. Release global input now,
       // including React's trial mount and workspace map changes.
       disposed = true;
+      motionPreference.removeEventListener("change", motionChange);
       cleanupInput();
       game?.destroy(true);
       parent.remove();

@@ -17,7 +17,7 @@ export const Command = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("pose"),
-    pose: z.enum(["stand", "sit", "sleep"]),
+    pose: z.enum(["stand", "sit", "sleep", "fish"]),
   }),
   z.object({
     type: z.literal("move"),

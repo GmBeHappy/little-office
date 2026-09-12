@@ -1,3 +1,4 @@
+import { waterRipple, type MapEffectSink } from "./map-effects";
 import { ZONES } from "./world";
 
 // Two tea houses face a central garden; their open south doors lead to the commons.
@@ -31,7 +32,7 @@ const rocks = [
   { x: 555, y: 220, w: 52, h: 32 },
   { x: 615, y: 175, w: 28, h: 22 },
 ];
-const pond = [
+export const pond = [
   { x: 430, y: 405, w: 260, h: 45 },
   { x: 430, y: 515, w: 260, h: 45 },
 ];
@@ -62,6 +63,7 @@ export function drawZenGarden(
     size: number,
     color: string,
   ) => void,
+  effect?: MapEffectSink,
 ) {
   const ink = "#4c5c4b";
   rect(0, 0, 1120, 720, 0x577461);
@@ -109,7 +111,15 @@ export function drawZenGarden(
     rect(b.x, b.y, b.w, b.h, 0x7c9d95);
     rect(b.x + 5, b.y + 4, b.w - 10, b.h - 8, 0x8fbdaf);
     for (let i = 0; i < 5; i++)
-      rect(b.x + 18 + i * 48, b.y + 12 + (i % 2) * 13, 24, 3, 0xb9dbca);
+      waterRipple(
+        rect,
+        effect,
+        b.x + 18 + i * 48,
+        b.y + 12 + (i % 2) * 13,
+        24,
+        3,
+        0xb9dbca,
+      );
   }
   for (const [x, y] of [
     [474, 426],
@@ -168,6 +178,14 @@ export function drawZenGarden(
     }
   }
   const sakura = (x: number, y: number) => {
+    effect?.({
+      kind: "leaves",
+      x,
+      y: y - 75,
+      spread: 33,
+      fall: 115,
+      color: 0xffd4e0,
+    });
     rect(x - 29, y + 12, 60, 10, 0x99aa85);
     rect(x - 6, y - 24, 12, 42, 0x79584f);
     rect(x - 18, y - 28, 17, 7, 0x79584f);
