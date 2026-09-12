@@ -2,12 +2,36 @@
 import { useI18n } from "@/lib/i18n";
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
-import { WORLD, JUMP_DURATION, type Person } from "@/shared/world";
+import { WORLD, JUMP_DURATION, walkable, type Person } from "@/shared/world";
 import { drawOfficeMap, getMap, mapZones, type MapId } from "@/shared/maps";
 import { drawFishing, fishingPhase } from "@/shared/fishing";
 import { drawMapEffects, type MapEffect } from "@/shared/map-effects";
+import {
+  FARM_BLOCKS,
+  FARM_EGG_SPOTS,
+  FARM_GROWTH,
+  FARM_HENS,
+  FARM_HEN_YARD,
+  FARM_PLOTS,
+} from "@/shared/farm";
 import { drawCharacter } from "@/shared/avatars";
 import type { Command } from "@/shared/protocol";
+// Farm pickups render as pixel art above the avatar instead of emoji text.
+const FARM_ICON_EMOJIS: Record<
+  string,
+  "egg" | "sprout" | "wheat" | "fish" | "puff"
+> = {
+  "🥚": "egg",
+  "🌱": "sprout",
+  "🌾": "wheat",
+  "🐟": "fish",
+  "💨": "puff",
+};
+type FarmTarget = {
+  kind: "egg" | "plant" | "harvest";
+  x: number;
+  y: number;
+};
 type Props = {
   mapId: MapId;
   effectsEnabled: boolean;
@@ -72,6 +96,43 @@ export default function PixelMap(props: Props) {
       keys = new Set<string>();
       seq = 0;
       lastInput = 0;
+      // Farm mini-games are per-scene state; changing maps starts a fresh day.
+      farm?: {
+        eggs: Map<number, number>;
+        nextEgg: number;
+        plots: number[];
+        hens: {
+          x: number;
+          y: number;
+          tx: number;
+          ty: number;
+          mode: "walk" | "idle" | "peck";
+          fast: boolean;
+          until: number;
+          since: number;
+          direction: "left" | "right";
+          walkTime: number;
+          body: number;
+          wing: number;
+        }[];
+        animals: {
+          kind: "cow" | "sheep";
+          x: number;
+          y: number;
+          tx: number;
+          ty: number;
+          mode: "walk" | "idle" | "graze";
+          until: number;
+          since: number;
+          direction: "left" | "right";
+          walkTime: number;
+        }[];
+        caught: { eggs: number; crops: number; fish: number };
+      };
+      farmG?: Phaser.GameObjects.Graphics;
+      farmHud?: Phaser.GameObjects.Text;
+      farmLegend?: Phaser.GameObjects.Text;
+      farmPrompt?: Phaser.GameObjects.Text;
       touch?: {
         pointer: Phaser.Input.Pointer;
         target?: Phaser.GameObjects.GameObject;
@@ -104,6 +165,368 @@ export default function PixelMap(props: Props) {
       constructor() {
         super("office");
       }
+      // The nearest farm action for the player's position; E performs it.
+      farmTarget(time: number): FarmTarget | null {
+        const farm = this.farm;
+        if (!farm) return null;
+        const self = live.current.people.find(
+          (p) => p.id === live.current.self,
+        );
+        if (!self) return null;
+        let best: FarmTarget | null = null;
+        let bestD = Infinity;
+        const consider = (
+          kind: FarmTarget["kind"],
+          x: number,
+          y: number,
+          max: number,
+        ) => {
+          const d = Math.hypot(self.x - x, self.y - y);
+          if (d < max && d < bestD) {
+            bestD = d;
+            best = { kind, x, y };
+          }
+        };
+        for (const [spot, until] of farm.eggs)
+          if (until > time) {
+            const [x, y] = FARM_EGG_SPOTS[spot];
+            consider("egg", x, y, 48);
+          }
+        for (const [index, planted] of farm.plots.entries()) {
+          const [x, y] = FARM_PLOTS[index];
+          if (!planted) consider("plant", x, y, 54);
+          else if (time - planted >= FARM_GROWTH) consider("harvest", x, y, 54);
+        }
+        return best;
+      }
+      interactFarm(time: number) {
+        const farm = this.farm;
+        if (!farm) return;
+        const state = live.current;
+        const self = state.people.find((p) => p.id === state.self);
+        if (!self) return;
+        const target = this.farmTarget(time);
+        if (!target) return;
+        const celebrate = (emoji: string) =>
+          state.send({ type: "emote", emoji });
+        if (target.kind === "egg") {
+          for (const [spot, until] of farm.eggs) {
+            const [x, y] = FARM_EGG_SPOTS[spot];
+            if (x === target.x && y === target.y && until > time) {
+              farm.eggs.delete(spot);
+              break;
+            }
+          }
+          farm.caught.eggs++;
+          farm.nextEgg = Math.min(farm.nextEgg, time + 6000);
+          celebrate("🥚");
+        } else if (target.kind === "plant" || target.kind === "harvest") {
+          const index = FARM_PLOTS.findIndex(
+            ([x, y]) => x === target.x && y === target.y,
+          );
+          if (index >= 0) {
+            if (target.kind === "plant") {
+              farm.plots[index] = time;
+              celebrate("🌱");
+            } else {
+              farm.plots[index] = 0;
+              farm.caught.crops++;
+              celebrate("🌾");
+            }
+          }
+        }
+      }
+      // Pixel-art pickup icons float over avatars in place of emoji text.
+      drawFarmIcon(
+        g: Phaser.GameObjects.Graphics,
+        kind: "egg" | "sprout" | "wheat" | "fish" | "puff",
+        x: number,
+        y: number,
+        alpha: number,
+      ) {
+        const r = (ox: number, oy: number, w: number, h: number, c: number) => {
+          g.fillStyle(c, alpha);
+          g.fillRect(x + ox, y + oy, w, h);
+        };
+        if (kind === "egg") {
+          r(-5, -4, 10, 8, 0xf7f3e2);
+          r(-3, -8, 6, 5, 0xf7f3e2);
+          r(-4, 2, 8, 2, 0xe3d9c6);
+          r(-3, -7, 4, 3, 0xffffff);
+        } else if (kind === "sprout") {
+          r(-1, -6, 3, 10, 0x4c7957);
+          r(-6, -7, 5, 4, 0x69985f);
+          r(3, -9, 5, 4, 0x8bb16f);
+        } else if (kind === "wheat") {
+          for (const dx of [-6, -1, 4]) {
+            r(dx, -4, 2, 8, 0xc9a35b);
+            r(dx - 1, -9, 4, 5, 0xe8c56a);
+          }
+        } else if (kind === "fish") {
+          r(-6, -4, 12, 8, 0x5f9ec0);
+          r(-9, -2, 4, 4, 0x4f8db0);
+          r(3, -6, 3, 3, 0x4f8db0);
+          r(2, -2, 2, 2, 0xf7f3e2);
+        } else {
+          r(-7, -5, 4, 4, 0xd9d2c0);
+          r(0, -8, 5, 4, 0xd9d2c0);
+          r(-2, -1, 5, 4, 0xd9d2c0);
+        }
+      }
+      updateFarm(time: number, delta: number) {
+        const farm = this.farm!;
+        const step = Math.min(delta, 50);
+        // Hens lay a few eggs at a time; uncollected ones fade away.
+        if (farm.eggs.size < 3 && time > farm.nextEgg) {
+          const free = FARM_EGG_SPOTS.map((_, i) => i).filter(
+            (i) => !farm.eggs.has(i),
+          );
+          const spot = free[Math.floor(Math.random() * free.length)];
+          farm.eggs.set(spot, time + 45000);
+          farm.nextEgg = time + 9000 + Math.random() * 9000;
+        }
+        for (const [spot, until] of farm.eggs)
+          if (until < time) farm.eggs.delete(spot);
+        const g = this.farmG!;
+        g.clear();
+        const r = (
+          x: number,
+          y: number,
+          w: number,
+          h: number,
+          c: number,
+          a?: number,
+        ) => {
+          g.fillStyle(c, a);
+          g.fillRect(x, y, w, h);
+        };
+        for (const [spot] of farm.eggs) {
+          const [x, y] = FARM_EGG_SPOTS[spot];
+          r(x - 6, y + 3, 12, 3, 0x3e5233, 0.15);
+          r(x - 5, y - 3, 10, 7, 0xf7f3e2);
+          r(x - 3, y - 7, 6, 4, 0xf7f3e2);
+          r(x - 4, y + 1, 8, 3, 0xe3d9c6);
+          r(x - 3, y - 6, 4, 3, 0xffffff);
+        }
+        for (const [index, planted] of farm.plots.entries()) {
+          if (!planted) continue;
+          const [x, y] = FARM_PLOTS[index];
+          const age = time - planted;
+          if (age < FARM_GROWTH * 0.25) {
+            // Freshly sown: turned soil with a scatter of seeds.
+            r(x - 8, y - 1, 16, 5, 0x6b4526);
+            r(x - 5, y, 3, 2, 0xe8c56a);
+            r(x + 2, y + 1, 3, 2, 0xe8c56a);
+            r(x - 1, y - 3, 2, 2, 0xd9b45f);
+          } else if (age < FARM_GROWTH * 0.55) {
+            // A sprout pushes up two leaves.
+            r(x - 1, y - 9, 3, 9, 0x4c7957);
+            r(x - 6, y - 10, 5, 4, 0x69985f);
+            r(x + 3, y - 12, 5, 4, 0x8bb16f);
+          } else if (age < FARM_GROWTH) {
+            // Green wheat grows tall.
+            for (const dx of [-7, -2, 3]) {
+              r(x + dx, y - 15, 3, 15, 0x7aa050);
+              r(x + dx - 2, y - 17, 7, 4, 0x8bb16f);
+            }
+          } else {
+            // Ripe wheat: golden heads heavy over a tied bundle.
+            for (const dx of [-8, -2, 4]) {
+              r(x + dx, y - 17, 3, 17, 0xc9a35b);
+              r(x + dx - 2, y - 24, 7, 9, 0xe8c56a);
+              r(x + dx - 1, y - 23, 2, 2, 0xf2d98c);
+              r(x + dx + 2, y - 21, 2, 2, 0xf2d98c);
+            }
+            r(x - 6, y - 6, 14, 3, 0xb98f57);
+          }
+        }
+        // Hens wander the pen, peck at the ground, and scatter from people.
+        const self = live.current.people.find(
+          (p) => p.id === live.current.self,
+        );
+        const yard = FARM_HEN_YARD;
+        for (const hen of farm.hens) {
+          const playerDist = self
+            ? Math.hypot(self.x - hen.x, self.y - hen.y)
+            : Infinity;
+          if (hen.mode !== "walk" && playerDist < 40) {
+            hen.tx = Math.max(
+              yard.x,
+              Math.min(
+                yard.x + yard.w,
+                hen.x + (hen.x - (self?.x ?? hen.x) >= 0 ? 60 : -60),
+              ),
+            );
+            hen.ty = Math.max(
+              yard.y,
+              Math.min(
+                yard.y + yard.h,
+                hen.y + (hen.y - (self?.y ?? hen.y) >= 0 ? 45 : -45),
+              ),
+            );
+            hen.mode = "walk";
+            hen.fast = true;
+          }
+          if (hen.mode === "walk") {
+            const dx = hen.tx - hen.x,
+              dy = hen.ty - hen.y;
+            const dist = Math.hypot(dx, dy);
+            const speed = (hen.fast ? 60 : 24) * (step / 1000);
+            if (dist <= speed) {
+              hen.x = hen.tx;
+              hen.y = hen.ty;
+              hen.mode = Math.random() < 0.45 ? "peck" : "idle";
+              hen.until = time + 900 + Math.random() * 2800;
+              hen.since = time;
+              hen.fast = false;
+            } else {
+              hen.x += (dx / dist) * speed;
+              hen.y += (dy / dist) * speed;
+              hen.walkTime += step;
+              hen.direction = dx < 0 ? "left" : "right";
+            }
+          } else if (time > hen.until) {
+            hen.tx = yard.x + Math.random() * yard.w;
+            hen.ty = yard.y + Math.random() * yard.h;
+            hen.mode = "walk";
+          }
+          const frame = Math.floor(hen.walkTime / 120) % 2;
+          const bob =
+            hen.mode === "walk"
+              ? frame % 2
+                ? -1
+                : 0
+              : Math.sin(time / 400 + hen.x) > 0.6
+                ? -1
+                : 0;
+          const peck =
+            hen.mode === "peck"
+              ? Math.floor((time - hen.since) / 160) % 2
+                ? 6
+                : 0
+              : 0;
+          const mirrored = hen.direction === "left";
+          const p = (ox: number, oy: number, w: number, h: number, c: number) =>
+            r(hen.x + (mirrored ? -ox - w : ox), hen.y + oy + bob, w, h, c);
+          r(hen.x - 8, hen.y + 8, 16, 3, 0x3e5233, 0.15);
+          p(-9, -7, 18, 11, hen.body);
+          p(-13, -10, 5, 6, hen.wing);
+          p(-3, -3, 8, 6, hen.wing);
+          if (hen.mode === "walk") {
+            p(-4, 4, 2, 5 - (frame ? 2 : 0), 0xe8a23c);
+            p(2, 4, 2, 5 - (frame ? 0 : 2), 0xe8a23c);
+          } else {
+            p(-4, 4, 2, 5, 0xe8a23c);
+            p(2, 4, 2, 5, 0xe8a23c);
+          }
+          p(6, -13 + peck, 8, 8, hen.body);
+          p(8, -16 + peck, 4, 4, 0xd75b4a);
+          p(13, -10 + peck, 4, 3, 0xe8a23c);
+          p(11, -11 + peck, 2, 2, 0x3e5233);
+        }
+        // Cows and sheep graze anywhere their hooves can carry them.
+        for (const animal of farm.animals) {
+          if (animal.mode === "walk") {
+            const dx = animal.tx - animal.x,
+              dy = animal.ty - animal.y;
+            const dist = Math.hypot(dx, dy);
+            const speed = (animal.kind === "cow" ? 11 : 14) * (step / 1000);
+            const nx = animal.x + (dx / dist) * speed,
+              ny = animal.y + (dy / dist) * speed;
+            if (dist <= speed) {
+              animal.x = animal.tx;
+              animal.y = animal.ty;
+              animal.mode = Math.random() < 0.5 ? "graze" : "idle";
+              animal.until = time + 1500 + Math.random() * 4000;
+              animal.since = time;
+            } else if (walkable(nx, ny, FARM_BLOCKS)) {
+              animal.x = nx;
+              animal.y = ny;
+              animal.walkTime += step;
+              animal.direction = dx < 0 ? "left" : "right";
+            } else {
+              animal.mode = "idle";
+              animal.until = time + 600;
+            }
+          } else if (time > animal.until) {
+            for (let tries = 0; tries < 24; tries++) {
+              const tx = 70 + Math.random() * 980,
+                ty = 100 + Math.random() * 540;
+              if (walkable(tx, ty, FARM_BLOCKS)) {
+                animal.tx = tx;
+                animal.ty = ty;
+                break;
+              }
+            }
+            animal.mode = "walk";
+          }
+          const frame = Math.floor(animal.walkTime / 160) % 2;
+          const bob = animal.mode === "walk" && frame % 2 ? -1 : 0;
+          const graze =
+            animal.mode === "graze" &&
+            Math.floor((time - animal.since) / 240) % 2
+              ? 7
+              : 0;
+          const p = (ox: number, oy: number, w: number, h: number, c: number) =>
+            r(
+              animal.x + (animal.direction === "left" ? -ox - w : ox),
+              animal.y + oy + bob,
+              w,
+              h,
+              c,
+            );
+          if (animal.kind === "cow") {
+            r(animal.x - 17, animal.y + 13, 34, 4, 0x3e5233, 0.15);
+            p(-16, -12, 32, 17, 0xf2ead2);
+            p(-11, -9, 8, 8, 0x4a4038);
+            p(5, -4, 9, 8, 0x4a4038);
+            if (animal.mode === "walk") {
+              p(-13, 5, 4, 8 - (frame ? 2 : 0), 0x4a4038);
+              p(9, 5, 4, 8 - (frame ? 0 : 2), 0x4a4038);
+            } else {
+              p(-13, 5, 4, 8, 0x4a4038);
+              p(9, 5, 4, 8, 0x4a4038);
+            }
+            p(13, -17 + graze, 11, 11, 0xf2ead2);
+            p(13, -20 + graze, 4, 4, 0xd9c8a4);
+            p(21, -10 + graze, 4, 4, 0xe8a8a0);
+            p(16, -15 + graze, 2, 2, 0x3e5233);
+          } else {
+            r(animal.x - 13, animal.y + 11, 26, 4, 0x3e5233, 0.15);
+            p(-12, -10, 24, 15, 0xf5f2e8);
+            p(-14, -7, 4, 7, 0xf5f2e8);
+            p(8, -12, 5, 5, 0xf5f2e8);
+            if (animal.mode === "walk") {
+              p(-9, 5, 3, 7 - (frame ? 2 : 0), 0x4a4a52);
+              p(5, 5, 3, 7 - (frame ? 0 : 2), 0x4a4a52);
+            } else {
+              p(-9, 5, 3, 7, 0x4a4a52);
+              p(5, 5, 3, 7, 0x4a4a52);
+            }
+            p(11, -13 + graze, 9, 9, 0x4a4a52);
+            p(9, -15 + graze, 4, 3, 0x4a4a52);
+            p(17, -9 + graze, 3, 2, 0x4a4a52);
+            p(14, -11 + graze, 2, 2, 0xf5f2e8);
+          }
+        }
+        const prompt = this.farmPrompt!;
+        const target = this.farmTarget(time);
+        if (target) {
+          prompt
+            .setText(
+              target.kind === "egg"
+                ? t("[E] Collect the egg")
+                : target.kind === "plant"
+                  ? t("[E] Plant seeds")
+                  : t("[E] Harvest the wheat"),
+            )
+            .setPosition(target.x, target.y - 32)
+            .setVisible(true);
+        } else prompt.setVisible(false);
+        this.farmHud!.setText(
+          `🥚 ${farm.caught.eggs}   🌾 ${farm.caught.crops}   🐟 ${farm.caught.fish}`,
+        );
+      }
       create() {
         if (disposed) return;
         const g = this.add.graphics().setDepth(-2);
@@ -130,6 +553,80 @@ export default function PixelMap(props: Props) {
           (effect) => this.effects.push(effect),
         );
         this.ambient = this.add.graphics().setDepth(-1);
+        if (getMap(props.mapId).theme === "farm") {
+          this.farm = {
+            eggs: new Map(),
+            nextEgg: 4000,
+            plots: FARM_PLOTS.map(() => 0),
+            hens: FARM_HENS.map(([x, y], i) => ({
+              x,
+              y,
+              tx: x,
+              ty: y,
+              mode: "idle" as const,
+              fast: false,
+              until: 1000 + i * 700,
+              since: 0,
+              direction: "right" as const,
+              walkTime: 0,
+              body: i % 2 ? 0xc98d5a : 0xf5f2e8,
+              wing: i % 2 ? 0xb0794a : 0xd9d2c0,
+            })),
+            animals: (
+              [
+                ["cow", 210, 330],
+                ["cow", 860, 350],
+                ["sheep", 150, 460],
+                ["sheep", 660, 430],
+                ["sheep", 300, 630],
+              ] as const
+            ).map(([kind, x, y]) => ({
+              kind,
+              x,
+              y,
+              tx: x,
+              ty: y,
+              mode: "idle" as const,
+              until: 2000 + Math.random() * 3000,
+              since: 0,
+              direction: "right" as const,
+              walkTime: 0,
+            })),
+            caught: { eggs: 0, crops: 0, fish: 0 },
+          };
+          this.farmG = this.add.graphics().setDepth(950);
+          this.farmHud = this.add
+            .text(12, 8, "", {
+              fontSize: "15px",
+              color: "#3e5233",
+              backgroundColor: "#faf7e9",
+              padding: { left: 6, right: 6, top: 3, bottom: 3 },
+              resolution: 4,
+            })
+            .setOrigin(0, 0)
+            .setDepth(3000);
+          this.farmLegend = this.add
+            .text(1108, 8, t("WASD move · SPACE jump · E interact"), {
+              fontSize: "12px",
+              color: "#f4f1e0",
+              stroke: "#3e5233",
+              strokeThickness: 3,
+              resolution: 4,
+            })
+            .setOrigin(1, 0)
+            .setDepth(3000);
+          this.farmPrompt = this.add
+            .text(0, 0, "", {
+              fontSize: "13px",
+              color: "#3e5233",
+              backgroundColor: "#faf7e9",
+              padding: { left: 6, right: 6, top: 3, bottom: 3 },
+              resolution: 4,
+            })
+            .setOrigin(0.5, 1)
+            .setDepth(3000)
+            .setVisible(false);
+        }
         for (const room of mapZones(getMap(props.mapId)).filter(
           (zone) => zone.id !== "floor",
         )) {
@@ -287,6 +784,11 @@ export default function PixelMap(props: Props) {
             if (!e.repeat) live.current.send({ type: "nudge" });
             return;
           }
+          if (e.code === "KeyE" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            if (!e.repeat) this.interactFarm(performance.now());
+            return;
+          }
           if (e.code === "Space") {
             // Only Tab navigation gives controls ownership of Space. A room
             // button can retain focus after a click without owning game input.
@@ -369,6 +871,7 @@ export default function PixelMap(props: Props) {
           this.lastAmbient = time;
           this.ambientStill = still;
         }
+        if (this.farm) this.updateFarm(time, delta);
         const state = live.current;
         if (
           document.querySelector(
@@ -603,20 +1106,40 @@ export default function PixelMap(props: Props) {
           drawCharacter(p.avatar, p.direction, stride, pixel, pose);
           if (fishing && p.direction !== "up")
             drawFishing(fishing, p.avatar, fishingTime, reducedMotion, r);
+          // On the farm, pickup celebrations become pixel-art icons that
+          // float up and fade instead of emoji text.
+          const emote = state.emotes[p.id];
+          const farmIcon =
+            this.farm && emote && emote.until > Date.now()
+              ? FARM_ICON_EMOJIS[emote.emoji]
+              : undefined;
+          if (farmIcon) {
+            const remaining = emote.until - Date.now();
+            const rise = ((3000 - remaining) / 3000) * 14;
+            this.drawFarmIcon(
+              g,
+              farmIcon,
+              nudgeX,
+              -76 - rise + nudgeY,
+              Math.min(1, remaining / 600),
+            );
+          }
           a.wave.setText(
-            reacting && !nudge?.sender
-              ? "!"
-              : (state.emotes[p.id]?.until || 0) > Date.now()
-                ? state.emotes[p.id].emoji
-                : pose === "sleep"
-                  ? "Zzz"
-                  : (state.waves[p.id] || 0) > Date.now()
-                    ? "👋"
-                    : p.status === "dnd"
-                      ? "⏾"
-                      : p.status === "away"
-                        ? "z"
-                        : "",
+            farmIcon
+              ? ""
+              : reacting && !nudge?.sender
+                ? "!"
+                : (state.emotes[p.id]?.until || 0) > Date.now()
+                  ? state.emotes[p.id].emoji
+                  : pose === "sleep"
+                    ? "Zzz"
+                    : (state.waves[p.id] || 0) > Date.now()
+                      ? "👋"
+                      : p.status === "dnd"
+                        ? "⏾"
+                        : p.status === "away"
+                          ? "z"
+                          : "",
           );
           if (p.id === state.self)
             this.cameras.main.centerOn(a.container.x, a.container.y);
@@ -666,9 +1189,14 @@ export default function PixelMap(props: Props) {
       }
       data-map-id={props.mapId}
       role="img"
-      aria-label={t(
-        "Interactive pixel office. Move with WASD or arrow keys, or touch and drag to walk. Release to stop. Press Space to jump. Tap a person or meeting room to interact, or use the Rooms list for keyboard-accessible navigation.",
-      )}
+      aria-label={
+        t(
+          "Interactive pixel office. Move with WASD or arrow keys, or touch and drag to walk. Release to stop. Press Space to jump. Tap a person or meeting room to interact, or use the Rooms list for keyboard-accessible navigation.",
+        ) +
+        (getMap(props.mapId).theme === "farm"
+          ? " " + t("Press E near eggs, crops, or the pond to play.")
+          : "")
+      }
     />
   );
 }

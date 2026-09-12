@@ -16,6 +16,7 @@ import {
   Flower2,
   Landmark,
   Palmtree,
+  Wheat,
   Map,
   SlidersHorizontal,
   Cloud,
@@ -214,13 +215,15 @@ export function WorkspaceSettings({
                       ? Landmark
                       : option.theme === "beach"
                         ? Palmtree
-                        : option.theme === "zen"
-                          ? Flower2
-                          : option.theme === "nature"
-                            ? Leaf
-                            : option.theme === "camping"
-                              ? Tent
-                              : Rocket;
+                        : option.theme === "farm"
+                          ? Wheat
+                          : option.theme === "zen"
+                            ? Flower2
+                            : option.theme === "nature"
+                              ? Leaf
+                              : option.theme === "camping"
+                                ? Tent
+                                : Rocket;
                   return (
                     <Button
                       variant="plain"

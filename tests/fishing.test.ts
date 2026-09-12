@@ -95,7 +95,13 @@ test("fishing requires a manual command, synchronizes, cancels, and can be cast 
 test("all water maps expose fishable shores, but dry maps and facing away do not", () => {
   expect(
     MAPS.filter((map) => mapWater(map).length).map((map) => map.id),
-  ).toEqual(["nature-small", "zen-small", "temple-small", "beach-small"]);
+  ).toEqual([
+    "nature-small",
+    "zen-small",
+    "temple-small",
+    "beach-small",
+    "farm-small",
+  ]);
   for (const map of MAPS) {
     for (const b of mapWater(map)) {
       const person = {

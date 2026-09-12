@@ -1312,6 +1312,12 @@ export default function OfficeApp() {
                     )}
                   </p>
                   <p>
+                    <strong>{t("Farm break")}</strong>
+                    {t(
+                      "On the Sunny Acres map there are no desks — press E near the hen yard to collect eggs, at the crop field to plant and harvest wheat, and face the pond to fish with 3. Reel in the moment you see a bite!",
+                    )}
+                  </p>
+                  <p>
                     <strong>{t("Your space, your choice")}</strong>
                     {t(
                       "Mic and camera start off. Do not disturb quiets interruptions. Open-floor audio is public; use a meeting room for private conversations.",

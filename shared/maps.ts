@@ -7,6 +7,7 @@ import {
   drawZenGarden,
   pond,
 } from "./zen-garden";
+import { FARM_ZONES, FARM_BLOCKS, FARM_POND, drawFarmMap } from "./farm";
 import {
   TEMPLE_ZONES,
   TEMPLE_DESKS,
@@ -73,6 +74,15 @@ export const MAPS = [
       "A sunny beach with coconut palms, colourful parasols, and workstations on a wooden pier.",
   },
   {
+    id: "farm-small",
+    name: "Sunny Acres",
+    theme: "farm",
+    size: "small",
+    people: "4–8",
+    description:
+      "A cozy farmstead with a farmhouse, barn, clucking hens, plantable crops, and a fishing pond.",
+  },
+  {
     id: "nature-large",
     name: "Willow Gardens",
     theme: "nature",
@@ -116,11 +126,13 @@ export function getMap(id: string): OfficeMap {
 export function mapZones(map: OfficeMap) {
   if (map.theme === "temple") return TEMPLE_ZONES;
   if (map.theme === "beach") return BEACH_ZONES;
+  if (map.theme === "farm") return FARM_ZONES;
   return map.theme === "zen" ? ZEN_ZONES : ZONES;
 }
 export function mapDesks(map: OfficeMap) {
   if (map.theme === "temple") return TEMPLE_DESKS;
   if (map.theme === "beach") return BEACH_DESKS;
+  if (map.theme === "farm") return [];
   if (map.theme === "zen") return ZEN_DESKS;
   return map.size === "small"
     ? DESKS
@@ -129,6 +141,7 @@ export function mapDesks(map: OfficeMap) {
 export function mapBlocks(map: OfficeMap) {
   if (map.theme === "temple") return TEMPLE_BLOCKS;
   if (map.theme === "beach") return BEACH_BLOCKS;
+  if (map.theme === "farm") return FARM_BLOCKS;
   if (map.theme === "zen") return ZEN_BLOCKS;
   return [
     ...mapDesks(map).map((desk) => ({ ...desk, w: 116, h: 58 })),
@@ -152,6 +165,7 @@ export function mapBlocks(map: OfficeMap) {
 }
 
 export function mapWater(map: OfficeMap) {
+  if (map.theme === "farm") return [FARM_POND];
   if (map.theme === "zen") return pond;
   if (map.theme === "temple") return [templePond];
   if (map.theme === "beach") return sea;
@@ -173,6 +187,7 @@ export function drawOfficeMap(
 ) {
   if (map.theme === "temple") return drawTemple(rect, label, effect);
   if (map.theme === "beach") return drawBeach(rect, label, effect);
+  if (map.theme === "farm") return drawFarmMap(rect, label, effect);
   if (map.theme === "zen") return drawZenGarden(rect, label, effect);
   const space = map.theme === "space",
     camp = map.theme === "camping";
