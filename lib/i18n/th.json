@@ -561,5 +561,15 @@
   "Approve this member before changing their role.": "กรุณาอนุมัติสมาชิกก่อนเปลี่ยนบทบาท",
   "Invalid activity cursor.": "ตำแหน่งประวัติกิจกรรมไม่ถูกต้อง",
   "Invalid activity filter.": "ตัวกรองกิจกรรมไม่ถูกต้อง",
-  "Database request failed.": "ไม่สามารถดำเนินการกับฐานข้อมูลได้ กรุณาลองใหม่"
+  "Database request failed.": "ไม่สามารถดำเนินการกับฐานข้อมูลได้ กรุณาลองใหม่",
+  "Display": "การแสดงผล",
+  "Map effects": "เอฟเฟกต์แผนที่",
+  "Moving water and falling leaves or petals. Saved for your account on this browser.": "น้ำเคลื่อนไหวและใบไม้หรือกลีบดอกร่วง บันทึกการตั้งค่าสำหรับบัญชีของคุณบนเบราว์เซอร์นี้",
+  "Off by default when your device requests reduced motion. You can turn effects on here.": "ปิดตามค่าเริ่มต้นเมื่ออุปกรณ์เปิดการลดการเคลื่อนไหว คุณสามารถเปิดเอฟเฟกต์ได้ที่นี่",
+  "Fish": "ตกปลา",
+  "Stop fishing": "หยุดตกปลา",
+  "Fish / stop (3)": "ตกปลา / หยุด (3)",
+  "to fish": "เพื่อตกปลา",
+  "Face nearby water to fish.": "หันหน้าเข้าหาน้ำที่อยู่ใกล้ ๆ เพื่อตกปลา",
+  "Face nearby water and press 3 to fish. Press 3 again, move, or jump to stop. After catching a fish, you return to idle.": "หันหน้าเข้าหาน้ำที่อยู่ใกล้ ๆ แล้วกด 3 เพื่อตกปลา กด 3 อีกครั้ง เดิน หรือกระโดดเพื่อหยุด เมื่อจับปลาได้แล้วจะกลับมายืนตามปกติ"
 }

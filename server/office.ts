@@ -1,3 +1,4 @@
+import { startFishing, FISHING_CATCH_DURATION } from "../shared/fishing";
 import { isAvatar } from "../shared/appearance";
 import {
   WORLD,
@@ -17,6 +18,7 @@ import {
   DEFAULT_WORKSPACE,
   getMap,
   mapBlocks,
+  mapWater,
   mapZones,
   type WorkspaceSettings,
 } from "../shared/maps";
@@ -311,6 +313,17 @@ export class Office {
         if (command.room === m.room) m.microphone = !!m.room && command.enabled;
         break;
       case "pose":
+        if (command.pose === "fish") {
+          if (m.pose === "fish") break;
+          if (now < (this.cooldowns.get(`jump:${id}`) || 0)) break;
+          const fishing = startFishing(
+            m,
+            mapWater(getMap(this.workspace.mapId)),
+            now,
+          );
+          if (!fishing) throw new Error("Face nearby water to fish.");
+          m.fishing = fishing;
+        }
         m.pose = command.pose;
         m.moving = false;
         m.input = { dx: 0, dy: 0, at: 0 };
@@ -527,6 +540,15 @@ export class Office {
         m.manualStatus === "available"
       )
         m.status = "away";
+      if (
+        m.pose === "fish" &&
+        m.fishing &&
+        now >= m.fishing.bite + FISHING_CATCH_DURATION
+      ) {
+        m.pose = "stand";
+        m.fishing = undefined;
+        this.dirty = true;
+      }
       const { dx, dy, at } = m.input;
       m.moving = now - at < 300 && !!(dx || dy);
       if (!m.moving) continue;
@@ -575,6 +597,7 @@ export class Office {
         direction,
         moving,
         pose,
+        fishing,
         microphone,
         status,
         statusText,
@@ -591,6 +614,7 @@ export class Office {
         direction,
         moving,
         pose,
+        fishing: pose === "fish" ? fishing : undefined,
         microphone,
         status,
         statusText,
