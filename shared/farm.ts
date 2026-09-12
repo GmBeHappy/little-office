@@ -1,3 +1,4 @@
+import { waterRipple, type MapEffectSink } from "./map-effects";
 import { ZONES } from "./world";
 
 // A working farmstead: the farmhouse and barn host meetings while the yard
@@ -108,8 +109,6 @@ export const FARM_PLOTS: [number, number][] = [
 ];
 // Crops need this many milliseconds of sun before the E key can harvest them.
 export const FARM_GROWTH = 30000;
-// A bite window shorter than a coffee sip; the float must be reeled in time.
-export const FARM_BITE_WINDOW = 900;
 
 export function drawFarmMap(
   rect: (x: number, y: number, w: number, h: number, color: number) => void,
@@ -120,6 +119,7 @@ export function drawFarmMap(
     size: number,
     color: string,
   ) => void,
+  effect?: MapEffectSink,
 ) {
   const ink = "#3e5233";
   rect(0, 0, 1120, 720, 0x4e7a4a);
@@ -232,7 +232,15 @@ export function drawFarmMap(
   rect(110, 500, 250, 100, 0x5f9ec0);
   rect(126, 514, 218, 72, 0x4f8db0);
   for (let i = 0; i < 7; i++)
-    rect(136 + i * 32, 522 + (i % 3) * 22, 22, 3, 0x9cc8dd);
+    waterRipple(
+      rect,
+      effect,
+      136 + i * 32,
+      522 + (i % 3) * 22,
+      22,
+      3,
+      0x9cc8dd,
+    );
   for (const [lx, ly] of [
     [150, 545],
     [210, 570],
@@ -278,6 +286,14 @@ export function drawFarmMap(
   rect(1003, 323, 24, 8, 0xc39b70);
   rect(1003, 335, 24, 8, 0xc39b70);
   const appleTree = (x: number, y: number) => {
+    effect?.({
+      kind: "leaves",
+      x,
+      y: y - 62,
+      spread: 30,
+      fall: 95,
+      color: 0xc9d48a,
+    });
     rect(x - 6, y - 26, 12, 32, 0x775943);
     rect(x - 30, y - 50, 60, 30, 0x4c7957);
     rect(x - 24, y - 62, 46, 32, 0x69985f);

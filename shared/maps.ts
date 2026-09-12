@@ -1,6 +1,13 @@
+import { waterRipple, type MapEffectSink } from "./map-effects";
 import { BLOCKS, DESKS, ZONES } from "./world";
-import { ZEN_ZONES, ZEN_DESKS, ZEN_BLOCKS, drawZenGarden } from "./zen-garden";
-import { FARM_ZONES, FARM_BLOCKS, drawFarmMap } from "./farm";
+import {
+  ZEN_ZONES,
+  ZEN_DESKS,
+  ZEN_BLOCKS,
+  drawZenGarden,
+  pond,
+} from "./zen-garden";
+import { FARM_ZONES, FARM_BLOCKS, FARM_POND, drawFarmMap } from "./farm";
 import {
   TEMPLE_ZONES,
   TEMPLE_DESKS,
@@ -10,6 +17,8 @@ import {
   BEACH_BLOCKS,
   drawTemple,
   drawBeach,
+  templePond,
+  sea,
 } from "./holiday-maps";
 
 export const MAPS = [
@@ -155,6 +164,14 @@ export function mapBlocks(map: OfficeMap) {
   ];
 }
 
+export function mapWater(map: OfficeMap) {
+  if (map.theme === "farm") return [FARM_POND];
+  if (map.theme === "zen") return pond;
+  if (map.theme === "temple") return [templePond];
+  if (map.theme === "beach") return sea;
+  return map.id === "nature-small" ? [BLOCKS[DESKS.length]] : [];
+}
+
 // The picker and live map share their artwork, dimensions, and furniture.
 export function drawOfficeMap(
   map: OfficeMap,
@@ -166,11 +183,12 @@ export function drawOfficeMap(
     size: number,
     color: string,
   ) => void,
+  effect?: MapEffectSink,
 ) {
-  if (map.theme === "temple") return drawTemple(rect, label);
-  if (map.theme === "beach") return drawBeach(rect, label);
-  if (map.theme === "farm") return drawFarmMap(rect, label);
-  if (map.theme === "zen") return drawZenGarden(rect, label);
+  if (map.theme === "temple") return drawTemple(rect, label, effect);
+  if (map.theme === "beach") return drawBeach(rect, label, effect);
+  if (map.theme === "farm") return drawFarmMap(rect, label, effect);
+  if (map.theme === "zen") return drawZenGarden(rect, label, effect);
   const space = map.theme === "space",
     camp = map.theme === "camping";
   const palette = space
@@ -235,6 +253,14 @@ export function drawOfficeMap(
     }
   }
   const tree = (x: number, y: number) => {
+    effect?.({
+      kind: "leaves",
+      x,
+      y: y - 35,
+      spread: 20,
+      fall: 75,
+      color: camp ? 0x9eb981 : 0xd7c37f,
+    });
     rect(x - 5, y, 10, 23, 0x775943);
     if (camp) {
       rect(x - 27, y - 8, 54, 12, 0x2f5548);
@@ -328,11 +354,11 @@ export function drawOfficeMap(
     } else {
       rect(550, 210, 130, 45, 0x91b7b0);
       rect(556, 216, 118, 32, 0xb4d6c3);
-      rect(564, 231, 25, 4, 0xe6edd4);
+      waterRipple(rect, effect, 564, 231, 25, 4, 0xe6edd4);
       rect(649, 224, 19, 10, 0x76a176);
       rect(594, 239, 19, 7, 0x75a775);
       rect(603, 236, 6, 5, 0xe9c9d8);
-      rect(635, 218, 20, 3, 0xd9eee0);
+      waterRipple(rect, effect, 635, 218, 20, 3, 0xd9eee0);
       rect(590, 330, 60, 45, 0xae9167);
       rect(593, 333, 54, 35, 0xdcc499);
       rect(612, 343, 17, 15, 0xf0e5c6);

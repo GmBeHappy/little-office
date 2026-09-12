@@ -3,7 +3,7 @@ export const WORLD = { width: 1120, height: 720, spawn: { x: 740, y: 350 } };
 export const JUMP_DURATION = 650;
 export const NUDGE_RADIUS = 120;
 export type ZoneId = "floor" | "studio" | "library";
-export type Pose = "stand" | "sit" | "sleep";
+export type Pose = "stand" | "sit" | "sleep" | "fish";
 export type Availability = "available" | "busy" | "dnd" | "away";
 export const AVATARS = [
   "sage",
@@ -143,6 +143,7 @@ export type Person = {
   direction: "up" | "down" | "left" | "right";
   moving: boolean;
   pose: Pose;
+  fishing?: import("./fishing").Fishing;
   microphone: boolean;
   status: Availability;
   statusText: string;

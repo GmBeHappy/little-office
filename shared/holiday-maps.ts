@@ -1,3 +1,4 @@
+import { waterRipple, type MapEffectSink } from "./map-effects";
 import { ZONES } from "./world";
 
 type Rect = (x: number, y: number, w: number, h: number, color: number) => void;
@@ -36,7 +37,7 @@ const templeTables = [
   { x: 512, y: 170, w: 96, h: 40 },
   { x: 152, y: 550, w: 96, h: 40 },
 ];
-const templePond = { x: 880, y: 585, w: 145, h: 58 };
+export const templePond = { x: 880, y: 585, w: 145, h: 58 };
 const chedi = { x: 515, y: 395, w: 90, h: 54 };
 const templeTrees = [
   [350, 180],
@@ -81,7 +82,7 @@ const beachTables = [
   { x: 938, y: 535, w: 96, h: 40 },
 ];
 // The bay wraps around a broad pier. Each water rectangle is also a collision block.
-const sea = [
+export const sea = [
   { x: 40, y: 460, w: 340, h: 215 },
   { x: 380, y: 460, w: 150, h: 50 },
   { x: 650, y: 460, w: 65, h: 50 },
@@ -136,7 +137,7 @@ function meetingTables(
     rect(b.x + 40, b.y + 12, 16, 11, beach ? 0xf6e5c3 : 0xf0ce7f);
   }
 }
-export function drawTemple(rect: Rect, label: Label) {
+export function drawTemple(rect: Rect, label: Label, effect?: MapEffectSink) {
   const ink = "#715e43";
   rect(0, 0, 1120, 720, 0x869977);
   rect(32, 40, 1060, 644, 0xab9d80);
@@ -215,6 +216,14 @@ export function drawTemple(rect: Rect, label: Label) {
   rect(557, 331, 6, 29, 0xd8ad50);
   rect(559, 320, 2, 16, 0xffe8a6);
   for (const [x, y] of templeTrees) {
+    effect?.({
+      kind: "leaves",
+      x,
+      y: y - 58,
+      spread: 25,
+      fall: 95,
+      color: 0xffefbd,
+    });
     rect(x - 25, y + 10, 52, 12, 0xb3b58a);
     rect(x - 6, y - 23, 12, 41, 0x92704e);
     rect(x - 34, y - 48, 70, 30, 0x718d64);
@@ -233,6 +242,8 @@ export function drawTemple(rect: Rect, label: Label) {
   rect(p.x, p.y, p.w, p.h, 0xafb39a);
   rect(p.x + 5, p.y + 5, p.w - 10, p.h - 10, 0x8db6a6);
   for (const dx of [20, 62, 103]) {
+    waterRipple(rect, effect, p.x + dx, p.y + 9, 22, 2, 0xb9dbca);
+    waterRipple(rect, effect, p.x + dx - 3, p.y + 43, 25, 2, 0xb9dbca);
     rect(p.x + dx, p.y + 26, 20, 9, 0x71976b);
     rect(p.x + dx + 5, p.y + 20, 10, 7, 0xe6a4b7);
     rect(p.x + dx + 8, p.y + 16, 4, 8, 0xf6cbce);
@@ -243,7 +254,7 @@ export function drawTemple(rect: Rect, label: Label) {
   label("↓", 560, 310, 15, ink);
   label("↓", 200, 447, 15, ink);
 }
-export function drawBeach(rect: Rect, label: Label) {
+export function drawBeach(rect: Rect, label: Label, effect?: MapEffectSink) {
   const ink = "#586d69";
   rect(0, 0, 1120, 720, 0x5caeaf);
   rect(32, 40, 1060, 644, 0xddbf88);
@@ -261,8 +272,8 @@ export function drawBeach(rect: Rect, label: Label) {
     rect(b.x + 6, b.y + 7, b.w - 12, b.h - 14, 0x70bfbb);
     for (let y = b.y + 19; y < b.y + b.h - 8; y += 27)
       for (let x = b.x + 15; x < b.x + b.w - 25; x += 56) {
-        rect(x, y, 26, 3, 0xb9e7d4);
-        rect(x + 11, y + 7, 21, 2, 0x9ad9cc);
+        waterRipple(rect, effect, x, y, 26, 3, 0xb9e7d4);
+        waterRipple(rect, effect, x + 11, y + 7, 21, 2, 0x9ad9cc);
       }
   }
   // Two pier workstations sit over the bay, connected by a central boardwalk.
@@ -318,6 +329,14 @@ export function drawBeach(rect: Rect, label: Label) {
     rect(x + 55, 101, 12, 16, 0xffedc7);
   }
   for (const [x, y] of beachPalms) {
+    effect?.({
+      kind: "leaves",
+      x,
+      y: y - 70,
+      spread: 30,
+      fall: 105,
+      color: 0xa4c47f,
+    });
     rect(x - 23, y + 12, 49, 10, 0xd8c496);
     rect(x - 6, y - 20, 12, 38, 0xaf8556);
     rect(x - 1, y - 47, 10, 30, 0xc19a64);

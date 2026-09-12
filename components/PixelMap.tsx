@@ -4,15 +4,15 @@ import { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import { WORLD, JUMP_DURATION, walkable, type Person } from "@/shared/world";
 import { drawOfficeMap, getMap, mapZones, type MapId } from "@/shared/maps";
+import { drawFishing, fishingPhase } from "@/shared/fishing";
+import { drawMapEffects, type MapEffect } from "@/shared/map-effects";
 import {
-  FARM_BITE_WINDOW,
   FARM_BLOCKS,
   FARM_EGG_SPOTS,
   FARM_GROWTH,
   FARM_HENS,
   FARM_HEN_YARD,
   FARM_PLOTS,
-  FARM_POND,
 } from "@/shared/farm";
 import { drawCharacter } from "@/shared/avatars";
 import type { Command } from "@/shared/protocol";
@@ -27,8 +27,14 @@ const FARM_ICON_EMOJIS: Record<
   "🐟": "fish",
   "💨": "puff",
 };
+type FarmTarget = {
+  kind: "egg" | "plant" | "harvest";
+  x: number;
+  y: number;
+};
 type Props = {
   mapId: MapId;
+  effectsEnabled: boolean;
   people: Person[];
   self: string;
   speaking: string[];
@@ -47,9 +53,14 @@ export default function PixelMap(props: Props) {
   useEffect(() => {
     // Render at display density; the office artwork stays in world coordinates.
     const density = Math.min(window.devicePixelRatio || 1, 2);
-    const reducedMotion = window.matchMedia(
+    const motionPreference = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
-    ).matches;
+    );
+    let reducedMotion = motionPreference.matches;
+    const motionChange = () => {
+      reducedMotion = motionPreference.matches;
+    };
+    motionPreference.addEventListener("change", motionChange);
     // Each React effect owns its mount, including Strict Mode's trial mount.
     const parent = document.createElement("div");
     parent.style.cssText = "width:100%;height:100%;position:absolute;inset:0";
@@ -63,11 +74,6 @@ export default function PixelMap(props: Props) {
     let game: Phaser.Game | undefined;
     let disposed = false;
     let cleanupInput = () => {};
-    type FarmTarget = {
-      kind: "egg" | "plant" | "harvest" | "fish";
-      x: number;
-      y: number;
-    };
     class OfficeScene extends Phaser.Scene {
       avatars = new Map<
         string,
@@ -83,6 +89,10 @@ export default function PixelMap(props: Props) {
           poseSince: number;
         }
       >();
+      effects: MapEffect[] = [];
+      ambient?: Phaser.GameObjects.Graphics;
+      lastAmbient = -Infinity;
+      ambientStill?: boolean;
       keys = new Set<string>();
       seq = 0;
       lastInput = 0;
@@ -117,20 +127,6 @@ export default function PixelMap(props: Props) {
           direction: "left" | "right";
           walkTime: number;
         }[];
-        leaves: {
-          x: number;
-          y: number;
-          speed: number;
-          sway: number;
-          tone: number;
-        }[];
-        fishing?: {
-          phase: "cast" | "wait" | "bite";
-          castAt: number;
-          biteAt: number;
-          from: { x: number; y: number };
-          bobber: { x: number; y: number };
-        };
         caught: { eggs: number; crops: number; fish: number };
       };
       farmG?: Phaser.GameObjects.Graphics;
@@ -177,12 +173,6 @@ export default function PixelMap(props: Props) {
           (p) => p.id === live.current.self,
         );
         if (!self) return null;
-        if (farm.fishing)
-          return {
-            kind: "fish",
-            x: farm.fishing.bobber.x,
-            y: farm.fishing.bobber.y,
-          };
         let best: FarmTarget | null = null;
         let bestD = Infinity;
         const consider = (
@@ -207,16 +197,6 @@ export default function PixelMap(props: Props) {
           if (!planted) consider("plant", x, y, 54);
           else if (time - planted >= FARM_GROWTH) consider("harvest", x, y, 54);
         }
-        const px = Math.max(
-            FARM_POND.x,
-            Math.min(self.x, FARM_POND.x + FARM_POND.w),
-          ),
-          py = Math.max(
-            FARM_POND.y,
-            Math.min(self.y, FARM_POND.y + FARM_POND.h),
-          );
-        if (Math.hypot(self.x - px, self.y - py) < 52)
-          consider("fish", px, py, 52);
         return best;
       }
       interactFarm(time: number) {
@@ -225,16 +205,10 @@ export default function PixelMap(props: Props) {
         const state = live.current;
         const self = state.people.find((p) => p.id === state.self);
         if (!self) return;
-        const celebrate = (emoji: string) =>
-          state.send({ type: "emote", emoji });
-        if (farm.fishing) {
-          const bit = farm.fishing.phase === "bite";
-          farm.fishing = undefined;
-          celebrate(bit ? "🐟" : "💨");
-          return;
-        }
         const target = this.farmTarget(time);
         if (!target) return;
+        const celebrate = (emoji: string) =>
+          state.send({ type: "emote", emoji });
         if (target.kind === "egg") {
           for (const [spot, until] of farm.eggs) {
             const [x, y] = FARM_EGG_SPOTS[spot];
@@ -260,48 +234,6 @@ export default function PixelMap(props: Props) {
               celebrate("🌾");
             }
           }
-        } else {
-          // The float flies where the player is facing; if they face away
-          // from the water it lands at the nearest stretch of the pond.
-          const vectors = {
-            right: [1, 0],
-            left: [-1, 0],
-            up: [0, -1],
-            down: [0, 1],
-          } as const;
-          const [vx, vy] = vectors[self.direction];
-          let spot = { x: self.x, y: self.y };
-          for (let dist = 24; dist <= 120; dist += 8) {
-            const cx = self.x + vx * dist,
-              cy = self.y + vy * dist;
-            if (
-              cx > FARM_POND.x + 14 &&
-              cx < FARM_POND.x + FARM_POND.w - 14 &&
-              cy > FARM_POND.y + 12 &&
-              cy < FARM_POND.y + FARM_POND.h - 12
-            ) {
-              spot = { x: cx, y: cy };
-              break;
-            }
-          }
-          if (spot.x === self.x && spot.y === self.y)
-            spot = {
-              x: Math.max(
-                FARM_POND.x + 14,
-                Math.min(self.x, FARM_POND.x + FARM_POND.w - 14),
-              ),
-              y: Math.max(
-                FARM_POND.y + 12,
-                Math.min(self.y, FARM_POND.y + FARM_POND.h - 12),
-              ),
-            };
-          farm.fishing = {
-            phase: "cast",
-            castAt: time,
-            biteAt: 0,
-            from: { x: self.x, y: self.y - 30 },
-            bobber: spot,
-          };
         }
       }
       // Pixel-art pickup icons float over avatars in place of emoji text.
@@ -492,71 +424,6 @@ export default function PixelMap(props: Props) {
           p(13, -10 + peck, 4, 3, 0xe8a23c);
           p(11, -11 + peck, 2, 2, 0x3e5233);
         }
-        const fishing = farm.fishing;
-        if (fishing) {
-          if (fishing.phase === "cast" && time >= fishing.castAt + 300) {
-            fishing.phase = "wait";
-            fishing.biteAt = time + 1200 + Math.random() * 2800;
-          } else if (fishing.phase === "wait" && time >= fishing.biteAt)
-            fishing.phase = "bite";
-          if (
-            fishing.phase === "bite" &&
-            time >= fishing.biteAt + FARM_BITE_WINDOW
-          )
-            farm.fishing = undefined;
-          else {
-            let bx = fishing.bobber.x,
-              by = fishing.bobber.y;
-            if (fishing.phase === "cast") {
-              // The float arcs out from the rod tip to its landing spot.
-              const t = Math.min(1, (time - fishing.castAt) / 300);
-              bx = fishing.from.x + (bx - fishing.from.x) * t;
-              by =
-                fishing.from.y +
-                (by - fishing.from.y) * t -
-                Math.sin(t * Math.PI) * 26;
-            } else
-              by +=
-                fishing.phase === "wait"
-                  ? Math.round(Math.sin(time / 280) * 2)
-                  : Math.round(Math.sin(time / 60) * 2);
-            // A rod line keeps the cast readable from every direction.
-            if (self) {
-              g.lineStyle(1, 0x5c4a38, 0.85);
-              g.lineBetween(self.x, self.y - 30, bx, by);
-            }
-            r(bx - 5, by - 4, 10, 5, 0xd75b4a);
-            r(bx - 5, by + 1, 10, 4, 0xf7f3e2);
-            r(bx - 1, by - 7, 2, 3, 0x3e5233);
-            if (fishing.phase === "bite") {
-              const flick = Math.floor(time / 120) % 2;
-              r(bx - 13 + flick * 5, by + 5, 7, 2, 0x9cc8dd);
-              r(bx + 5 - flick * 5, by + 6, 7, 2, 0x9cc8dd);
-              g.lineStyle(2, 0xf2ead2, 1);
-              g.strokeCircle(bx, by - 2, 13);
-            }
-          }
-        }
-        // Sun glints drift across the pond surface.
-        if (!reducedMotion)
-          for (let i = 0; i < 4; i++) {
-            const sx =
-              FARM_POND.x + 24 + ((i * 61 + time / 30) % (FARM_POND.w - 56));
-            r(sx, FARM_POND.y + 20 + i * 18, 24, 2, 0x9cc8dd, 0.7);
-          }
-        // Leaves drift down over the whole farm.
-        if (!reducedMotion)
-          for (const leaf of farm.leaves) {
-            leaf.y += (leaf.speed * step) / 1000;
-            leaf.x += Math.sin(time / 900 + leaf.sway) * 0.5;
-            if (leaf.y > 700) {
-              leaf.y = -8;
-              leaf.x = 60 + Math.random() * 1000;
-            }
-            const tone = [0x8bb16f, 0xc9a35b, 0x7aa050][leaf.tone];
-            r(leaf.x, leaf.y, 5, 3, tone);
-            r(leaf.x + 1, leaf.y - 2, 3, 2, tone);
-          }
         // Cows and sheep graze anywhere their hooves can carry them.
         for (const animal of farm.animals) {
           if (animal.mode === "walk") {
@@ -643,26 +510,15 @@ export default function PixelMap(props: Props) {
           }
         }
         const prompt = this.farmPrompt!;
-        const target = farm.fishing ? null : this.farmTarget(time);
-        if (farm.fishing) {
-          prompt
-            .setText(
-              farm.fishing.phase === "bite"
-                ? t("[E] Reel it in!")
-                : t("Wait for it…"),
-            )
-            .setPosition(farm.fishing.bobber.x, farm.fishing.bobber.y - 30)
-            .setVisible(true);
-        } else if (target) {
+        const target = this.farmTarget(time);
+        if (target) {
           prompt
             .setText(
               target.kind === "egg"
                 ? t("[E] Collect the egg")
                 : target.kind === "plant"
                   ? t("[E] Plant seeds")
-                  : target.kind === "harvest"
-                    ? t("[E] Harvest the wheat")
-                    : t("[E] Cast your line"),
+                  : t("[E] Harvest the wheat"),
             )
             .setPosition(target.x, target.y - 32)
             .setVisible(true);
@@ -673,7 +529,7 @@ export default function PixelMap(props: Props) {
       }
       create() {
         if (disposed) return;
-        const g = this.add.graphics();
+        const g = this.add.graphics().setDepth(-2);
         drawOfficeMap(
           getMap(props.mapId),
           (x, y, w, h, color) => {
@@ -694,22 +550,9 @@ export default function PixelMap(props: Props) {
               })
               .setOrigin(0.5);
           },
+          (effect) => this.effects.push(effect),
         );
-        for (const room of mapZones(getMap(props.mapId)).filter(
-          (zone) => zone.id !== "floor",
-        )) {
-          this.add
-            .zone(room.x, room.y, room.w, room.h)
-            .setOrigin(0)
-            .setInteractive({ useHandCursor: true })
-            .setData("tap", () =>
-              live.current.send({ type: "zone", zone: room.id }),
-            )
-            .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-              if (!pointer.wasTouch && this.mapPointer(pointer))
-                live.current.send({ type: "zone", zone: room.id });
-            });
-        }
+        this.ambient = this.add.graphics().setDepth(-1);
         if (getMap(props.mapId).theme === "farm") {
           this.farm = {
             eggs: new Map(),
@@ -749,13 +592,6 @@ export default function PixelMap(props: Props) {
               direction: "right" as const,
               walkTime: 0,
             })),
-            leaves: Array.from({ length: 9 }, (_, i) => ({
-              x: 60 + Math.random() * 1000,
-              y: Math.random() * 700,
-              speed: 26 + Math.random() * 22,
-              sway: Math.random() * Math.PI * 2,
-              tone: i % 3,
-            })),
             caught: { eggs: 0, crops: 0, fish: 0 },
           };
           this.farmG = this.add.graphics().setDepth(950);
@@ -790,6 +626,21 @@ export default function PixelMap(props: Props) {
             .setOrigin(0.5, 1)
             .setDepth(3000)
             .setVisible(false);
+        }
+        for (const room of mapZones(getMap(props.mapId)).filter(
+          (zone) => zone.id !== "floor",
+        )) {
+          this.add
+            .zone(room.x, room.y, room.w, room.h)
+            .setOrigin(0)
+            .setInteractive({ useHandCursor: true })
+            .setData("tap", () =>
+              live.current.send({ type: "zone", zone: room.id }),
+            )
+            .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+              if (!pointer.wasTouch && this.mapPointer(pointer))
+                live.current.send({ type: "zone", zone: room.id });
+            });
         }
         this.input.on(
           "pointerdown",
@@ -899,7 +750,14 @@ export default function PixelMap(props: Props) {
           )
             return;
           if (
-            ["Digit1", "Numpad1", "Digit2", "Numpad2"].includes(e.code) &&
+            [
+              "Digit1",
+              "Numpad1",
+              "Digit2",
+              "Numpad2",
+              "Digit3",
+              "Numpad3",
+            ].includes(e.code) &&
             !e.ctrlKey &&
             !e.metaKey &&
             !e.altKey
@@ -911,7 +769,9 @@ export default function PixelMap(props: Props) {
               );
               const pose = ["Digit1", "Numpad1"].includes(e.code)
                 ? "sit"
-                : "sleep";
+                : ["Digit2", "Numpad2"].includes(e.code)
+                  ? "sleep"
+                  : "fish";
               live.current.send({
                 type: "pose",
                 pose: self?.pose === pose ? "stand" : pose,
@@ -990,6 +850,28 @@ export default function PixelMap(props: Props) {
         this.events.once("destroy", cleanupInput);
       }
       update(time: number, delta: number) {
+        const still = !live.current.effectsEnabled;
+        if (
+          this.ambient &&
+          !document.hidden &&
+          (this.ambientStill !== still ||
+            (!still &&
+              this.effects.length > 0 &&
+              time - this.lastAmbient >= 80))
+        ) {
+          this.ambient.clear();
+          drawMapEffects(
+            this.effects,
+            time,
+            still,
+            (x, y, w, h, color, alpha = 1) => {
+              this.ambient!.fillStyle(color, alpha).fillRect(x, y, w, h);
+            },
+          );
+          this.lastAmbient = time;
+          this.ambientStill = still;
+        }
+        if (this.farm) this.updateFarm(time, delta);
         const state = live.current;
         if (
           document.querySelector(
@@ -999,7 +881,6 @@ export default function PixelMap(props: Props) {
           this.keys.clear();
           this.stopTouch();
         }
-        if (this.farm) this.updateFarm(time, delta);
         if (time - this.lastInput > 80) {
           const dx = this.touch
             ? this.touch.dx
@@ -1091,7 +972,7 @@ export default function PixelMap(props: Props) {
             a.poseSince = time;
           }
           const settle =
-            reducedMotion || pose === "stand"
+            reducedMotion || pose === "stand" || pose === "fish"
               ? 0
               : -4 * Math.max(0, 1 - (time - a.poseSince) / 250);
           const breathe =
@@ -1134,8 +1015,16 @@ export default function PixelMap(props: Props) {
               ? 0.16 *
                 Math.sin(((elapsed - 520) / (JUMP_DURATION - 520)) * Math.PI)
               : 0;
-          a.label.y = -57 - height;
-          a.wave.y = -66 - height;
+          const fishing = pose === "fish" ? p.fishing : undefined;
+          const fishingTime = Date.now();
+          const fishingSpace =
+            fishing &&
+            p.direction === "up" &&
+            fishingPhase(fishing, fishingTime) !== "idle"
+              ? 28
+              : 0;
+          a.label.y = -57 - height - fishingSpace;
+          a.wave.y = -66 - height - fishingSpace;
           a.label.setText(
             p.id === state.self ? t("{name} · you", { name: p.name }) : p.name,
           );
@@ -1212,7 +1101,11 @@ export default function PixelMap(props: Props) {
               h * (1 - squash),
               c,
             );
+          if (fishing && p.direction === "up")
+            drawFishing(fishing, p.avatar, fishingTime, reducedMotion, r);
           drawCharacter(p.avatar, p.direction, stride, pixel, pose);
+          if (fishing && p.direction !== "up")
+            drawFishing(fishing, p.avatar, fishingTime, reducedMotion, r);
           // On the farm, pickup celebrations become pixel-art icons that
           // float up and fade instead of emoji text.
           const emote = state.emotes[p.id];
@@ -1280,6 +1173,7 @@ export default function PixelMap(props: Props) {
       // Phaser destruction does not emit shutdown. Release global input now,
       // including React's trial mount and workspace map changes.
       disposed = true;
+      motionPreference.removeEventListener("change", motionChange);
       cleanupInput();
       game?.destroy(true);
       parent.remove();
