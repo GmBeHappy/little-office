@@ -237,9 +237,9 @@ export function drawFarmMap(
       effect,
       136 + i * 32,
       522 + (i % 3) * 22,
-      22,
+      26,
       3,
-      0x9cc8dd,
+      0xd8f1df,
     );
   for (const [lx, ly] of [
     [150, 545],
@@ -286,13 +286,14 @@ export function drawFarmMap(
   rect(1003, 323, 24, 8, 0xc39b70);
   rect(1003, 335, 24, 8, 0xc39b70);
   const appleTree = (x: number, y: number) => {
+    // Golden leaves read clearly against the green canopy.
     effect?.({
       kind: "leaves",
       x,
       y: y - 62,
-      spread: 30,
-      fall: 95,
-      color: 0xc9d48a,
+      spread: 34,
+      fall: 110,
+      color: 0xe8c56a,
     });
     rect(x - 6, y - 26, 12, 32, 0x775943);
     rect(x - 30, y - 50, 60, 30, 0x4c7957);
@@ -308,6 +309,16 @@ export function drawFarmMap(
   for (const [x, y] of trees) appleTree(x, y);
   for (const x of [20, 1096])
     for (let y = 340; y < 660; y += 34) {
+      // A few bamboo clumps shed pale leaves along the map edges.
+      if ((y - 340) % 102 === 0)
+        effect?.({
+          kind: "leaves",
+          x: x + 4,
+          y: y - 8,
+          spread: 14,
+          fall: 56,
+          color: 0xb9d18a,
+        });
       rect(x, y, 4, 28, 0x6f8f4f);
       rect(x - 7, y + 4, 18, 5, 0x86b468);
       rect(x + 3, y + 15, 16, 4, 0xa5d182);
