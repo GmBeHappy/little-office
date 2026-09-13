@@ -1308,13 +1308,13 @@ export default function OfficeApp() {
                       "Face someone nearby and press Z to nudge them. Both of you hear a chime, and the avatars react. Press 1 to sit or 2 to sleep; move or jump to stand up. These poses do not change your voice or availability.",
                     )}{" "}
                     {t(
-                      "Face nearby water and press 3 to fish. Press 3 again, move, or jump to stop. After catching a fish, you return to idle.",
+                      "Face nearby water and press 3 or E to fish. Press it again, move, or jump to stop. After catching a fish, you return to idle.",
                     )}
                   </p>
                   <p>
                     <strong>{t("Farm break")}</strong>
                     {t(
-                      "On the Sunny Acres map there are no desks — press E near the hen yard to collect eggs, at the crop field to plant and harvest wheat, and face the pond to fish with 3. Reel in the moment you see a bite!",
+                      "On the Sunny Acres map there are no desks — press E near the hen yard to collect eggs, at the crop field to plant and harvest wheat, and face the pond to fish. One key works the same on every map!",
                     )}
                   </p>
                   <p>
