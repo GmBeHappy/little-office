@@ -581,7 +581,6 @@
   "Farmhouse meeting room · 8 seats": "ห้องประชุมบ้านไร่ · 8 ที่นั่ง",
   "Barn meeting room · 6 seats": "ห้องประชุมโรงนา · 6 ที่นั่ง",
   "Farm break": "พักที่ไร่",
-  "On the Sunny Acres map there are no desks — press E near the hen yard to collect eggs, at the crop field to plant and harvest wheat, and face the pond to fish with 3. Reel in the moment you see a bite!": "แผนที่ไร่แสงอรุณไม่มีโต๊ะทำงาน — กด E ใกล้ลานไก่เพื่อเก็บไข่ ที่แปลงผักเพื่อปลูกและเก็บข้าวสาลี และหันหน้าเข้าหาบ่อแล้วกด 3 เพื่อตกปลา ตอกเบ็ดทันทีเมื่อเห็นปลามากิน!",
   "Display": "การแสดงผล",
   "Map effects": "เอฟเฟกต์แผนที่",
   "Moving water and falling leaves or petals. Saved for your account on this browser.": "น้ำเคลื่อนไหวและใบไม้หรือกลีบดอกร่วง บันทึกการตั้งค่าสำหรับบัญชีของคุณบนเบราว์เซอร์นี้",
@@ -591,5 +590,6 @@
   "Fish / stop (3)": "ตกปลา / หยุด (3)",
   "to fish": "เพื่อตกปลา",
   "Face nearby water to fish.": "หันหน้าเข้าหาน้ำที่อยู่ใกล้ ๆ เพื่อตกปลา",
-  "Face nearby water and press 3 to fish. Press 3 again, move, or jump to stop. After catching a fish, you return to idle.": "หันหน้าเข้าหาน้ำที่อยู่ใกล้ ๆ แล้วกด 3 เพื่อตกปลา กด 3 อีกครั้ง เดิน หรือกระโดดเพื่อหยุด เมื่อจับปลาได้แล้วจะกลับมายืนตามปกติ"
+  "Face nearby water and press 3 or E to fish. Press it again, move, or jump to stop. After catching a fish, you return to idle.": "หันหน้าเข้าหาน้ำที่อยู่ใกล้ ๆ แล้วกด 3 หรือ E เพื่อตกปลา กดอีกครั้ง เดิน หรือกระโดดเพื่อหยุด เมื่อจับปลาได้แล้วจะกลับมายืนตามปกติ",
+  "On the Sunny Acres map there are no desks — press E near the hen yard to collect eggs, at the crop field to plant and harvest wheat, and face the pond to fish. One key works the same on every map!": "แผนที่ไร่แสงอรุณไม่มีโต๊ะทำงาน — กด E ใกล้ลานไก่เพื่อเก็บไข่ ที่แปลงผักเพื่อปลูกและเก็บข้าวสาลี และหันหน้าเข้าหาบ่อเพื่อตกปลา ใช้ปุ่มเดียวเหมือนกันทุกแผนที่!"
 }

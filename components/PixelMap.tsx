@@ -3,8 +3,14 @@ import { useI18n } from "@/lib/i18n";
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import { WORLD, JUMP_DURATION, walkable, type Person } from "@/shared/world";
-import { drawOfficeMap, getMap, mapZones, type MapId } from "@/shared/maps";
-import { drawFishing, fishingPhase } from "@/shared/fishing";
+import {
+  drawOfficeMap,
+  getMap,
+  mapWater,
+  mapZones,
+  type MapId,
+} from "@/shared/maps";
+import { drawFishing, fishingPhase, fishingTarget } from "@/shared/fishing";
 import { drawMapEffects, type MapEffect } from "@/shared/map-effects";
 import {
   FARM_BLOCKS,
@@ -201,12 +207,12 @@ export default function PixelMap(props: Props) {
       }
       interactFarm(time: number) {
         const farm = this.farm;
-        if (!farm) return;
+        if (!farm) return false;
         const state = live.current;
         const self = state.people.find((p) => p.id === state.self);
-        if (!self) return;
+        if (!self) return false;
         const target = this.farmTarget(time);
-        if (!target) return;
+        if (!target) return false;
         const celebrate = (emoji: string) =>
           state.send({ type: "emote", emoji });
         if (target.kind === "egg") {
@@ -235,6 +241,17 @@ export default function PixelMap(props: Props) {
             }
           }
         }
+        return true;
+      }
+      // E mirrors the 3 key: on any map, facing water casts a line. Farm
+      // eggs and crops take priority when the player stands next to them.
+      interactFacingWater(self: Person) {
+        if (self.pose === "fish") {
+          live.current.send({ type: "pose", pose: "stand" });
+          return;
+        }
+        if (fishingTarget(self, mapWater(getMap(props.mapId))))
+          live.current.send({ type: "pose", pose: "fish" });
       }
       // Pixel-art pickup icons float over avatars in place of emoji text.
       drawFarmIcon(
@@ -786,7 +803,14 @@ export default function PixelMap(props: Props) {
           }
           if (e.code === "KeyE" && !e.ctrlKey && !e.metaKey && !e.altKey) {
             e.preventDefault();
-            if (!e.repeat) this.interactFarm(performance.now());
+            if (!e.repeat) {
+              const self = live.current.people.find(
+                (p) => p.id === live.current.self,
+              );
+              if (!self) return;
+              if (this.interactFarm(performance.now())) return;
+              this.interactFacingWater(self);
+            }
             return;
           }
           if (e.code === "Space") {
