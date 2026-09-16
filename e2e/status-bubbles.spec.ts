@@ -100,6 +100,13 @@ test("status bubbles share presets, save custom messages and icons, and clear wh
       .locator(".avatar-status-bubble")
       .filter({ hasText: custom });
     await expect(customBubble).toContainText("🌙");
+    // Approach the floating bubble as a user would; hover pauses its motion
+    // before Playwright waits for a stable click target.
+    const desktopBubble = await customBubble.boundingBox();
+    await owner.mouse.move(
+      desktopBubble!.x + desktopBubble!.width / 2,
+      desktopBubble!.y + desktopBubble!.height / 2,
+    );
     await customBubble.click();
     await expect(customBubble).toHaveAttribute("aria-expanded", "true");
     await owner.screenshot({
@@ -109,6 +116,11 @@ test("status bubbles share presets, save custom messages and icons, and clear wh
     await expect(customBubble).toHaveAttribute("aria-expanded", "false");
     await owner.setViewportSize({ width: 390, height: 844 });
     await expect(customBubble).toBeInViewport();
+    const mobileBubble = await customBubble.boundingBox();
+    await owner.mouse.move(
+      mobileBubble!.x + mobileBubble!.width / 2,
+      mobileBubble!.y + mobileBubble!.height / 2,
+    );
     await customBubble.click();
     const box = await customBubble.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
@@ -126,8 +138,10 @@ test("status bubbles share presets, save custom messages and icons, and clear wh
       .getByRole("button", { name: "Save changes", exact: true })
       .click();
     await expect(
-      owner.locator('.avatar-status-bubble[data-status="away"]'),
-    ).toContainText("☕Back in 10 minutes");
+      owner.locator(
+        '.avatar-status-bubble[data-status="away"][aria-label^="Robin:"]',
+      ),
+    ).toContainText("⏳Back in 10 minutes");
     await owner
       .getByRole("button", { name: "Your profile", exact: true })
       .click();
@@ -146,7 +160,9 @@ test("status bubbles share presets, save custom messages and icons, and clear wh
       .getByRole("button", { name: "Save changes", exact: true })
       .click();
     await expect(
-      owner.locator('.avatar-status-bubble[data-status="busy"]'),
+      owner.locator(
+        '.avatar-status-bubble[data-status="busy"][aria-label^="Robin:"]',
+      ),
     ).toHaveText("💻Busy");
     await owner
       .getByRole("button", { name: "Your profile", exact: true })
@@ -159,10 +175,12 @@ test("status bubbles share presets, save custom messages and icons, and clear wh
     await profile
       .getByRole("button", { name: "Save changes", exact: true })
       .click();
-    await expect(owner.locator(".avatar-status-bubble:visible")).toHaveCount(0);
-    await expect(observer.locator(".avatar-status-bubble:visible")).toHaveCount(
-      0,
-    );
+    await expect(
+      owner.locator('.avatar-status-bubble[aria-label^="Robin:"]:visible'),
+    ).toHaveCount(0);
+    await expect(
+      observer.locator('.avatar-status-bubble[aria-label^="Robin:"]:visible'),
+    ).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));

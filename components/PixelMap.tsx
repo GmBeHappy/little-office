@@ -923,6 +923,12 @@ export default function PixelMap(props: Props) {
               document.createElement("span"),
             );
             bubbleIcon.setAttribute("aria-hidden", "true");
+            bubbleIcon.className = "status-bubble-emoji";
+            const effect = bubble.appendChild(document.createElement("span"));
+            effect.className = "status-bubble-effect";
+            effect.setAttribute("aria-hidden", "true");
+            for (let particle = 0; particle < 3; particle++)
+              effect.appendChild(document.createElement("i"));
             const bubbleText = bubble.appendChild(
               document.createElement("span"),
             );
@@ -1066,8 +1072,37 @@ export default function PixelMap(props: Props) {
               : 0;
           a.label.y = -57 - height - fishingSpace;
           a.wave.y = -66 - height - fishingSpace;
+          // Keep temporary reactions beside the name instead of reserving a
+          // permanent empty gap between the status bubble and the avatar.
+          a.wave.x = p.status === "available" ? 0 : a.label.width / 2 + 18;
           const message = p.statusText.trim() || t(STATUS_LABELS[p.status]);
           const icon = statusIcon(p.status, p.statusIcon);
+          const changed =
+            a.bubble.dataset.status !== p.status ||
+            a.bubbleText.textContent !== message ||
+            a.bubbleIcon.textContent !== icon;
+          if (changed) {
+            // Only animate actual changes, not each presence snapshot or arrival.
+            if (
+              a.bubble.dataset.status &&
+              p.status !== "available" &&
+              state.effectsEnabled
+            ) {
+              for (const animation of a.bubble.getAnimations())
+                if (animation.id === "status-change") animation.cancel();
+              a.bubble.animate(
+                [
+                  { scale: "0.96" },
+                  { scale: reducedMotion ? "1.02" : "1.08", offset: 0.45 },
+                  { scale: "1" },
+                ],
+                { id: "status-change", duration: 360, easing: "ease-out" },
+              );
+            }
+            a.bubble.dataset.effect =
+              icon === "☕" ? "steam" : icon === "🚿" ? "droplets" : "";
+          }
+          a.bubble.dataset.effectsEnabled = String(state.effectsEnabled);
           if (a.bubbleText.textContent !== message)
             a.bubbleText.textContent = message;
           if (a.bubbleIcon.textContent !== icon)
@@ -1078,10 +1113,10 @@ export default function PixelMap(props: Props) {
             `${p.name}: ${t(STATUS_LABELS[p.status])}. ${message}`,
           );
           a.bubble.title = `${p.name}: ${message}`;
-          // Emotes and gestures keep the space immediately above the name.
-          // Status bubbles sit higher so they can be read at the same time.
+          // Anchor to the nameplate's top edge; the screen-space gap below
+          // stays small at every map zoom and display density.
           a.bubble.dataset.worldY = String(
-            a.container.y - 106 - height - fishingSpace,
+            a.container.y + a.label.y - a.label.height / 2,
           );
           a.label.setText(
             p.id === state.self ? t("{name} · you", { name: p.name }) : p.name,
@@ -1177,7 +1212,7 @@ export default function PixelMap(props: Props) {
             this.drawFarmIcon(
               g,
               farmIcon,
-              nudgeX,
+              nudgeX + a.wave.x,
               -76 - rise + nudgeY,
               Math.min(1, remaining / 600),
             );
@@ -1226,8 +1261,8 @@ export default function PixelMap(props: Props) {
           const point = camera
             .getViewMatrix()
             .transformPoint(a.container.x, Number(a.bubble.dataset.worldY));
-          const x = point.x / density,
-            y = point.y / density;
+          const x = Math.round(point.x / density),
+            y = Math.round(point.y / density) - 3;
           a.bubble.hidden =
             a.bubble.dataset.status === "available" ||
             x < 0 ||
