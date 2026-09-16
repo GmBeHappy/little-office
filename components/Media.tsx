@@ -97,6 +97,7 @@ export function useOfficeMedia(
   const pendingScreenQuality = useRef<MediaQuality>("maximum");
   const [choices, setChoices] = useState<DeviceChoices>(defaultDevices);
   const preferences = useRef<DeviceChoices>(defaultDevices);
+  const activeDevices = useRef<DeviceChoices>(defaultDevices);
   const [outputSupported, setOutputSupported] = useState(false);
   const [outputPickerSupported, setOutputPickerSupported] = useState(false);
   const [deviceBusy, setDeviceBusy] = useState(false);
@@ -141,6 +142,7 @@ export function useOfficeMedia(
     qualityPreference.current = savedQuality;
     setQuality(savedQuality);
     preferences.current = saved;
+    activeDevices.current = saved;
     setChoices(saved);
     setOutputSupported("setSinkId" in HTMLMediaElement.prototype);
     setOutputPickerSupported(
@@ -181,17 +183,16 @@ export function useOfficeMedia(
         );
         if (cancelled || access.room !== roomId) return;
         // Validate a saved output before remote tracks attach; unavailable devices use the default.
-        if (
-          preferences.current.audiooutput &&
-          "setSinkId" in HTMLMediaElement.prototype
-        ) {
+        let audioOutput = preferences.current.audiooutput;
+        if (audioOutput && "setSinkId" in HTMLMediaElement.prototype) {
           try {
-            await new Audio().setSinkId(preferences.current.audiooutput);
+            await new Audio().setSinkId(audioOutput);
           } catch {
             if (cancelled) return;
-            remember("audiooutput", "");
+            audioOutput = "";
+            activeDevices.current.audiooutput = "";
             notify(
-              "Your saved speaker is unavailable. Using system default; choose it again in Devices.",
+              "Your saved speaker is unavailable. Using system default until it reconnects.",
             );
           }
         }
@@ -206,7 +207,7 @@ export function useOfficeMedia(
           },
           audioOutput:
             "setSinkId" in HTMLMediaElement.prototype
-              ? { deviceId: preferences.current.audiooutput }
+              ? { deviceId: audioOutput }
               : undefined,
           videoCaptureDefaults: {
             deviceId: preferences.current.videoinput || undefined,
@@ -255,7 +256,7 @@ export function useOfficeMedia(
         }
         setRoom(next);
         setConnected(true);
-        void enumerate();
+        void enumerate(false, true);
         try {
           if (wanted.current.mic) {
             await next.localParticipant.setMicrophoneEnabled(true);
@@ -447,13 +448,14 @@ export function useOfficeMedia(
       if (resetMissing) {
         for (const kind of Object.keys(defaultDevices) as MediaDeviceKind[]) {
           const id = preferences.current[kind];
-          if (
-            id &&
-            id !== "default" &&
-            !list.some((d) => d.kind === kind && d.deviceId === id)
-          ) {
-            if (await switchDevice(kind, ""))
-              notify("A selected device disconnected. Using system default.");
+          if (id && id !== "default") {
+            const available = list.some(
+              (device) => device.kind === kind && device.deviceId === id,
+            );
+            if (await switchDevice(kind, available ? id : "", false)) {
+              if (!available)
+                notify("A selected device disconnected. Using system default.");
+            }
           }
         }
       }
@@ -461,7 +463,11 @@ export function useOfficeMedia(
       notify(`Could not access devices: ${(e as Error).message}`);
     }
   }
-  async function switchDevice(kind: MediaDeviceKind, id: string) {
+  async function switchDevice(
+    kind: MediaDeviceKind,
+    id: string,
+    savePreference = true,
+  ) {
     if (deviceChange.current) return false;
     deviceChange.current = true;
     setDeviceBusy(true);
@@ -488,7 +494,8 @@ export function useOfficeMedia(
         throw new Error(
           "The conversation changed. Please choose your device again.",
         );
-      remember(kind, id);
+      activeDevices.current = { ...activeDevices.current, [kind]: id };
+      if (savePreference) remember(kind, id);
       return true;
     } catch (e) {
       notify((e as Error).message);
@@ -518,8 +525,8 @@ export function useOfficeMedia(
     sound.volume = 0.5;
     chime.current = sound;
     try {
-      if (preferences.current.audiooutput && "setSinkId" in sound)
-        await sound.setSinkId(preferences.current.audiooutput);
+      if (activeDevices.current.audiooutput && "setSinkId" in sound)
+        await sound.setSinkId(activeDevices.current.audiooutput);
       await sound.play();
       setChimeBlocked(false);
     } catch {

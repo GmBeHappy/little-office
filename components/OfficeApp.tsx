@@ -22,7 +22,6 @@ import {
 } from "./MemberForms";
 import { useI18n, LanguageToggle } from "@/lib/i18n";
 import dynamic from "next/dynamic";
-import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -1401,24 +1400,8 @@ function Control({
 }
 function Toast({ text, close }: { text: string; close: () => void }) {
   const { t } = useI18n();
-  const [dialog, setDialog] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    // Keep notifications within the active dialog's pointer and focus boundary.
-    const root = document.querySelector(".app-shell");
-    if (!root) return;
-    const update = () =>
-      setDialog(
-        Array.from(
-          root.querySelectorAll<HTMLElement>('[data-slot="dialog-content"]'),
-        ).at(-1) ?? null,
-      );
-    update();
-    const observer = new MutationObserver(update);
-    observer.observe(root, { childList: true });
-    return () => observer.disconnect();
-  }, []);
-  const content = (
-    <div className="toast" data-in-dialog={!!dialog} role="status">
+  return (
+    <div className="toast" role="status">
       <Leaf size={17} />
       <span>{t(text)}</span>
       <Button variant="plain" onClick={close} aria-label={t("Dismiss")}>
@@ -1426,7 +1409,6 @@ function Toast({ text, close }: { text: string; close: () => void }) {
       </Button>
     </div>
   );
-  return dialog ? createPortal(content, dialog) : content;
 }
 function RoomCards({
   people,

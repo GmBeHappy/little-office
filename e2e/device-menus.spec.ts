@@ -5,6 +5,93 @@ test.skip(
   "Run through scripts/e2e.ts with isolated accounts.",
 );
 
+test("a temporarily unavailable device remains selected after reconnect and reload", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    let available = true;
+    const enumerate = navigator.mediaDevices.enumerateDevices.bind(
+      navigator.mediaDevices,
+    );
+    navigator.mediaDevices.enumerateDevices = async () => [
+      ...(await enumerate()),
+      ...(available
+        ? [
+            {
+              deviceId: "remembered-microphone",
+              groupId: "remembered",
+              kind: "audioinput",
+              label: "Remembered microphone",
+              toJSON() {
+                return {};
+              },
+            } as MediaDeviceInfo,
+          ]
+        : []),
+    ];
+    Object.assign(window, {
+      setRememberedMicrophoneAvailable(value: boolean) {
+        available = value;
+        navigator.mediaDevices.dispatchEvent(new Event("devicechange"));
+      },
+    });
+  });
+  await page.goto("/");
+  await page.getByLabel("Username", { exact: true }).fill(accounts[0].username);
+  await page.getByLabel("Password", { exact: true }).fill(accounts[0].password);
+  await page.getByRole("button", { name: "Enter the office" }).click();
+  await expect(page.locator(".pixel-map canvas")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Audio devices", exact: true })
+    .click();
+  const microphone = page.getByRole("combobox", {
+    name: "Microphone",
+    exact: true,
+  });
+  await microphone.click();
+  await page
+    .getByRole("option", { name: "Remembered microphone", exact: true })
+    .click();
+  await expect(microphone).toHaveAttribute(
+    "data-value",
+    "remembered-microphone",
+  );
+  await page.evaluate(() =>
+    (
+      window as unknown as {
+        setRememberedMicrophoneAvailable: (value: boolean) => void;
+      }
+    ).setRememberedMicrophoneAvailable(false),
+  );
+  await expect(microphone).toHaveAttribute(
+    "data-value",
+    "remembered-microphone",
+  );
+  expect(
+    await page.evaluate(
+      (userId) =>
+        JSON.parse(localStorage.getItem(`office-devices:${userId}`) || "{}"),
+      accounts[0].id,
+    ),
+  ).toMatchObject({ audioinput: "remembered-microphone" });
+  await page.evaluate(() =>
+    (
+      window as unknown as {
+        setRememberedMicrophoneAvailable: (value: boolean) => void;
+      }
+    ).setRememberedMicrophoneAvailable(true),
+  );
+  await page.reload();
+  await expect(page.locator(".pixel-map canvas")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Audio devices", exact: true })
+    .click();
+  await expect(microphone).toHaveAttribute(
+    "data-value",
+    "remembered-microphone",
+  );
+});
+
 test("long device menus stay inside their dialog and scroll to the final option", async ({
   page,
 }) => {

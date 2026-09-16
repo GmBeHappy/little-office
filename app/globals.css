@@ -785,8 +785,8 @@
     padding: 15px 17px;
     box-shadow: 0 8px 30px #323d322b;
   }
-  .toast[data-in-dialog="true"] {
-    @apply bottom-4 left-4 right-4 z-[160] w-auto max-w-none translate-x-0;
+  .app-shell:has(.toolbar-menu) > .toast {
+    @apply hidden;
   }
   .toast > span {
     @apply leading-[1.6];

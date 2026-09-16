@@ -8,6 +8,76 @@ test.skip(
   accounts.length !== 2,
   "Run with bun scripts/e2e.ts to provision isolated test accounts.",
 );
+test("nudge notifications stay outside an open device dialog", async ({
+  browser,
+}) => {
+  const contexts = await Promise.all([
+    browser.newContext(),
+    browser.newContext(),
+  ]);
+  try {
+    const [a, b] = await Promise.all(
+      contexts.map((context) => context.newPage()),
+    );
+    const snapshots = new Map<Page, Snapshot>();
+    let nudges = 0;
+    for (const page of [a, b])
+      page.on("websocket", (socket) => {
+        if (!socket.url().includes("/api/office")) return;
+        socket.on("framereceived", ({ payload }) => {
+          const message = JSON.parse(String(payload));
+          if (message.type === "snapshot") snapshots.set(page, message);
+          if (page === b && message.type === "nudge") nudges++;
+        });
+      });
+    for (const [index, page] of [a, b].entries()) {
+      await page.goto("/");
+      await page
+        .getByLabel("Username", { exact: true })
+        .fill(accounts[index].username);
+      await page
+        .getByLabel("Password", { exact: true })
+        .fill(accounts[index].password);
+      await page.getByRole("button", { name: "Enter the office" }).click();
+      await expect(page.locator(".pixel-map canvas")).toBeVisible();
+      await expect.poll(() => snapshots.has(page)).toBe(true);
+    }
+    for (const page of [a, b]) {
+      await page
+        .getByRole("button", { name: "Join The Studio", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Leave conversation", exact: true })
+        .click();
+    }
+    const own = (page: Page) =>
+      snapshots
+        .get(page)!
+        .people.find((person) => person.id === snapshots.get(page)!.self)!;
+    const dx = own(b).x - own(a).x,
+      dy = own(b).y - own(a).y;
+    const direction =
+      Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? "d" : "a") : dy > 0 ? "s" : "w";
+    await a.keyboard.press(direction);
+    await expect
+      .poll(() => canNudge(own(a), own(b)), { intervals: [20] })
+      .toBe(true);
+    const dismiss = b.getByRole("button", { name: "Dismiss" });
+    if (await dismiss.isVisible()) await dismiss.click();
+    await b.getByRole("button", { name: "Audio devices", exact: true }).click();
+    const dialog = b.getByRole("dialog", { name: "Audio devices" });
+    await a.keyboard.press("z");
+    await expect.poll(() => nudges).toBe(1);
+    const toast = b.locator(".toast");
+    await expect(toast).toContainText("Robin nudged you");
+    await expect(toast).toBeHidden();
+    await expect(dialog.getByRole("status")).toHaveCount(0);
+    await b.keyboard.press("Escape");
+    await expect(toast).toBeVisible();
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
 test("automatic nearby voice shows participants and Z nudges with a chime without firing while typing", async ({
   browser,
 }) => {

@@ -303,7 +303,7 @@
   "Enter the meeting room to lock it.": "เข้าห้องประชุมก่อนล็อกห้อง",
   "This login method is disabled.": "วิธีเข้าสู่ระบบนี้ถูกปิดอยู่",
   "Device changed, but this browser could not save your preference.": "เปลี่ยนอุปกรณ์แล้ว แต่เบราว์เซอร์บันทึกตัวเลือกไม่ได้",
-  "Your saved speaker is unavailable. Using system default; choose it again in Devices.": "ลำโพงที่บันทึกไว้ไม่พร้อมใช้งาน กำลังใช้ค่าเริ่มต้นของระบบ เลือกใหม่ได้ในอุปกรณ์",
+  "Your saved speaker is unavailable. Using system default until it reconnects.": "ลำโพงที่บันทึกไว้ไม่พร้อมใช้งาน กำลังใช้ค่าเริ่มต้นของระบบจนกว่าอุปกรณ์จะเชื่อมต่ออีกครั้ง",
   "Device access was not granted. You can enable your microphone or camera from the toolbar.": "ยังไม่ได้รับอนุญาตให้ใช้อุปกรณ์ คุณเปิดไมโครโฟนหรือกล้องจากแถบควบคุมได้",
   "Join nearby audio or a meeting room first.": "รอให้เสียงใกล้ตัวเชื่อมต่อหรือเข้าห้องประชุมก่อน",
   "A screen-share request is already in progress.": "กำลังดำเนินการแชร์หน้าจออยู่แล้ว",
