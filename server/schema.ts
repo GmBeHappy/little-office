@@ -34,6 +34,7 @@ export const users = pgTable("user", {
   avatar: text("avatar").notNull(),
   availability: text("availability").notNull(),
   statusText: text("statusText").notNull(),
+  statusIcon: text("statusIcon").notNull().default(""),
   mustChangePassword: boolean("mustChangePassword").notNull(),
 });
 export const sessions = pgTable(

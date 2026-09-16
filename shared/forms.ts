@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isAvatar } from "./appearance";
 import { MAPS } from "./maps";
+import { statusIconSchema } from "./status";
 const name = z
   .string()
   .trim()
@@ -33,6 +34,7 @@ export const profileSchema = z.object({
   avatar: z.string().refine(isAvatar, "Choose a valid character."),
   status: z.enum(["available", "busy", "dnd", "away"]),
   statusText: z.string().max(80, "Use 80 characters or fewer."),
+  statusIcon: statusIconSchema.optional(),
 });
 export const createMemberSchema = z.object({ name, username, password });
 export const resetPasswordSchema = z.object({ password });

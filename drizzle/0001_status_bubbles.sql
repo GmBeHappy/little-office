@@ -1,0 +1,1 @@
+ALTER TABLE "user" ADD COLUMN "statusIcon" text DEFAULT '' NOT NULL;

@@ -131,6 +131,7 @@ export class Office {
       role: string;
       availability?: string;
       statusText?: string;
+      statusIcon?: string;
     },
     sessionId: string,
     expires: number,
@@ -155,6 +156,7 @@ export class Office {
       microphone: false,
       status,
       statusText: user.statusText || "",
+      statusIcon: user.statusIcon || "",
       zone: "floor",
       conversation: "",
       room: "",
@@ -347,6 +349,7 @@ export class Office {
       case "status":
         m.status = m.manualStatus = command.status;
         m.statusText = command.text;
+        if (command.icon !== undefined) m.statusIcon = command.icon;
         this.syncConversation(m);
         break;
       case "zone":
@@ -601,6 +604,7 @@ export class Office {
         microphone,
         status,
         statusText,
+        statusIcon,
         zone,
         conversation,
         room,
@@ -618,6 +622,7 @@ export class Office {
         microphone,
         status,
         statusText,
+        statusIcon,
         zone,
         conversation,
         room,

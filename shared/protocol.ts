@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { statusIconSchema } from "./status";
 export const Command = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("screen-share"),
@@ -29,6 +30,7 @@ export const Command = z.discriminatedUnion("type", [
     type: z.literal("status"),
     status: z.enum(["available", "busy", "dnd", "away"]),
     text: z.string().max(80),
+    icon: statusIconSchema.optional(),
   }),
   z.object({ type: z.literal("wave"), target: z.string().max(80) }),
   z.object({

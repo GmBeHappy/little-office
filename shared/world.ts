@@ -147,6 +147,7 @@ export type Person = {
   microphone: boolean;
   status: Availability;
   statusText: string;
+  statusIcon?: string;
   zone: ZoneId;
   conversation: string;
   room: string;

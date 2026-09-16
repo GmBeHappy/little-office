@@ -8,6 +8,13 @@
       "when": 1788889580481,
       "tag": "0000_existing_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789559960925,
+      "tag": "0001_status_bubbles",
+      "breakpoints": true
     }
   ]
 }

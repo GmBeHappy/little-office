@@ -22,6 +22,8 @@ Reusable shadcn/ui components live in `components/ui`: buttons, inputs, labels, 
 
 Login, temporary-password replacement, profile editing, member creation/password reset, and workspace settings use React Hook Form with Zod schemas in `shared/forms.ts`. `FormInput` connects labels, descriptions, and translated inline errors to each field. Invalid forms stay on screen, failed saves retain edits, and submitting buttons prevent duplicate requests. Controlled avatar/status inputs use `Controller`; immediate device and feature switches keep their existing actions. API validation and owner authorization remain enforced on the server.
 
+Open **Your profile** to choose a quick status or combine availability, a status icon, and a message of up to 80 characters. Busy, Do not disturb, and Away show a compact bubble above your avatar; hover, focus, or tap it to read the full message. Available hides the bubble. Icons and messages persist across sign-ins and update for everyone in the office. Existing Do not disturb behavior is unchanged; status expiration is not included. Run `bun db:migrate` when upgrading to add the status icon column.
+
 ## Run locally
 
 Install Bun 1.4.2+ and Node.js 24+. From the repository:

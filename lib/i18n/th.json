@@ -591,5 +591,22 @@
   "Fish / stop (3)": "ตกปลา / หยุด (3)",
   "to fish": "เพื่อตกปลา",
   "Face nearby water to fish.": "หันหน้าเข้าหาน้ำที่อยู่ใกล้ ๆ เพื่อตกปลา",
-  "Face nearby water and press 3 to fish. Press 3 again, move, or jump to stop. After catching a fish, you return to idle.": "หันหน้าเข้าหาน้ำที่อยู่ใกล้ ๆ แล้วกด 3 เพื่อตกปลา กด 3 อีกครั้ง เดิน หรือกระโดดเพื่อหยุด เมื่อจับปลาได้แล้วจะกลับมายืนตามปกติ"
+  "Face nearby water and press 3 to fish. Press 3 again, move, or jump to stop. After catching a fish, you return to idle.": "หันหน้าเข้าหาน้ำที่อยู่ใกล้ ๆ แล้วกด 3 เพื่อตกปลา กด 3 อีกครั้ง เดิน หรือกระโดดเพื่อหยุด เมื่อจับปลาได้แล้วจะกลับมายืนตามปกติ",
+  "Automatic": "อัตโนมัติ",
+  "Working": "กำลังทำงาน",
+  "Meeting": "ประชุม",
+  "Coffee": "กาแฟ",
+  "Lunch": "มื้อกลางวัน",
+  "Stepping out": "ออกไปสักครู่",
+  "Resting": "พักผ่อน",
+  "In a meeting": "กำลังประชุม",
+  "Deep work": "กำลังจดจ่อกับงาน",
+  "Please do not interrupt": "กรุณาอย่ารบกวน",
+  "Back in 10 minutes": "กลับมาใน 10 นาที",
+  "Out for lunch": "ออกไปทานข้าว",
+  "Quick status": "สถานะด่วน",
+  "Status icon": "ไอคอนสถานะ",
+  "BUBBLE PREVIEW": "ตัวอย่างกล่องสถานะ",
+  "Your bubble is hidden while available.": "กล่องสถานะจะซ่อนเมื่อคุณพร้อมคุย",
+  "Shown above your avatar when busy, away, or on do not disturb. Hover or tap a bubble to read more.": "แสดงเหนืออวาตาร์เมื่อไม่ว่าง ไม่อยู่ หรือห้ามรบกวน วางเมาส์หรือแตะกล่องเพื่ออ่านข้อความทั้งหมด"
 }

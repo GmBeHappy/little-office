@@ -33,7 +33,7 @@ test("Drizzle creates a fresh database and applies the adoption baseline only on
     const rows = await pg.query(
       "SELECT count(*)::integer AS count FROM drizzle.__drizzle_migrations",
     );
-    expect(rows.rows).toEqual([{ count: 1 }]);
+    expect(rows.rows).toEqual([{ count: 2 }]);
     // A fresh install retains the same database-enforced unique keys and delete cascades.
     const constraints = await pg.query<{ name: string }>(
       `SELECT conname AS name FROM pg_constraint WHERE conname IN ('user_username_key','session_token_key','account_userId_fkey','session_userId_fkey') ORDER BY conname`,
@@ -82,6 +82,12 @@ test("upgrading a populated legacy database retains settings, drawings, S3 refer
     ).rows;
     await migrate(db, { migrationsFolder });
     await migrate(db, { migrationsFolder });
+    expect((await db.select().from(schema.users))[0]).toMatchObject({
+      username: "legacy_owner",
+      availability: "busy",
+      statusText: "Existing status",
+      statusIcon: "",
+    });
     expect(
       (await pg.query("SELECT id,actor,action,created_at FROM office_audit"))
         .rows,

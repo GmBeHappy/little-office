@@ -26,6 +26,7 @@ export type User = {
   mustChangePassword: boolean;
   availability: string;
   statusText: string;
+  statusIcon?: string;
 };
 export type AppConfig = {
   workspace: import("@/shared/maps").WorkspaceSettings;

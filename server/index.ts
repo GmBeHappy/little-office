@@ -44,6 +44,7 @@ import {
 import { ACTIVITY_ACTIONS } from "../shared/activity";
 import { memberRoleSchema } from "../shared/forms";
 import { MAPS } from "../shared/maps";
+import { STATUS_ICONS } from "../shared/status";
 
 export const office = new Office(retireRoom, setPresenter, (event) => {
   void db
@@ -169,12 +170,29 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       const s = requireSession(identity);
       await db
         .update(users)
-        .set({ name: body.name, avatar: body.avatar })
+        .set({
+          name: body.name,
+          avatar: body.avatar,
+          ...(body.status !== undefined
+            ? {
+                availability: body.status,
+                statusText: body.statusText ?? "",
+                statusIcon: body.statusIcon ?? "",
+              }
+            : {}),
+        })
         .where(eq(users.id, s.user.id));
       const member = office.members.get(s.user.id);
       if (member) {
         member.name = body.name;
         member.avatar = body.avatar as import("../shared/appearance").AvatarId;
+        if (body.status !== undefined)
+          office.handle(s.user.id, {
+            type: "status",
+            status: body.status,
+            text: body.statusText ?? "",
+            icon: body.statusIcon ?? "",
+          });
         office.broadcast();
       }
       return { ok: true };
@@ -183,6 +201,18 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       body: t.Object({
         name: t.String({ minLength: 1, maxLength: 40 }),
         avatar: t.String({ pattern: AVATAR_PATTERN, maxLength: 32 }),
+        status: t.Optional(
+          t.Union([
+            t.Literal("available"),
+            t.Literal("busy"),
+            t.Literal("dnd"),
+            t.Literal("away"),
+          ]),
+        ),
+        statusText: t.Optional(t.String({ maxLength: 80 })),
+        statusIcon: t.Optional(
+          t.Union(STATUS_ICONS.map((icon) => t.Literal(icon))),
+        ),
       }),
     },
   )
@@ -890,6 +920,9 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
             .set({
               availability: result.data.status,
               statusText: result.data.text,
+              ...(result.data.icon !== undefined
+                ? { statusIcon: result.data.icon }
+                : {}),
             })
             .where(eq(users.id, s.user.id))
             .catch(() => {});

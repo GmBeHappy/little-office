@@ -335,6 +335,113 @@
     @apply block;
     image-rendering: auto;
   }
+  .status-bubbles {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .avatar-status-bubble,
+  .status-preview-bubble {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid #d4bd8c;
+    border-radius: 12px;
+    padding: 7px 10px;
+    background: #fff8e7;
+    color: #584329;
+    box-shadow: 0 3px 8px #34281818;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .avatar-status-bubble {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    max-width: 156px;
+    pointer-events: auto;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .avatar-status-bubble[hidden] {
+    display: none;
+  }
+  .avatar-status-bubble::after {
+    content: "";
+    position: absolute;
+    bottom: -5px;
+    left: calc(50% - 4px);
+    width: 8px;
+    height: 8px;
+    transform: rotate(45deg);
+    background: inherit;
+    border-right: inherit;
+    border-bottom: inherit;
+  }
+  .avatar-status-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .avatar-status-bubble:is(:hover, :focus-visible, [aria-expanded="true"]) {
+    max-width: 220px;
+    width: max-content;
+    z-index: 1000 !important;
+  }
+  .avatar-status-bubble:is(:hover, :focus-visible, [aria-expanded="true"])
+    .avatar-status-text {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .avatar-status-bubble:focus-visible {
+    outline: 2px solid #507859;
+    outline-offset: 3px;
+  }
+  :is(.avatar-status-bubble, .status-preview-bubble)[data-status="dnd"] {
+    background: #f8eef4;
+    border-color: #d5b6c8;
+    color: #704563;
+  }
+  :is(.avatar-status-bubble, .status-preview-bubble)[data-status="away"] {
+    background: #eef3f4;
+    border-color: #b6c9ce;
+    color: #47646b;
+  }
+  .status-presets legend {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .status-presets > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .status-presets button {
+    border: 1px solid #dedbce;
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+  .status-presets button:hover {
+    background: #eeeee4;
+  }
+  .status-preview {
+    padding: 14px;
+    border-radius: 12px;
+    background: #f1f0e9;
+  }
+  .status-preview-bubble {
+    width: fit-content;
+    max-width: 100%;
+    margin: 10px 0;
+    overflow-wrap: anywhere;
+  }
+  .status-preview p {
+    font-size: 12px;
+    color: #697568;
+    margin-top: 8px;
+  }
   .map-hint {
     @apply absolute bottom-[15px] left-[17px] flex gap-[3px] items-center rounded-[5px] pointer-events-none;
     padding: 6px 8px;
