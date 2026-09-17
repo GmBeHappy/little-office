@@ -24,6 +24,7 @@ test("Drizzle creates a fresh database and applies the adoption baseline only on
     expect(await db.select().from(schema.workspaces)).toEqual([
       {
         id: 1,
+        dailyMap: { enabled: false, date: "" },
         name: "Keep my workspace",
         mapId: "nature-small",
         revision: 9,
@@ -33,7 +34,7 @@ test("Drizzle creates a fresh database and applies the adoption baseline only on
     const rows = await pg.query(
       "SELECT count(*)::integer AS count FROM drizzle.__drizzle_migrations",
     );
-    expect(rows.rows).toEqual([{ count: 1 }]);
+    expect(rows.rows).toEqual([{ count: 2 }]);
     // A fresh install retains the same database-enforced unique keys and delete cascades.
     const constraints = await pg.query<{ name: string }>(
       `SELECT conname AS name FROM pg_constraint WHERE conname IN ('user_username_key','session_token_key','account_userId_fkey','session_userId_fkey') ORDER BY conname`,

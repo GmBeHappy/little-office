@@ -39,6 +39,7 @@ export async function workspaceSettings() {
       mapId: schema.workspaces.mapId,
       revision: schema.workspaces.revision,
       features: schema.workspaces.features,
+      dailyMap: schema.workspaces.dailyMap,
     })
     .from(schema.workspaces)
     .where(eq(schema.workspaces.id, 1));

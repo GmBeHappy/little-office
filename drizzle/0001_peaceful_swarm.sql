@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_settings" ADD COLUMN "daily_map" jsonb DEFAULT '{"enabled":false,"date":""}'::jsonb NOT NULL;

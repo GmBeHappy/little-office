@@ -645,6 +645,9 @@ export default function OfficeApp() {
             <div className="map-stage">
               <PixelMap
                 mapId={workspace.mapId}
+                habitat={snapshot?.habitat}
+                wildlifeEnabled={workspace.features?.wildlife !== false}
+                activitiesEnabled={workspace.features?.activities !== false}
                 effectsEnabled={mapEffectsEnabled}
                 people={people}
                 self={user.id}

@@ -87,15 +87,16 @@ export function WorkspaceSettings({
   }, [tab, notify]);
   const form = useForm({
     resolver: zodResolver(workspaceSchema),
-    defaultValues: { name: workspace.name, mapId: workspace.mapId },
+    defaultValues: {
+      name: workspace.name,
+      mapId: workspace.mapId,
+      dailyMapEnabled: workspace.dailyMap?.enabled ?? false,
+    },
   });
   const name = form.watch("name"),
     selected = form.watch("mapId");
   const setSelected = (value: string) =>
     form.setValue("mapId", value, { shouldDirty: true, shouldValidate: true });
-  const [size, setSize] = useState<"small" | "large">(
-    getMap(workspace.mapId).size,
-  );
   const saving = form.formState.isSubmitting;
   const map = getMap(selected);
   const changedMap = selected !== workspace.mapId;
@@ -166,6 +167,30 @@ export function WorkspaceSettings({
                 required
                 maxLength={60}
               />
+              <div className="workspace-feature-card">
+                <div className="workspace-feature-icon">
+                  <RefreshCw size={25} />
+                </div>
+                <div>
+                  <h4>{t("Randomize map daily")}</h4>
+                  <p>
+                    {t(
+                      "Choose a different map each day after midnight (Bangkok time). Waits until the office is empty. The current map stays for today.",
+                    )}
+                  </p>
+                </div>
+                <Switch
+                  aria-label={t("Randomize map daily")}
+                  checked={form.watch("dailyMapEnabled") ?? false}
+                  disabled={saving}
+                  onCheckedChange={(value) =>
+                    form.setValue("dailyMapEnabled", value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                />
+              </div>
               <div className="map-selection-heading">
                 <div>
                   <h3>{t("A change of scenery.")}</h3>
@@ -173,87 +198,57 @@ export function WorkspaceSettings({
                 </div>
               </div>
               <div
-                className="map-size-tabs"
-                role="group"
-                aria-label={t("Map size")}
-              >
-                <Button
-                  variant="plain"
-                  type="button"
-                  aria-pressed={size === "small"}
-                  onClick={() => setSize("small")}
-                >
-                  {t("4–8 people")}
-                  <span>
-                    {t("{count} maps · 8 work seats", {
-                      count: MAPS.filter((m) => m.size === "small").length,
-                    })}
-                  </span>
-                </Button>
-                <Button
-                  variant="plain"
-                  type="button"
-                  aria-pressed={size === "large"}
-                  onClick={() => setSize("large")}
-                >
-                  {t("10–12 people")}
-                  <span>
-                    {t("{count} maps · 12 work seats", {
-                      count: MAPS.filter((m) => m.size === "large").length,
-                    })}
-                  </span>
-                </Button>
-              </div>
-              <div
                 className="map-picker"
                 role="group"
                 aria-label={t("Workspace maps")}
               >
-                {MAPS.filter((option) => option.size === size).map((option) => {
-                  const Icon =
-                    option.theme === "temple"
-                      ? Landmark
-                      : option.theme === "beach"
-                        ? Palmtree
-                        : option.theme === "farm"
-                          ? Wheat
-                          : option.theme === "zen"
-                            ? Flower2
-                            : option.theme === "nature"
-                              ? Leaf
-                              : option.theme === "camping"
-                                ? Tent
-                                : Rocket;
-                  return (
-                    <Button
-                      variant="plain"
-                      type="button"
-                      className={selected === option.id ? "selected" : ""}
-                      key={option.id}
-                      aria-label={t("{name} map", { name: t(option.name) })}
-                      aria-pressed={selected === option.id}
-                      onClick={() => setSelected(option.id)}
-                    >
-                      <MapPreview map={option} />
-                      <span className="map-option-copy">
-                        <span className="map-option-name">
-                          <Icon size={15} />
-                          <strong>{t(option.name)}</strong>
-                          {selected === option.id && <Check size={16} />}
+                {MAPS.filter((option) => option.size === "small").map(
+                  (option) => {
+                    const Icon =
+                      option.theme === "temple"
+                        ? Landmark
+                        : option.theme === "beach"
+                          ? Palmtree
+                          : option.theme === "farm"
+                            ? Wheat
+                            : option.theme === "zen"
+                              ? Flower2
+                              : option.theme === "nature"
+                                ? Leaf
+                                : option.theme === "camping"
+                                  ? Tent
+                                  : Rocket;
+                    return (
+                      <Button
+                        variant="plain"
+                        type="button"
+                        className={selected === option.id ? "selected" : ""}
+                        key={option.id}
+                        aria-label={t("{name} map", { name: t(option.name) })}
+                        aria-pressed={selected === option.id}
+                        onClick={() => setSelected(option.id)}
+                      >
+                        <MapPreview map={option} />
+                        <span className="map-option-copy">
+                          <span className="map-option-name">
+                            <Icon size={15} />
+                            <strong>{t(option.name)}</strong>
+                            {selected === option.id && <Check size={16} />}
+                          </span>
+                          <span>{t(option.description)}</span>
+                          <small>
+                            {workspace.mapId === option.id
+                              ? t("CURRENT MAP · ")
+                              : ""}
+                            {t("{count} people · 2 meeting areas", {
+                              count: option.people,
+                            })}
+                          </small>
                         </span>
-                        <span>{t(option.description)}</span>
-                        <small>
-                          {workspace.mapId === option.id
-                            ? t("CURRENT MAP · ")
-                            : ""}
-                          {t("{count} people · 2 meeting areas", {
-                            count: option.people,
-                          })}
-                        </small>
-                      </span>
-                    </Button>
-                  );
-                })}
+                      </Button>
+                    );
+                  },
+                )}
               </div>
               <div className="map-apply-summary">
                 <strong>{t("Selected: {name}", { name: t(map.name) })}</strong>
@@ -276,7 +271,11 @@ export function WorkspaceSettings({
                 className="primary"
                 type="submit"
                 disabled={
-                  saving || (!changedMap && name.trim() === workspace.name)
+                  saving ||
+                  (!changedMap &&
+                    name.trim() === workspace.name &&
+                    (form.watch("dailyMapEnabled") ?? false) ===
+                      (workspace.dailyMap?.enabled ?? false))
                 }
               >
                 {saving
@@ -343,6 +342,59 @@ export function WorkspaceSettings({
                 }}
               />
             </div>
+            {(
+              [
+                {
+                  key: "wildlife",
+                  label: "Roaming wildlife",
+                  description: "Show animals wandering around the workspace.",
+                },
+                {
+                  key: "activities",
+                  label: "Interactive activities",
+                  description:
+                    "Let teammates interact with animals and shared activity stations using E or the action button.",
+                },
+              ] as const
+            ).map((item) => (
+              <div className="workspace-feature-card" key={item.key}>
+                <div className="workspace-feature-icon">
+                  <Leaf size={25} />
+                </div>
+                <div>
+                  <h4>{t(item.label)}</h4>
+                  <p>{t(item.description)}</p>
+                </div>
+                <Switch
+                  aria-label={t(item.label)}
+                  checked={workspace.features?.[item.key] !== false}
+                  disabled={featureBusy}
+                  onCheckedChange={async (value) => {
+                    setFeatureBusy(true);
+                    try {
+                      await api(
+                        "/admin/features",
+                        {
+                          features: {
+                            ...workspace.features,
+                            whiteboard: whiteboardEnabled(workspace),
+                            [item.key]: value,
+                          },
+                          revision: workspace.revision,
+                        },
+                        "PATCH",
+                      );
+                      await refresh();
+                      notify("Workspace features updated.");
+                    } catch (error) {
+                      notify((error as Error).message);
+                    } finally {
+                      setFeatureBusy(false);
+                    }
+                  }}
+                />
+              </div>
+            ))}
             <p className="workspace-feature-note">
               <ShieldCheck size={16} />
               {t(

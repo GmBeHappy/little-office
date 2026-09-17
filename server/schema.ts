@@ -129,6 +129,10 @@ export const workspaces = pgTable(
       .notNull()
       .default("nature-small"),
     revision: integer("revision").notNull().default(1),
+    dailyMap: jsonb("daily_map")
+      .$type<NonNullable<WorkspaceSettings["dailyMap"]>>()
+      .notNull()
+      .default({ enabled: false, date: "" }),
     features: jsonb("features")
       .$type<NonNullable<WorkspaceSettings["features"]>>()
       .notNull()

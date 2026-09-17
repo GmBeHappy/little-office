@@ -37,6 +37,7 @@ export const profileSchema = z.object({
 export const createMemberSchema = z.object({ name, username, password });
 export const resetPasswordSchema = z.object({ password });
 export const workspaceSchema = z.object({
+  dailyMapEnabled: z.boolean().optional(),
   name: z
     .string()
     .trim()

@@ -1,6 +1,11 @@
 import { z } from "zod";
 export const Command = z.discriminatedUnion("type", [
   z.object({
+    type: z.literal("interact"),
+    target: z.number().int().min(0).max(3),
+    revision: z.number().int().nonnegative(),
+  }),
+  z.object({
     type: z.literal("screen-share"),
     room: z.string().max(200),
     enabled: z.boolean(),

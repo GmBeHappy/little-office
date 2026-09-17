@@ -99,16 +99,15 @@ Actual resolution and frame rate depend on the capture source, browser, CPU/GPU,
 
 Workspace owners can change the name and shared map under **Settings → Workspace**. The selection persists in PostgreSQL and updates all connected users.
 
-| Theme           | 4–8 people · 8 work seats | 10–12 people · 12 work seats |
-| --------------- | ------------------------- | ---------------------------- |
-| Nature outdoors | Fern Grove                | Willow Gardens               |
-| Camping         | Pine Camp                 | Summit Basecamp              |
-| Space           | Lunar Outpost             | Orbital Station              |
-| Japanese zen    | Sakura Garden             | —                            |
-| Thai temple     | Siam Courtyard            | —                            |
-| Summer beach    | Summer Cove               | —                            |
+The picker includes 12 maps for 4–8 people: Fern Grove, Pine Camp, Lunar Outpost, Sakura Garden, Siam Courtyard, Summer Cove, Sunny Acres, Cloudpeak Lodge, Mangrove Hideaway, Rainforest Canopy, Misty Lakeside, and Glasshouse Garden. Older 10–12-person maps remain compatible with saved workspaces but are no longer offered in the picker. Sunny Acres has farming activities instead of desks; the other selectable maps have eight work seats.
 
-Sakura Garden has a distinct layout: two tea-house meeting rooms across the north, four work areas around a raked sand garden and koi pond, a walkable wooden bridge, pink sakura trees, and stone lanterns. Choose **4–8 people → Sakura Garden** to select it.
+Owners can enable **Randomize map daily** on the Maps tab, then save. It is off by default. The server checks every minute after midnight in **Asia/Bangkok**, waits until the office is empty, and chooses from the 12 selectable maps excluding the current one. Enabling it or manually saving a map keeps that choice for the rest of the day. The choice and date persist in PostgreSQL, including across restarts; missed days produce one new choice on the next startup. Turning it off keeps the current map. Apply database migrations before starting the updated API.
+
+Every map also has roaming pixel wildlife (a rover on Lunar Outpost) and a themed shared activity station. Approach an animal or station and press **E**, or tap the nearby action button on mobile. Stations advance through three steps, show the same progress to everyone, and reset after a minute of inactivity. Animal interactions show a brief heart reaction. These new activities are temporary: changing maps or restarting the API resets them. Existing Sunny Acres farming progress remains local to each player.
+
+Owners can toggle **Roaming wildlife** and **Interactive activities** in the Features tab. The wildlife switch hides the new animals and Sunny Acres animals; the activities switch disables animal/station interactions and Sunny Acres farming actions. Fishing retains its existing controls. Ambient effects and reduced-motion preferences stop the new wildlife movement without hiding the animals. Activities make no sound.
+
+Sakura Garden has a distinct layout: two tea-house meeting rooms across the north, four work areas around a raked sand garden and koi pond, a walkable wooden bridge, pink sakura trees, and stone lanterns. Choose **Sakura Garden** to select it.
 
 Siam Courtyard places a golden hall north of an open chedi courtyard and a garden sala to the southwest. Summer Cove connects a surf club, beach workstations, and a pier lounge around turquoise water. Both have eight work seats and their own room entrances and paths.
 

@@ -1,3 +1,18 @@
+import {
+  retreatFor,
+  retreatZones,
+  retreatBlocks,
+  drawNatureRetreat,
+} from "./nature-retreats";
+import {
+  CAMP_DESKS,
+  CAMP_ZONES,
+  CAMP_BLOCKS,
+  MOON_DESKS,
+  MOON_ZONES,
+  MOON_BLOCKS,
+  drawRetreat,
+} from "./retreat-maps";
 import { waterRipple, type MapEffectSink } from "./map-effects";
 import { BLOCKS, DESKS, ZONES } from "./world";
 import {
@@ -83,6 +98,49 @@ export const MAPS = [
       "A cozy farmstead with a farmhouse, barn, clucking hens, plantable crops, and a fishing pond.",
   },
   {
+    id: "cloudpeak-small",
+    name: "Cloudpeak Lodge",
+    theme: "nature",
+    size: "small",
+    people: "4–8",
+    description:
+      "Mountain terraces, a waterfall, and warm cabins above the clouds.",
+  },
+  {
+    id: "mangrove-small",
+    name: "Mangrove Hideaway",
+    theme: "nature",
+    size: "small",
+    people: "4–8",
+    description: "Tropical garden islands connected by wooden boardwalks.",
+  },
+  {
+    id: "canopy-small",
+    name: "Rainforest Canopy",
+    theme: "nature",
+    size: "small",
+    people: "4–8",
+    description: "Leafy treehouse decks connected by rope-lined bridges.",
+  },
+  {
+    id: "lakeside-small",
+    name: "Misty Lakeside",
+    theme: "nature",
+    size: "small",
+    people: "4–8",
+    description: "Quiet waterfront cabins, reed beds, and lakeside work decks.",
+  },
+  {
+    id: "glasshouse-small",
+    name: "Glasshouse Garden",
+    theme: "nature",
+    size: "small",
+    people: "4–8",
+    description:
+      "A botanical glasshouse with leafy work corners and a cafe courtyard.",
+  },
+
+  {
     id: "nature-large",
     name: "Willow Gardens",
     theme: "nature",
@@ -113,7 +171,8 @@ export type WorkspaceSettings = {
   name: string;
   mapId: MapId;
   revision: number;
-  features?: { whiteboard: boolean };
+  features?: { whiteboard: boolean; wildlife?: boolean; activities?: boolean };
+  dailyMap?: { enabled: boolean; date: string };
 };
 export const DEFAULT_WORKSPACE: WorkspaceSettings = {
   name: "Team workspace",
@@ -124,12 +183,20 @@ export function getMap(id: string): OfficeMap {
   return MAPS.find((map) => map.id === id) || MAPS[0];
 }
 export function mapZones(map: OfficeMap) {
+  const retreat = retreatFor(map.id);
+  if (retreat) return retreatZones(retreat);
+  if (map.id === "camping-small") return CAMP_ZONES;
+  if (map.id === "space-small") return MOON_ZONES;
   if (map.theme === "temple") return TEMPLE_ZONES;
   if (map.theme === "beach") return BEACH_ZONES;
   if (map.theme === "farm") return FARM_ZONES;
   return map.theme === "zen" ? ZEN_ZONES : ZONES;
 }
 export function mapDesks(map: OfficeMap) {
+  const retreat = retreatFor(map.id);
+  if (retreat) return retreat.desks;
+  if (map.id === "camping-small") return CAMP_DESKS;
+  if (map.id === "space-small") return MOON_DESKS;
   if (map.theme === "temple") return TEMPLE_DESKS;
   if (map.theme === "beach") return BEACH_DESKS;
   if (map.theme === "farm") return [];
@@ -139,6 +206,10 @@ export function mapDesks(map: OfficeMap) {
     : [110, 330, 550].flatMap((x) => [175, 405].map((y) => ({ x, y })));
 }
 export function mapBlocks(map: OfficeMap) {
+  const retreat = retreatFor(map.id);
+  if (retreat) return retreatBlocks(retreat);
+  if (map.id === "camping-small") return CAMP_BLOCKS;
+  if (map.id === "space-small") return MOON_BLOCKS;
   if (map.theme === "temple") return TEMPLE_BLOCKS;
   if (map.theme === "beach") return BEACH_BLOCKS;
   if (map.theme === "farm") return FARM_BLOCKS;
@@ -165,6 +236,8 @@ export function mapBlocks(map: OfficeMap) {
 }
 
 export function mapWater(map: OfficeMap) {
+  const retreat = retreatFor(map.id);
+  if (retreat) return retreat.water;
   if (map.theme === "farm") return [FARM_POND];
   if (map.theme === "zen") return pond;
   if (map.theme === "temple") return [templePond];
@@ -185,6 +258,10 @@ export function drawOfficeMap(
   ) => void,
   effect?: MapEffectSink,
 ) {
+  const retreat = retreatFor(map.id);
+  if (retreat) return drawNatureRetreat(retreat, rect, label, effect);
+  if (map.id === "camping-small" || map.id === "space-small")
+    return drawRetreat(map.theme === "space", rect, label, effect);
   if (map.theme === "temple") return drawTemple(rect, label, effect);
   if (map.theme === "beach") return drawBeach(rect, label, effect);
   if (map.theme === "farm") return drawFarmMap(rect, label, effect);
