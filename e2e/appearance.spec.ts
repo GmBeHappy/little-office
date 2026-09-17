@@ -38,25 +38,43 @@ test("custom avatars save, sync to teammates, survive reconnect, and fit mobile"
   await login(other, 1);
   await page.getByRole("button", { name: "Your profile", exact: true }).click();
   const editor = page.locator(".avatar-editor");
-  for (const [group, count] of [
-    ["Skin tone", 5],
-    ["Hair", 5],
-    ["Hat", 6],
-    ["Clothes", 5],
-  ] as const)
-    await expect(
-      editor
-        .getByRole("group", { name: group, exact: true })
-        .getByRole("button"),
-    ).toHaveCount(count);
-  for (const name of [
-    "Deep skin tone",
-    "Classic bob",
-    "Crown",
-    "Denim overalls",
-  ])
-    await editor.getByRole("button", { name, exact: true }).click();
-  const id = "custom:4:2:5:1";
+  await expect(editor.locator(".skin-tone-options button")).toHaveCount(5);
+  for (const group of ["Hair", "Hat", "Clothes"] as const) {
+    const carousel = editor.getByRole("group", { name: group, exact: true });
+    await expect(carousel).toHaveAttribute("data-option-count", "15");
+    await expect(carousel.locator(".avatar-carousel-choice")).toHaveCount(3);
+  }
+  await editor.getByRole("button", { name: "Next Hair", exact: true }).click();
+  await expect(
+    editor.getByRole("button", { name: "Ponytail", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  const beforeRandom = await editor
+    .locator(".avatar-preview-stage svg")
+    .getAttribute("data-avatar");
+  await editor.getByRole("button", { name: "Randomize", exact: true }).click();
+  await expect(editor.locator(".avatar-preview-stage svg")).toHaveAttribute(
+    "data-avatar",
+    /^custom:[0-4]:(?:[0-9]|1[0-4]):(?:[0-9]|1[0-4]):(?:[0-9]|1[0-4])$/,
+  );
+  expect(
+    await editor
+      .locator(".avatar-preview-stage svg")
+      .getAttribute("data-avatar"),
+  ).not.toBe(beforeRandom);
+  await editor
+    .getByRole("button", { name: "Deep skin tone", exact: true })
+    .click();
+  for (const group of ["Hair", "Hat", "Clothes"] as const) {
+    const carousel = editor.getByRole("group", { name: group, exact: true });
+    for (let i = 0; i < 15; i++) {
+      if ((await carousel.getAttribute("data-selected")) === "14") break;
+      await editor
+        .getByRole("button", { name: `Next ${group}`, exact: true })
+        .click();
+    }
+    await expect(carousel).toHaveAttribute("data-selected", "14");
+  }
+  const id = "custom:4:14:14:14";
   await expect(editor.locator(".avatar-preview-stage svg")).toHaveAttribute(
     "data-avatar",
     id,
@@ -109,10 +127,10 @@ test("custom avatars save, sync to teammates, survive reconnect, and fit mobile"
     true,
   );
   await editor
-    .getByRole("button", { name: "Lilac sweater", exact: true })
+    .getByRole("button", { name: "Rainbow tee", exact: true })
     .scrollIntoViewIfNeeded();
   await expect(
-    editor.getByRole("button", { name: "Lilac sweater", exact: true }),
+    editor.getByRole("button", { name: "Rainbow tee", exact: true }),
   ).toBeInViewport();
   await page.screenshot({ path: "/private/tmp/avatar-editor-mobile.png" });
   expect(errors).toEqual([]);
