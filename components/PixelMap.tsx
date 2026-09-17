@@ -22,6 +22,7 @@ import {
   habitatStyle,
   type HabitatState,
 } from "@/shared/habitats";
+import { wildlifeAnimation } from "@/shared/wildlife-animation";
 import { drawCharacter } from "@/shared/avatars";
 import type { Command } from "@/shared/protocol";
 // Farm pickups render as pixel art above the avatar instead of emoji text.
@@ -86,7 +87,7 @@ export default function PixelMap(props: Props) {
     actionButton.type = "button";
     actionButton.hidden = true;
     actionButton.style.cssText =
-      "position:absolute;bottom:70px;left:50%;transform:translateX(-50%);z-index:5;padding:10px 16px;border-radius:12px;background:#f5f0df;color:#405541;border:1px solid #acb59b;max-width:90%;font:inherit;box-shadow:0 4px 16px #24382922";
+      "position:absolute;bottom:calc(max(16px, env(safe-area-inset-bottom)) + 92px);left:50%;transform:translateX(-50%);z-index:5;padding:10px 16px;border-radius:12px;background:#f5f0df;color:#405541;border:1px solid #acb59b;max-width:90%;font:inherit;box-shadow:0 4px 16px #24382922";
     actionButton.addEventListener("pointerdown", (e) => e.stopPropagation());
     parent.appendChild(actionButton);
     let game: Phaser.Game | undefined;
@@ -124,7 +125,6 @@ export default function PixelMap(props: Props) {
           state.wildlifeEnabled,
           state.activitiesEnabled,
           Date.now(),
-          reducedMotion,
         );
         if (target >= 0)
           state.send({
@@ -504,13 +504,11 @@ export default function PixelMap(props: Props) {
             }
             animal.mode = "walk";
           }
-          const frame = Math.floor(animal.walkTime / 160) % 2;
-          const bob = animal.mode === "walk" && frame % 2 ? -1 : 0;
-          const graze =
-            animal.mode === "graze" &&
-            Math.floor((time - animal.since) / 240) % 2
-              ? 7
-              : 0;
+          const { frame, bob, graze } = wildlifeAnimation(
+            animal.mode,
+            animal.walkTime,
+            time - animal.since,
+          );
           const p = (ox: number, oy: number, w: number, h: number, c: number) =>
             r(
               animal.x + (animal.direction === "left" ? -ox - w : ox),
@@ -932,7 +930,6 @@ export default function PixelMap(props: Props) {
                 state.wildlifeEnabled,
                 state.activitiesEnabled,
                 now,
-                reducedMotion,
               )
             : -1;
           const farmTarget = this.farmTarget(time);

@@ -1,3 +1,5 @@
+import { drawWildlife } from "./wildlife-art";
+import { wildlifeAnimation, type WildlifeMode } from "./wildlife-animation";
 import { getMap, mapBlocks, mapZones, mapWater } from "./maps";
 import { walkable, zoneAt, type Person } from "./world";
 
@@ -193,9 +195,87 @@ function animalRoute(mapId: string, index: number) {
       nodes.push({ x, y, parent: n });
     }
   }
-  const route = [];
+  const outbound: { x: number; y: number }[] = [];
   for (let n = farthest; n >= 0; n = nodes[n].parent)
-    route.unshift({ x: nodes[n].x, y: nodes[n].y });
+    outbound.unshift({ x: nodes[n].x, y: nodes[n].y });
+  // Return by a different safe branch where space allows, rather than reversing.
+  const end = outbound[outbound.length - 1];
+  const back = [{ ...end, parent: -1 }];
+  const visited = new Set([`${end.x},${end.y}`]);
+  let finish = 0;
+  for (let n = 0; n < back.length; n++) {
+    const p = back[n];
+    if (p.x === home.x && p.y === home.y) {
+      finish = n;
+      break;
+    }
+    for (let d = 3; d >= 0; d--) {
+      const [dx, dy] = directions[(d + index) % 4],
+        x = p.x + dx,
+        y = p.y + dy;
+      if (
+        Math.abs(x - home.x) > 144 ||
+        Math.abs(y - home.y) > 144 ||
+        visited.has(`${x},${y}`)
+      )
+        continue;
+      if (
+        ![1, 2, 3, 4, 5, 6].every((step) =>
+          safe(p.x + (dx * step) / 6, p.y + (dy * step) / 6),
+        )
+      )
+        continue;
+      visited.add(`${x},${y}`);
+      back.push({ x, y, parent: n });
+    }
+  }
+  const inbound: { x: number; y: number }[] = [];
+  for (let n = finish; n >= 0; n = back[n].parent)
+    inbound.unshift({ x: back[n].x, y: back[n].y });
+  // Remove grid-shaped zigzags only when the entire shortcut clears obstacles.
+  const smooth = (path: { x: number; y: number }[]) => {
+    const result = [path[0]];
+    for (let n = 0; n < path.length - 1;) {
+      let next = n + 1;
+      for (let j = path.length - 1; j > n + 1; j--) {
+        const a = path[n],
+          b = path[j],
+          steps = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 4);
+        if (
+          Array.from({ length: steps }, (_, k) => (k + 1) / steps).every((t) =>
+            safe(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t),
+          )
+        ) {
+          next = j;
+          break;
+        }
+      }
+      result.push(path[next]);
+      n = next;
+    }
+    return result;
+  };
+  // Retain the return route's widest bend so smoothing does not collapse an
+  // open-area loop into the exact same outbound diagonal.
+  let bend = 0,
+    deviation = 0;
+  for (let i = 1; i < inbound.length - 1; i++) {
+    const p = inbound[i];
+    const cross = Math.abs(
+      (home.x - end.x) * (p.y - end.y) - (home.y - end.y) * (p.x - end.x),
+    );
+    if (cross > deviation) {
+      deviation = cross;
+      bend = i;
+    }
+  }
+  const returning = bend
+    ? [
+        ...smooth(inbound.slice(0, bend + 1)),
+        ...smooth(inbound.slice(bend)).slice(1),
+      ]
+    : smooth(inbound);
+  const route = [...smooth(outbound), ...returning.slice(1)];
   routes.set(key, route);
   return route;
 }
@@ -207,28 +287,40 @@ export function animalPosition(
 ) {
   const route = animalRoute(mapId, index),
     home = route[0];
-  const travel = (route.length - 1) * 1000,
-    pause = 1800;
-  const phase =
-    (((now + index * 2300) % (2 * (travel + pause))) + 2 * (travel + pause)) %
-    (2 * (travel + pause));
-  const returning = phase >= travel + pause;
-  const elapsed = returning ? phase - travel - pause : phase;
-  const distance = Math.min(travel, elapsed) / 1000;
-  const progress = still
-    ? 0
-    : returning
-      ? route.length - 1 - distance
-      : distance;
-  const segment = Math.min(Math.floor(progress), Math.max(0, route.length - 2));
+  const durations = route
+    .slice(1)
+    .map(
+      (p, i) => (Math.hypot(p.x - route[i].x, p.y - route[i].y) / 24) * 1000,
+    );
+  const pause = 900 + index * 250,
+    total = durations.reduce((sum, d) => sum + d + pause, 0);
+  let phase =
+    still || !total ? 0 : (((now + index * 2300) % total) + total) % total;
+  let segment = 0;
+  while (
+    segment < durations.length - 1 &&
+    phase >= durations[segment] + pause
+  ) {
+    phase -= durations[segment] + pause;
+    segment++;
+  }
   const a = route[segment],
-    b = route[Math.min(segment + 1, route.length - 1)];
-  const fraction = progress - segment;
+    b = route[segment + 1] ?? a;
+  const duration = durations[segment] || 1,
+    t = still ? 0 : Math.min(1, phase / duration);
+  const moving = !still && durations.length > 0 && phase < duration;
   return {
-    x: still ? home.x : a.x + (b.x - a.x) * fraction,
-    y: still ? home.y : a.y + (b.y - a.y) * fraction,
-    right: still ? true : returning ? b.x <= a.x : b.x >= a.x,
-    moving: !still && travel > 0 && elapsed < travel,
+    x: still ? home.x : a.x + (b.x - a.x) * t,
+    y: still ? home.y : a.y + (b.y - a.y) * t,
+    right: still ? true : b.x === a.x ? index % 2 === 0 : b.x > a.x,
+    moving,
+    mode: (moving
+      ? "walk"
+      : !still && (segment + index) % 2 === 0
+        ? "graze"
+        : "idle") as WildlifeMode,
+    walkTime: still ? 0 : Math.min(phase, duration),
+    poseTime: still ? 0 : Math.max(0, phase - duration),
   };
 }
 export function habitatTarget(
@@ -322,47 +414,30 @@ export function drawHabitat(
   }
   if (!wildlife) return;
   for (let i = 0; i < points.length - 1; i++) {
-    const p = animalPosition(mapId, i, now, still),
+    const p = animalPosition(mapId, i, now),
       x = Math.round(p.x),
       y = Math.round(p.y);
     const flip = p.right ? 1 : -1;
+    const { bob, graze, frontLift, backLift } = wildlifeAnimation(
+      p.mode,
+      p.walkTime,
+      p.poseTime,
+    );
+    // The shadow stays on the ground while the body lifts with each step.
+    rect(x - 11, y + 3, 24, 5, 0x739077);
     const r: Rect = (dx, dy, w, h, c) =>
-      rect(x + (flip > 0 ? dx : -dx - w), y + dy, w, h, c);
-    r(-11, 3, 24, 5, 0x739077);
-    const bird = ["bird", "duck", "toucan"].includes(style.animal);
-    const color =
-      style.animal === "robot"
-        ? 0xa1c2c8
-        : style.animal === "crab"
-          ? 0xcc8b70
-          : style.animal === "squirrel"
-            ? 0xac8963
-            : style.animal === "toucan"
-              ? 0x43584d
-              : 0xd9cfb5;
-    r(-9, -10, 18, 13, color);
-    r(4, -16, 10, 11, color);
-    r(11, -13, 2, 2, 0x3f5147);
-    const stride = !p.moving ? 0 : Math.round(Math.sin(now / 160 + i) * 2);
-    r(-6, 2, 4, 4 + stride, 0x8b795e);
-    r(5, 2, 4, 4 - stride, 0x8b795e);
-    if (bird) {
-      r(14, -12, style.animal === "toucan" ? 10 : 5, 4, 0xdcb579);
-      r(-8, -8, 10, 6, style.color);
-    } else if (style.animal === "crab") {
-      r(-16, -9, 6, 5, color);
-      r(14, -9, 6, 5, color);
-      r(-20, -13, 5, 7, color);
-      r(19, -13, 5, 7, color);
-    } else if (style.animal === "robot") {
-      r(5, -22, 2, 6, 0xd9e8d4);
-      r(3, -24, 6, 3, 0xbed9a3);
-      r(-5, -7, 9, 4, 0x4e7d79);
-    } else {
-      r(3, -22, 4, style.animal === "rabbit" ? 12 : 7, color);
-      r(10, -21, 4, 7, color);
-      r(-14, style.animal === "squirrel" ? -19 : -9, 6, 14, color);
-    }
+      rect(x + (flip > 0 ? dx : -dx - w), y + dy + bob, w, h, c);
+    drawWildlife(
+      style.animal,
+      {
+        bob,
+        graze,
+        frontLift,
+        backLift,
+        frame: Math.floor(p.walkTime / 160) % 2,
+      },
+      r,
+    );
     if (activities && state.animal === i && state.affectionUntil > now) {
       r(-3, -33, 4, 4, 0xd39cac);
       r(3, -33, 4, 4, 0xd39cac);

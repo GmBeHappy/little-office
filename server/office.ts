@@ -325,7 +325,7 @@ export class Office {
           true,
           now,
         );
-        // Reduced-motion clients show animals at their safe home position.
+        // Older reduced-motion clients still show animals at their safe home position.
         if (
           target !== command.target &&
           habitatTarget(

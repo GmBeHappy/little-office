@@ -187,3 +187,47 @@ test("animal interactions work along the route and at reduced-motion homes", () 
     expect(office.habitat.affectionUntil).toBe(now + 5000);
   }
 });
+
+test("reduced motion keeps wildlife walking instead of freezing interactive animals", () => {
+  for (const map of MAPS) {
+    const frames = [0, 10000].map((now) => {
+      const shapes: number[][] = [];
+      drawHabitat(
+        map.id,
+        emptyHabitat(),
+        now,
+        true,
+        false,
+        true,
+        (x, y, w, h, c) => shapes.push([x, y, w, h, c]),
+      );
+      return shapes;
+    });
+    expect(frames[0], map.id).not.toEqual(frames[1]);
+  }
+});
+
+test("every wildlife species has visible walking frames even with reduced motion", () => {
+  for (const map of MAPS) {
+    for (const reduced of [false, true]) {
+      const frames = [100, 260].map((now) => {
+        const shapes: number[][] = [];
+        drawHabitat(
+          map.id,
+          emptyHabitat(),
+          now,
+          true,
+          false,
+          reduced,
+          (x, y, w, h, c) => shapes.push([x, y, w, h, c]),
+        );
+        // Normalize to the first animal's shadow: translation alone is not animation.
+        const [x, y] = shapes[0];
+        return shapes
+          .slice(0, 6)
+          .map((p) => [p[0] - x, p[1] - y, ...p.slice(2)]);
+      });
+      expect(frames[0], `${map.id}, reduced=${reduced}`).not.toEqual(frames[1]);
+    }
+  }
+});
