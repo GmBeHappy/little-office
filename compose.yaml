@@ -18,6 +18,7 @@ services:
     restart: unless-stopped
   migrate:
     image: ${OFFICE_IMAGE:-ghcr.io/gmbehappy/little-office:latest}
+    pull_policy: ${OFFICE_PULL_POLICY:-always}
     build: .
     network_mode: host
     env_file: .env
@@ -26,6 +27,7 @@ services:
       postgres: { condition: service_healthy }
   api:
     image: ${OFFICE_IMAGE:-ghcr.io/gmbehappy/little-office:latest}
+    pull_policy: ${OFFICE_PULL_POLICY:-always}
     network_mode: host
     env_file: .env
     environment:
@@ -47,6 +49,7 @@ services:
     restart: unless-stopped
   web:
     image: ${OFFICE_IMAGE:-ghcr.io/gmbehappy/little-office:latest}
+    pull_policy: ${OFFICE_PULL_POLICY:-always}
     network_mode: host
     env_file: .env
     depends_on:
@@ -61,6 +64,7 @@ services:
     restart: unless-stopped
   caddy:
     image: ${CADDY_IMAGE:-ghcr.io/gmbehappy/little-office-caddy:latest}
+    pull_policy: ${CADDY_PULL_POLICY:-always}
     build:
       context: .
       dockerfile: deploy/Caddy.Dockerfile

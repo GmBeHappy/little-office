@@ -206,7 +206,7 @@ docker login ghcr.io -u YOUR_GITHUB_USERNAME
 
 Edit `.env` with your domains and secrets. Run `openssl rand -hex 32` separately for `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, and `LIVEKIT_API_SECRET`; use `openssl rand -hex 16` for `LIVEKIT_API_KEY`. Put the same PostgreSQL password into `DATABASE_URL`. Set `APP_URL=https://<office-domain>` and `LIVEKIT_URL=wss://<rtc-domain>`. Leave OIDC fields blank until you configure your provider.
 
-`OFFICE_IMAGE` and `CADDY_IMAGE` default to `latest`. To pin a build, set both to the corresponding `sha-<full-commit-SHA>` tag from Actions, or their individual image digests. Keep the repository checkout and image version from the same commit/release when upgrading deployment configuration.
+`OFFICE_IMAGE` and `CADDY_IMAGE` default to `latest`, and their pull policies default to `always`. Every `docker compose up` checks GHCR and uses a newer successful `main` build without editing `.env`. To pin a build, set both images to the corresponding `sha-<full-commit-SHA>` tag from Actions, or their individual image digests. Keep the repository checkout and image version from the same commit/release when upgrading deployment configuration.
 
 ```sh
 docker compose pull
@@ -262,12 +262,11 @@ Caddy and its layer-4 module are version-pinned; the PostgreSQL major tag receiv
 
 ### Update an existing VM
 
-Schedule a short interruption for active calls. Back up the database first, then update the checkout and the two image references in `.env` together:
+Schedule a short interruption for active calls. Back up the database first, then update the checkout and pull the moving `latest` tags:
 
 ```sh
 docker compose exec -T postgres pg_dump -U office office > office-backup.sql
 git pull --ff-only
-# If using pinned tags, update OFFICE_IMAGE and CADDY_IMAGE in .env now.
 docker compose pull
 docker compose stop web api
 docker compose up --no-deps --force-recreate --exit-code-from migrate migrate
@@ -286,6 +285,8 @@ The same Compose file retains local build definitions. Use local tags to avoid c
 # Set these in .env:
 # OFFICE_IMAGE=little-office:local
 # CADDY_IMAGE=little-office-caddy:local
+# OFFICE_PULL_POLICY=build
+# CADDY_PULL_POLICY=build
 docker compose build
 ```
 
