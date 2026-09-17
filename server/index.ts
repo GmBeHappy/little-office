@@ -45,6 +45,7 @@ import { ACTIVITY_ACTIONS } from "../shared/activity";
 import { memberRoleSchema } from "../shared/forms";
 import { MAPS } from "../shared/maps";
 import { STATUS_ICONS } from "../shared/status";
+import { rotateDailyMap, mapDay } from "./daily-map";
 
 export const office = new Office(retireRoom, setPresenter, (event) => {
   void db
@@ -52,6 +53,7 @@ export const office = new Office(retireRoom, setPresenter, (event) => {
     .values({ ...event, createdAt: new Date(event.createdAt) })
     .catch(() => console.error("Could not persist office activity."));
 });
+await rotateDailyMap();
 office.configureWorkspace(await workspaceSettings());
 export const whiteboards = new Whiteboards(office);
 function requireSession(s: AuthSession | null, owner = false) {
@@ -227,6 +229,9 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
         .set({
           name,
           mapId: body.mapId,
+          ...(body.dailyMapEnabled === undefined
+            ? {}
+            : { dailyMap: { enabled: body.dailyMapEnabled, date: mapDay() } }),
           revision: sql`${workspaces.revision}+1`,
         })
         .where(
@@ -237,6 +242,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
           mapId: workspaces.mapId,
           revision: workspaces.revision,
           features: workspaces.features,
+          dailyMap: workspaces.dailyMap,
         });
       if (!result.length)
         throw new Error(
@@ -249,6 +255,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       body: t.Object({
         name: t.String({ minLength: 1, maxLength: 60 }),
         mapId: t.Union(MAPS.map((map) => t.Literal(map.id))),
+        dailyMapEnabled: t.Optional(t.Boolean()),
         revision: t.Integer({ minimum: 0 }),
       }),
     },
@@ -260,7 +267,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       const result = await db
         .update(workspaces)
         .set({
-          features: body.features,
+          features: sql`${workspaces.features} || ${JSON.stringify(body.features)}::jsonb`,
           revision: sql`${workspaces.revision}+1`,
         })
         .where(
@@ -271,6 +278,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
           mapId: workspaces.mapId,
           revision: workspaces.revision,
           features: workspaces.features,
+          dailyMap: workspaces.dailyMap,
         });
       if (!result.length)
         throw new Error(
@@ -282,7 +290,11 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
     },
     {
       body: t.Object({
-        features: t.Object({ whiteboard: t.Boolean() }),
+        features: t.Object({
+          whiteboard: t.Boolean(),
+          wildlife: t.Optional(t.Boolean()),
+          activities: t.Optional(t.Boolean()),
+        }),
         revision: t.Integer({ minimum: 0 }),
       }),
     },
@@ -949,6 +961,23 @@ if (import.meta.main) {
     hostname: process.env.API_HOST || "127.0.0.1",
   });
   setInterval(() => office.tick(0.05), 50);
+  let rotating = false;
+  setInterval(async () => {
+    if (rotating || office.members.size) return;
+    rotating = true;
+    try {
+      // Recheck occupancy after the database read before persisting a change.
+      const next = await rotateDailyMap(
+        new Date(),
+        () => office.members.size === 0,
+      );
+      if (next) office.configureWorkspace(next);
+    } catch (error) {
+      console.error("Daily map rotation failed; will retry.", error);
+    } finally {
+      rotating = false;
+    }
+  }, 60_000);
   setInterval(() => whiteboards.prune(), 1000);
   setInterval(() => {
     if (office.dirty) office.broadcast();

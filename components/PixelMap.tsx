@@ -2,18 +2,26 @@
 import { useI18n } from "@/lib/i18n";
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
-import { WORLD, JUMP_DURATION, walkable, type Person } from "@/shared/world";
+import { WORLD, JUMP_DURATION, type Person } from "@/shared/world";
 import { drawOfficeMap, getMap, mapZones, type MapId } from "@/shared/maps";
 import { drawFishing, fishingPhase } from "@/shared/fishing";
 import { drawMapEffects, type MapEffect } from "@/shared/map-effects";
 import {
-  FARM_BLOCKS,
+  farmAnimalWalkable,
+  FARM_ANIMALS,
   FARM_EGG_SPOTS,
   FARM_GROWTH,
   FARM_HENS,
   FARM_HEN_YARD,
   FARM_PLOTS,
 } from "@/shared/farm";
+import {
+  drawHabitat,
+  emptyHabitat,
+  habitatTarget,
+  habitatStyle,
+  type HabitatState,
+} from "@/shared/habitats";
 import { drawCharacter } from "@/shared/avatars";
 import type { Command } from "@/shared/protocol";
 import { STATUS_LABELS, statusIcon } from "@/shared/status";
@@ -34,6 +42,9 @@ type FarmTarget = {
   y: number;
 };
 type Props = {
+  habitat?: HabitatState;
+  wildlifeEnabled: boolean;
+  activitiesEnabled: boolean;
   mapId: MapId;
   effectsEnabled: boolean;
   people: Person[];
@@ -75,6 +86,13 @@ export default function PixelMap(props: Props) {
     const bubbles = document.createElement("div");
     bubbles.className = "status-bubbles";
     parent.appendChild(bubbles);
+    const actionButton = document.createElement("button");
+    actionButton.type = "button";
+    actionButton.hidden = true;
+    actionButton.style.cssText =
+      "position:absolute;bottom:70px;left:50%;transform:translateX(-50%);z-index:5;padding:10px 16px;border-radius:12px;background:#f5f0df;color:#405541;border:1px solid #acb59b;max-width:90%;font:inherit;box-shadow:0 4px 16px #24382922";
+    actionButton.addEventListener("pointerdown", (e) => e.stopPropagation());
+    parent.appendChild(actionButton);
     let game: Phaser.Game | undefined;
     let disposed = false;
     let cleanupInput = () => {};
@@ -96,6 +114,32 @@ export default function PixelMap(props: Props) {
           poseSince: number;
         }
       >();
+      habitatG?: Phaser.GameObjects.Graphics;
+      lastHabitat = 0;
+      interact() {
+        const state = live.current;
+        if (!state.activitiesEnabled) return;
+        if (this.farmTarget(performance.now())) {
+          this.interactFarm(performance.now());
+          return;
+        }
+        const self = state.people.find((p) => p.id === state.self);
+        if (!self) return;
+        const target = habitatTarget(
+          state.mapId,
+          self,
+          state.wildlifeEnabled,
+          state.activitiesEnabled,
+          Date.now(),
+          reducedMotion,
+        );
+        if (target >= 0)
+          state.send({
+            type: "interact",
+            target,
+            revision: state.habitat?.revision ?? 0,
+          });
+      }
       effects: MapEffect[] = [];
       ambient?: Phaser.GameObjects.Graphics;
       lastAmbient = -Infinity;
@@ -175,7 +219,7 @@ export default function PixelMap(props: Props) {
       // The nearest farm action for the player's position; E performs it.
       farmTarget(time: number): FarmTarget | null {
         const farm = this.farm;
-        if (!farm) return null;
+        if (!farm || !live.current.activitiesEnabled) return null;
         const self = live.current.people.find(
           (p) => p.id === live.current.self,
         );
@@ -352,7 +396,7 @@ export default function PixelMap(props: Props) {
           (p) => p.id === live.current.self,
         );
         const yard = FARM_HEN_YARD;
-        for (const hen of farm.hens) {
+        for (const hen of live.current.wildlifeEnabled ? farm.hens : []) {
           const playerDist = self
             ? Math.hypot(self.x - hen.x, self.y - hen.y)
             : Infinity;
@@ -432,7 +476,7 @@ export default function PixelMap(props: Props) {
           p(11, -11 + peck, 2, 2, 0x3e5233);
         }
         // Cows and sheep graze anywhere their hooves can carry them.
-        for (const animal of farm.animals) {
+        for (const animal of live.current.wildlifeEnabled ? farm.animals : []) {
           if (animal.mode === "walk") {
             const dx = animal.tx - animal.x,
               dy = animal.ty - animal.y;
@@ -446,7 +490,7 @@ export default function PixelMap(props: Props) {
               animal.mode = Math.random() < 0.5 ? "graze" : "idle";
               animal.until = time + 1500 + Math.random() * 4000;
               animal.since = time;
-            } else if (walkable(nx, ny, FARM_BLOCKS)) {
+            } else if (farmAnimalWalkable(nx, ny)) {
               animal.x = nx;
               animal.y = ny;
               animal.walkTime += step;
@@ -459,7 +503,7 @@ export default function PixelMap(props: Props) {
             for (let tries = 0; tries < 24; tries++) {
               const tx = 70 + Math.random() * 980,
                 ty = 100 + Math.random() * 540;
-              if (walkable(tx, ty, FARM_BLOCKS)) {
+              if (farmAnimalWalkable(tx, ty)) {
                 animal.tx = tx;
                 animal.ty = ty;
                 break;
@@ -560,6 +604,8 @@ export default function PixelMap(props: Props) {
           (effect) => this.effects.push(effect),
         );
         this.ambient = this.add.graphics().setDepth(-1);
+        this.habitatG = this.add.graphics().setDepth(940);
+        actionButton.onclick = () => this.interact();
         if (getMap(props.mapId).theme === "farm") {
           this.farm = {
             eggs: new Map(),
@@ -579,15 +625,7 @@ export default function PixelMap(props: Props) {
               body: i % 2 ? 0xc98d5a : 0xf5f2e8,
               wing: i % 2 ? 0xb0794a : 0xd9d2c0,
             })),
-            animals: (
-              [
-                ["cow", 210, 330],
-                ["cow", 860, 350],
-                ["sheep", 150, 460],
-                ["sheep", 660, 430],
-                ["sheep", 300, 630],
-              ] as const
-            ).map(([kind, x, y]) => ({
+            animals: FARM_ANIMALS.map(([kind, x, y]) => ({
               kind,
               x,
               y,
@@ -793,7 +831,7 @@ export default function PixelMap(props: Props) {
           }
           if (e.code === "KeyE" && !e.ctrlKey && !e.metaKey && !e.altKey) {
             e.preventDefault();
-            if (!e.repeat) this.interactFarm(performance.now());
+            if (!e.repeat) this.interact();
             return;
           }
           if (e.code === "Space") {
@@ -879,6 +917,54 @@ export default function PixelMap(props: Props) {
           this.ambientStill = still;
         }
         if (this.farm) this.updateFarm(time, delta);
+        if (this.habitatG && time - this.lastHabitat > 80) {
+          const state = live.current,
+            now = Date.now();
+          this.habitatG.clear();
+          drawHabitat(
+            state.mapId,
+            state.habitat ?? emptyHabitat(),
+            now,
+            state.wildlifeEnabled,
+            state.activitiesEnabled,
+            reducedMotion,
+            (x, y, w, h, color) =>
+              this.habitatG!.fillStyle(color).fillRect(x, y, w, h),
+          );
+          const self = state.people.find((p) => p.id === state.self);
+          const target = self
+            ? habitatTarget(
+                state.mapId,
+                self,
+                state.wildlifeEnabled,
+                state.activitiesEnabled,
+                now,
+                reducedMotion,
+              )
+            : -1;
+          const farmTarget = this.farmTarget(time);
+          actionButton.hidden =
+            (!farmTarget && target < 0) ||
+            !!document.querySelector('[role="dialog"], dialog[open]');
+          if (!actionButton.hidden) {
+            const style = habitatStyle(state.mapId),
+              h = state.habitat;
+            const step = h && now - h.updatedAt < 60000 ? h.step : 0;
+            actionButton.textContent = farmTarget
+              ? t(
+                  farmTarget.kind === "egg"
+                    ? "[E] Collect the egg"
+                    : farmTarget.kind === "plant"
+                      ? "[E] Plant seeds"
+                      : "[E] Harvest the wheat",
+                )
+              : "E · " +
+                t(target ? style.quick : style.activity) +
+                (target === 0 && step ? " · " + t(style.stages[step - 1]) : "");
+            actionButton.disabled = !farmTarget && target === 0 && step === 3;
+          }
+          this.lastHabitat = time;
+        }
         const state = live.current;
         if (
           document.querySelector(

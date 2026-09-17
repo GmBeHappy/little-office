@@ -1,6 +1,6 @@
 {
-  "id": "aedb8fee-cf67-4fc1-9fe5-04be388481fe",
-  "prevId": "1682761c-a2fc-4717-8ce5-6d5b8cdc6002",
+  "id": "b6ee05bd-df11-44b1-a4c2-894595e541cc",
+  "prevId": "aedb8fee-cf67-4fc1-9fe5-04be388481fe",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -527,6 +527,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "statusIcon": {
+          "name": "statusIcon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
         },
         "mustChangePassword": {
           "name": "mustChangePassword",

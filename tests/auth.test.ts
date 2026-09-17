@@ -43,13 +43,13 @@ beforeAll(async () => {
   );
   server = new PGLiteSocketServer({
     db: pg,
-    port: 15433,
+    // Let the OS choose a free port; fixed ports can be reserved on Windows.
+    port: 0,
     host: "127.0.0.1",
     maxConnections: 10,
   });
   await server.start();
-  process.env.DATABASE_URL =
-    "postgres://postgres:postgres@127.0.0.1:15433/postgres";
+  process.env.DATABASE_URL = `postgres://postgres:postgres@${server.getServerConn()}/postgres`;
   process.env.BETTER_AUTH_SECRET = crypto.randomUUID() + crypto.randomUUID();
   process.env.APP_URL = "http://localhost:3000";
   process.env.OFFICE_S3_ACCESS_KEY_ID = "";
@@ -410,6 +410,81 @@ describe("authentication and authorization", () => {
     expect(
       (await request("/admin/workspace", body, ownerCookie, "PATCH")).status,
     ).toBe(400);
+  });
+  test("daily map rotation is owner-controlled, persists once per Bangkok day, and waits for an empty office", async () => {
+    const { rotateDailyMap, mapDay } = await import("../server/daily-map");
+    const { workspaceSettings } = await import("../server/db");
+    const { office } = await import("../server/index");
+    const { MAPS } = await import("../shared/maps");
+    expect(mapDay(new Date("2026-10-01T16:59:59Z"))).toBe("2026-10-01");
+    expect(mapDay(new Date("2026-10-01T17:00:00Z"))).toBe("2026-10-02");
+    const initial = await workspaceSettings();
+    const body = {
+      name: initial.name,
+      mapId: initial.mapId,
+      revision: initial.revision,
+      dailyMapEnabled: true,
+    };
+    expect(
+      (await request("/admin/workspace", body, memberCookie, "PATCH")).status,
+    ).toBe(400);
+    expect(
+      (
+        await request(
+          "/admin/workspace",
+          { ...body, dailyMapEnabled: "yes" },
+          ownerCookie,
+          "PATCH",
+        )
+      ).status,
+    ).toBe(400);
+    const enabled = await request(
+      "/admin/workspace",
+      body,
+      ownerCookie,
+      "PATCH",
+    );
+    expect(enabled.status).toBe(200);
+    expect(enabled.data.workspace.dailyMap).toEqual({
+      enabled: true,
+      date: mapDay(),
+    });
+    expect(enabled.data.workspace.mapId).toBe(initial.mapId);
+    expect(await rotateDailyMap()).toBeUndefined();
+    const tomorrow = new Date(Date.now() + 86400000);
+    expect(await rotateDailyMap(tomorrow, () => false)).toBeUndefined();
+    expect((await workspaceSettings()).revision).toBe(
+      enabled.data.workspace.revision,
+    );
+    const rolls = await Promise.all([
+      rotateDailyMap(tomorrow),
+      rotateDailyMap(tomorrow),
+    ]);
+    expect(rolls.filter(Boolean)).toHaveLength(1);
+    const rotated = await workspaceSettings();
+    expect(rotated.mapId).not.toBe(initial.mapId);
+    expect(
+      MAPS.some((map) => map.size === "small" && map.id === rotated.mapId),
+    ).toBe(true);
+    expect(rotated.revision).toBe(enabled.data.workspace.revision + 1);
+    expect(await rotateDailyMap(tomorrow)).toBeUndefined();
+    expect(await rotateDailyMap(new Date())).toBeUndefined();
+    office.configureWorkspace(rotated);
+    const disabled = await request(
+      "/admin/workspace",
+      {
+        name: rotated.name,
+        mapId: rotated.mapId,
+        revision: rotated.revision,
+        dailyMapEnabled: false,
+      },
+      ownerCookie,
+      "PATCH",
+    );
+    expect(disabled.status).toBe(200);
+    expect(
+      await rotateDailyMap(new Date(Date.now() + 2 * 86400000)),
+    ).toBeUndefined();
   });
   test("custom avatar profile updates persist and reject invalid combinations", async () => {
     const body = { name: "Custom owner", avatar: "custom:4:2:5:1" };

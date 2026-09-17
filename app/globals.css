@@ -2673,6 +2673,14 @@
   .avatar-turn {
     @apply inline-flex items-center justify-center gap-[6px] p-[8px] text-[11px];
   }
+  .avatar-preview-actions {
+    @apply flex flex-wrap items-center justify-center gap-[6px];
+  }
+  .avatar-random {
+    @apply inline-flex items-center justify-center gap-[6px] p-[8px] text-[11px];
+    color: #445e39;
+    background: #edf4e4;
+  }
   .avatar-options {
     @apply flex flex-col gap-[18px] min-w-[0];
   }
@@ -2683,26 +2691,22 @@
   .avatar-options legend {
     @apply text-[12px] font-semibold mb-[9px];
   }
-  .skin-tone-options,
-  .avatar-style-options {
+  .skin-tone-options {
     @apply grid gap-[6px];
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
-  .skin-tone-options button,
-  .avatar-style-options button {
+  .skin-tone-options button {
     @apply relative flex flex-col items-center justify-center gap-[5px] rounded-[10px];
     padding: 7px 3px;
     border: 1px solid #dfe4d6;
     background: #fffdf8;
   }
-  .skin-tone-options button[aria-pressed="true"],
-  .avatar-style-options button[aria-pressed="true"] {
+  .skin-tone-options button[aria-pressed="true"] {
     background: #eaf1df;
     border-color: #789661;
     box-shadow: 0 0 0 1px #789661;
   }
-  .skin-tone-options small,
-  .avatar-style-options small {
+  .skin-tone-options small {
     @apply text-[9px] leading-[1.35];
     overflow-wrap: anywhere;
   }
@@ -2715,11 +2719,56 @@
     color: white;
     filter: drop-shadow(0 1px 2px #0009);
   }
-  .avatar-style-options .pixel-avatar {
-    @apply w-[32px] h-[51px];
+  .avatar-carousel-fieldset legend {
+    @apply flex items-center justify-between w-full;
   }
-  .avatar-style-hat {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+  .avatar-carousel-fieldset legend small {
+    @apply text-[9px] font-normal;
+    color: #87907e;
+  }
+  .avatar-carousel {
+    @apply grid items-stretch gap-[6px] min-w-[0];
+    --avatar-card-width: 84px;
+    grid-template-columns: 34px minmax(0, 1fr) 34px;
+  }
+  .avatar-carousel-arrow {
+    @apply grid place-items-center rounded-[10px] p-[0];
+    min-height: 78px;
+    color: #5c7450;
+    border: 1px solid #dfe4d6;
+    background: #f3f5ec;
+  }
+  .avatar-carousel-arrow:hover {
+    background: #e7eedc;
+    border-color: #aaba9b;
+  }
+  .avatar-carousel-track {
+    @apply flex justify-center gap-[6px] min-w-[0] overflow-hidden;
+  }
+  .avatar-carousel-choice {
+    @apply relative flex flex-col items-center justify-center gap-[5px] rounded-[10px] shrink-0;
+    width: var(--avatar-card-width);
+    min-height: 78px;
+    padding: 7px 4px;
+    border: 1px solid #dfe4d6;
+    background: #fffdf8;
+  }
+  .avatar-carousel-choice:hover {
+    background: #f7f5ed;
+    border-color: #c3cdb8;
+  }
+  .avatar-carousel-choice[aria-pressed="true"] {
+    background: #eaf1df;
+    border-color: #789661;
+    box-shadow: inset 0 0 0 1px #789661;
+  }
+  .avatar-carousel-choice small {
+    @apply text-[9px] leading-[1.25] text-center;
+    min-height: 23px;
+    overflow-wrap: anywhere;
+  }
+  .avatar-carousel-choice .pixel-avatar {
+    @apply w-[34px] h-[48px];
   }
   .appearance-check {
     @apply absolute top-[3px] right-[3px];
@@ -2752,18 +2801,26 @@
       @apply w-[76px] h-[122px];
     }
     .avatar-preview-panel > .eyebrow,
-    .avatar-preview-panel > button,
+    .avatar-preview-panel > .avatar-preview-actions,
     .avatar-preview-panel > p {
       grid-column: 2;
     }
     .avatar-preview-panel p {
       @apply m-[0];
     }
-    .avatar-preview-panel > button {
-      width: max-content;
+    .avatar-preview-actions {
+      @apply justify-start;
     }
-    .avatar-style-hat {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+    .avatar-carousel {
+      --avatar-card-width: 78px;
+      grid-template-columns: 30px minmax(0, 1fr) 30px;
+      gap: 4px;
+    }
+    .avatar-carousel-arrow {
+      min-height: 74px;
+    }
+    .avatar-carousel-choice {
+      min-height: 74px;
     }
   }
 

@@ -189,7 +189,7 @@ describe("office behavior", () => {
     expect(a.microphone).toBe(true);
   });
   test("all maps have the advertised seats and reachable safe entrances", () => {
-    expect(MAPS.filter((map) => map.size === "small")).toHaveLength(7);
+    expect(MAPS.filter((map) => map.size === "small")).toHaveLength(12);
     expect(MAPS.filter((map) => map.size === "large")).toHaveLength(3);
     for (const map of MAPS) {
       const blocks = mapBlocks(map);

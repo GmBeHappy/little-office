@@ -101,6 +101,10 @@ test("all water maps expose fishable shores, but dry maps and facing away do not
     "temple-small",
     "beach-small",
     "farm-small",
+    "cloudpeak-small",
+    "mangrove-small",
+    "lakeside-small",
+    "glasshouse-small",
   ]);
   for (const map of MAPS) {
     for (const b of mapWater(map)) {

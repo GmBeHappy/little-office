@@ -101,16 +101,15 @@ Actual resolution and frame rate depend on the capture source, browser, CPU/GPU,
 
 Workspace owners can change the name and shared map under **Settings → Workspace**. The selection persists in PostgreSQL and updates all connected users.
 
-| Theme           | 4–8 people · 8 work seats | 10–12 people · 12 work seats |
-| --------------- | ------------------------- | ---------------------------- |
-| Nature outdoors | Fern Grove                | Willow Gardens               |
-| Camping         | Pine Camp                 | Summit Basecamp              |
-| Space           | Lunar Outpost             | Orbital Station              |
-| Japanese zen    | Sakura Garden             | —                            |
-| Thai temple     | Siam Courtyard            | —                            |
-| Summer beach    | Summer Cove               | —                            |
+The picker includes 12 maps for 4–8 people: Fern Grove, Pine Camp, Lunar Outpost, Sakura Garden, Siam Courtyard, Summer Cove, Sunny Acres, Cloudpeak Lodge, Mangrove Hideaway, Rainforest Canopy, Misty Lakeside, and Glasshouse Garden. Older 10–12-person maps remain compatible with saved workspaces but are no longer offered in the picker. Sunny Acres has farming activities instead of desks; the other selectable maps have eight work seats.
 
-Sakura Garden has a distinct layout: two tea-house meeting rooms across the north, four work areas around a raked sand garden and koi pond, a walkable wooden bridge, pink sakura trees, and stone lanterns. Choose **4–8 people → Sakura Garden** to select it.
+Owners can enable **Randomize map daily** on the Maps tab, then save. It is off by default. The server checks every minute after midnight in **Asia/Bangkok**, waits until the office is empty, and chooses from the 12 selectable maps excluding the current one. Enabling it or manually saving a map keeps that choice for the rest of the day. The choice and date persist in PostgreSQL, including across restarts; missed days produce one new choice on the next startup. Turning it off keeps the current map. Apply database migrations before starting the updated API.
+
+Every map also has roaming pixel wildlife (a rover on Lunar Outpost) and a themed shared activity station. Approach an animal or station and press **E**, or tap the nearby action button on mobile. Stations advance through three steps, show the same progress to everyone, and reset after a minute of inactivity. Animal interactions show a brief heart reaction. These new activities are temporary: changing maps or restarting the API resets them. Existing Sunny Acres farming progress remains local to each player.
+
+Owners can toggle **Roaming wildlife** and **Interactive activities** in the Features tab. The wildlife switch hides the new animals and Sunny Acres animals; the activities switch disables animal/station interactions and Sunny Acres farming actions. Fishing retains its existing controls. Wildlife follows dry, obstacle-checked walking routes independently of the ambient water/tree effects switch. Reduced-motion preferences pause the new wildlife at safe home positions without hiding the animals. Activities make no sound.
+
+Sakura Garden has a distinct layout: two tea-house meeting rooms across the north, four work areas around a raked sand garden and koi pond, a walkable wooden bridge, pink sakura trees, and stone lanterns. Choose **Sakura Garden** to select it.
 
 Siam Courtyard places a golden hall north of an open chedi courtyard and a garden sala to the southwest. Summer Cove connects a surf club, beach workstations, and a pier lounge around turquoise water. Both have eight work seats and their own room entrances and paths.
 
@@ -208,7 +207,7 @@ docker login ghcr.io -u YOUR_GITHUB_USERNAME
 
 Edit `.env` with your domains and secrets. Run `openssl rand -hex 32` separately for `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, and `LIVEKIT_API_SECRET`; use `openssl rand -hex 16` for `LIVEKIT_API_KEY`. Put the same PostgreSQL password into `DATABASE_URL`. Set `APP_URL=https://<office-domain>` and `LIVEKIT_URL=wss://<rtc-domain>`. Leave OIDC fields blank until you configure your provider.
 
-`OFFICE_IMAGE` and `CADDY_IMAGE` default to `latest`. To pin a build, set both to the corresponding `sha-<full-commit-SHA>` tag from Actions, or their individual image digests. Keep the repository checkout and image version from the same commit/release when upgrading deployment configuration.
+`OFFICE_IMAGE` and `CADDY_IMAGE` default to `latest`, and their pull policies default to `always`. Every `docker compose up` checks GHCR and uses a newer successful `main` build without editing `.env`. To pin a build, set both images to the corresponding `sha-<full-commit-SHA>` tag from Actions, or their individual image digests. Keep the repository checkout and image version from the same commit/release when upgrading deployment configuration.
 
 ```sh
 docker compose pull
@@ -264,12 +263,11 @@ Caddy and its layer-4 module are version-pinned; the PostgreSQL major tag receiv
 
 ### Update an existing VM
 
-Schedule a short interruption for active calls. Back up the database first, then update the checkout and the two image references in `.env` together:
+Schedule a short interruption for active calls. Back up the database first, then update the checkout and pull the moving `latest` tags:
 
 ```sh
 docker compose exec -T postgres pg_dump -U office office > office-backup.sql
 git pull --ff-only
-# If using pinned tags, update OFFICE_IMAGE and CADDY_IMAGE in .env now.
 docker compose pull
 docker compose stop web api
 docker compose up --no-deps --force-recreate --exit-code-from migrate migrate
@@ -288,6 +286,8 @@ The same Compose file retains local build definitions. Use local tags to avoid c
 # Set these in .env:
 # OFFICE_IMAGE=little-office:local
 # CADDY_IMAGE=little-office-caddy:local
+# OFFICE_PULL_POLICY=build
+# CADDY_PULL_POLICY=build
 docker compose build
 ```
 
@@ -311,7 +311,7 @@ bun test
 bun build
 ```
 
-The test suite covers password authentication, access controls, disabled methods, room admission, movement validation, summon consent/expiry, duplicate tabs, and media room generation changes. Authentication tests use a separate ephemeral database on localhost:15433.
+The test suite covers password authentication, access controls, disabled methods, room admission, movement validation, summon consent/expiry, duplicate tabs, and media room generation changes. Authentication tests use a separate ephemeral database on an available localhost port selected by the operating system.
 
 For the two-browser test, start the app, database, and LiveKit first:
 

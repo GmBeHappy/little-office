@@ -164,6 +164,7 @@ export type Invitation = {
 };
 export type Snapshot = {
   workspace: import("./maps").WorkspaceSettings;
+  habitat?: import("./habitats").HabitatState;
   type: "snapshot";
   epoch: string;
   self: string;

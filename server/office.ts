@@ -1,3 +1,4 @@
+import { emptyHabitat, habitatTarget } from "../shared/habitats";
 import { startFishing, FISHING_CATCH_DURATION } from "../shared/fishing";
 import { isAvatar } from "../shared/appearance";
 import {
@@ -36,6 +37,7 @@ type Member = Person & {
   sharing: boolean;
 };
 export class Office {
+  habitat = emptyHabitat();
   workspace: WorkspaceSettings = { ...DEFAULT_WORKSPACE };
   blocks = mapBlocks(getMap(DEFAULT_WORKSPACE.mapId));
   zones = mapZones(getMap(DEFAULT_WORKSPACE.mapId));
@@ -46,6 +48,7 @@ export class Office {
       for (const member of this.members.values()) this.stopSharing(member);
     this.workspace = { ...next };
     if (changedMap) {
+      this.habitat = emptyHabitat();
       this.blocks = mapBlocks(getMap(next.mapId));
       this.zones = mapZones(getMap(next.mapId));
       for (const room of new Set(
@@ -311,6 +314,47 @@ export class Office {
         m.status = m.manualStatus;
     }
     switch (command.type) {
+      case "interact": {
+        if (
+          this.workspace.features?.activities === false ||
+          command.revision !== this.habitat.revision
+        )
+          break;
+        const target = habitatTarget(
+          this.workspace.mapId,
+          m,
+          this.workspace.features?.wildlife !== false,
+          true,
+          now,
+        );
+        // Reduced-motion clients show animals at their safe home position.
+        if (
+          target !== command.target &&
+          habitatTarget(
+            this.workspace.mapId,
+            m,
+            this.workspace.features?.wildlife !== false,
+            true,
+            now,
+            true,
+          ) !== command.target
+        )
+          break;
+        if (command.target === 0) {
+          const step =
+            now - this.habitat.updatedAt >= 60000 ? 0 : this.habitat.step;
+          if (step === 3 || now - this.habitat.updatedAt < 1000) break;
+          this.habitat.step = step + 1;
+          this.habitat.updatedAt = now;
+        } else {
+          this.habitat.animal = command.target - 1;
+          this.habitat.affectionUntil = now + 5000;
+        }
+        this.habitat.revision++;
+        this.dirty = true;
+        break;
+      }
+
       case "microphone":
         if (command.room === m.room) m.microphone = !!m.room && command.enabled;
         break;
@@ -635,6 +679,7 @@ export class Office {
     for (const m of this.members.values()) {
       const snapshot: Snapshot = {
         workspace: this.workspace,
+        habitat: { ...this.habitat },
         type: "snapshot",
         epoch: this.epoch,
         self: m.id,
