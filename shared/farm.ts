@@ -1,5 +1,5 @@
 import { waterRipple, type MapEffectSink } from "./map-effects";
-import { ZONES } from "./world";
+import { ZONES, walkable } from "./world";
 
 // A working farmstead: the farmhouse and barn host meetings while the yard
 // between them is one big playground. No desks — eggs, crops, and fish instead.
@@ -342,4 +342,19 @@ export function drawFarmMap(
   label("4–8 PEOPLE · MEET AT THE FARMHOUSE & BARN", 560, 676, 10, ink);
   label("↑", 234, 318, 16, ink);
   label("↑", 919, 318, 16, ink);
+}
+
+export const FARM_ANIMALS = [
+  ["cow", 210, 330],
+  ["cow", 860, 350],
+  ["sheep", 150, 570],
+  ["sheep", 660, 430],
+  ["sheep", 330, 640],
+] as const;
+
+// Livestock are wider than player collision points; keep their bodies off banks.
+export function farmAnimalWalkable(x: number, y: number) {
+  return [-22, 0, 22].every((dx) =>
+    [-8, 0, 8].every((dy) => walkable(x + dx, y + dy, FARM_BLOCKS)),
+  );
 }

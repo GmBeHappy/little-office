@@ -751,35 +751,6 @@ export default function OfficeApp() {
                 speaking={media.speaking}
               />
             </div>
-            <div className="map-bottomline">
-              <span>
-                <i className="green-dot" />
-                {self?.conversation.startsWith("call:")
-                  ? t("Private call")
-                  : self?.zone !== "floor"
-                    ? t("Meeting room audio")
-                    : self?.status === "dnd"
-                      ? t("Do not disturb · audio paused")
-                      : t("Nearby voice · automatic")}
-                <span className="muted">
-                  {" "}
-                  ·{" "}
-                  {audience.length
-                    ? t("{count} in your conversation", {
-                        count: audience.length,
-                      })
-                    : t("a little room to focus")}
-                </span>
-              </span>
-              <Button
-                variant="link"
-                className="text-button"
-                onClick={() => setModal("help")}
-              >
-                {t("How it works")}
-                <ArrowUpRight size={13} />
-              </Button>
-            </div>
           </div>
           {media.error && (
             <div className="media-error">

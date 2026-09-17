@@ -325,15 +325,27 @@ export class Office {
           true,
           now,
         );
-        if (target !== command.target) break;
-        if (target === 0) {
+        // Reduced-motion clients show animals at their safe home position.
+        if (
+          target !== command.target &&
+          habitatTarget(
+            this.workspace.mapId,
+            m,
+            this.workspace.features?.wildlife !== false,
+            true,
+            now,
+            true,
+          ) !== command.target
+        )
+          break;
+        if (command.target === 0) {
           const step =
             now - this.habitat.updatedAt >= 60000 ? 0 : this.habitat.step;
           if (step === 3 || now - this.habitat.updatedAt < 1000) break;
           this.habitat.step = step + 1;
           this.habitat.updatedAt = now;
         } else {
-          this.habitat.animal = target - 1;
+          this.habitat.animal = command.target - 1;
           this.habitat.affectionUntil = now + 5000;
         }
         this.habitat.revision++;

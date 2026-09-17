@@ -2,12 +2,13 @@
 import { useI18n } from "@/lib/i18n";
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
-import { WORLD, JUMP_DURATION, walkable, type Person } from "@/shared/world";
+import { WORLD, JUMP_DURATION, type Person } from "@/shared/world";
 import { drawOfficeMap, getMap, mapZones, type MapId } from "@/shared/maps";
 import { drawFishing, fishingPhase } from "@/shared/fishing";
 import { drawMapEffects, type MapEffect } from "@/shared/map-effects";
 import {
-  FARM_BLOCKS,
+  farmAnimalWalkable,
+  FARM_ANIMALS,
   FARM_EGG_SPOTS,
   FARM_GROWTH,
   FARM_HENS,
@@ -123,6 +124,7 @@ export default function PixelMap(props: Props) {
           state.wildlifeEnabled,
           state.activitiesEnabled,
           Date.now(),
+          reducedMotion,
         );
         if (target >= 0)
           state.send({
@@ -481,7 +483,7 @@ export default function PixelMap(props: Props) {
               animal.mode = Math.random() < 0.5 ? "graze" : "idle";
               animal.until = time + 1500 + Math.random() * 4000;
               animal.since = time;
-            } else if (walkable(nx, ny, FARM_BLOCKS)) {
+            } else if (farmAnimalWalkable(nx, ny)) {
               animal.x = nx;
               animal.y = ny;
               animal.walkTime += step;
@@ -494,7 +496,7 @@ export default function PixelMap(props: Props) {
             for (let tries = 0; tries < 24; tries++) {
               const tx = 70 + Math.random() * 980,
                 ty = 100 + Math.random() * 540;
-              if (walkable(tx, ty, FARM_BLOCKS)) {
+              if (farmAnimalWalkable(tx, ty)) {
                 animal.tx = tx;
                 animal.ty = ty;
                 break;
@@ -616,15 +618,7 @@ export default function PixelMap(props: Props) {
               body: i % 2 ? 0xc98d5a : 0xf5f2e8,
               wing: i % 2 ? 0xb0794a : 0xd9d2c0,
             })),
-            animals: (
-              [
-                ["cow", 210, 330],
-                ["cow", 860, 350],
-                ["sheep", 150, 460],
-                ["sheep", 660, 430],
-                ["sheep", 300, 630],
-              ] as const
-            ).map(([kind, x, y]) => ({
+            animals: FARM_ANIMALS.map(([kind, x, y]) => ({
               kind,
               x,
               y,
@@ -926,7 +920,7 @@ export default function PixelMap(props: Props) {
             now,
             state.wildlifeEnabled,
             state.activitiesEnabled,
-            reducedMotion || !state.effectsEnabled,
+            reducedMotion,
             (x, y, w, h, color) =>
               this.habitatG!.fillStyle(color).fillRect(x, y, w, h),
           );
@@ -938,6 +932,7 @@ export default function PixelMap(props: Props) {
                 state.wildlifeEnabled,
                 state.activitiesEnabled,
                 now,
+                reducedMotion,
               )
             : -1;
           const farmTarget = this.farmTarget(time);

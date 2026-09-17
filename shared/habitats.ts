@@ -1,4 +1,4 @@
-import { getMap, mapBlocks, mapZones } from "./maps";
+import { getMap, mapBlocks, mapZones, mapWater } from "./maps";
 import { walkable, zoneAt, type Person } from "./world";
 
 export const HABITATS = {
@@ -105,15 +105,33 @@ export function habitatStyle(mapId: string) {
   const key = mapId.split("-")[0] as keyof typeof HABITATS;
   return HABITATS[key] || HABITATS.nature;
 }
+// Check the animal's footprint, not only its center, including decorative water.
+function habitatGround(mapId: string) {
+  const map = getMap(mapId),
+    blocks = mapBlocks(map),
+    zones = mapZones(map),
+    water = mapWater(map);
+  return (x: number, y: number) =>
+    [-14, 0, 14].every((dx) =>
+      [-6, 0, 6].every(
+        (dy) =>
+          walkable(x + dx, y + dy, blocks) &&
+          zoneAt(x + dx, y + dy, zones) === "floor",
+      ),
+    ) &&
+    !water.some(
+      (w) =>
+        x + 24 > w.x && x - 24 < w.x + w.w && y + 8 > w.y && y - 8 < w.y + w.h,
+    );
+}
+
 // Routes and stations derive from the same collision geometry as the server.
 // Cache by map ID: layouts are immutable for the lifetime of a build.
 const layouts = new Map<string, { x: number; y: number }[]>();
 export function habitatLayout(mapId: string) {
   const cached = layouts.get(mapId);
   if (cached) return cached;
-  const map = getMap(mapId),
-    blocks = mapBlocks(map),
-    zones = mapZones(map);
+  const safe = habitatGround(mapId);
   const points: { x: number; y: number }[] = [];
   for (let y = 340; y <= 600; y += 60)
     for (let x = 120; x <= 1000; x += 80) {
@@ -122,11 +140,7 @@ export function habitatLayout(mapId: string) {
       if (points.some((p) => Math.hypot(x - p.x, y - p.y) < 170)) continue;
       if (
         [-24, 0, 24].every((dx) =>
-          [-18, 0, 18].every(
-            (dy) =>
-              walkable(x + dx, y + dy, blocks) &&
-              zoneAt(x + dx, y + dy, zones) === "floor",
-          ),
+          [-18, 0, 18].every((dy) => safe(x + dx, y + dy)),
         )
       )
         points.push({ x, y });
@@ -134,18 +148,87 @@ export function habitatLayout(mapId: string) {
   layouts.set(mapId, points);
   return points;
 }
+// Deterministic routes keep rendering and server interaction checks in agreement.
+// A short grid search finds a dry route; every segment is checked between nodes.
+const routes = new Map<string, { x: number; y: number }[]>();
+function animalRoute(mapId: string, index: number) {
+  const key = `${mapId}:${index}`;
+  const cached = routes.get(key);
+  if (cached) return cached;
+  const home = habitatLayout(mapId)[index + 1],
+    safe = habitatGround(mapId);
+  const nodes = [{ ...home, parent: -1 }];
+  const seen = new Set([`${home.x},${home.y}`]);
+  let farthest = 0;
+  const directions = [
+    [24, 0],
+    [0, 24],
+    [-24, 0],
+    [0, -24],
+  ];
+  for (let n = 0; n < nodes.length; n++) {
+    const p = nodes[n];
+    if (
+      Math.hypot(p.x - home.x, p.y - home.y) >
+      Math.hypot(nodes[farthest].x - home.x, nodes[farthest].y - home.y)
+    )
+      farthest = n;
+    for (let d = 0; d < 4; d++) {
+      const [dx, dy] = directions[(d + index) % 4],
+        x = p.x + dx,
+        y = p.y + dy;
+      if (
+        Math.abs(x - home.x) > 144 ||
+        Math.abs(y - home.y) > 144 ||
+        seen.has(`${x},${y}`)
+      )
+        continue;
+      seen.add(`${x},${y}`);
+      if (
+        ![1, 2, 3, 4, 5, 6].every((step) =>
+          safe(p.x + (dx * step) / 6, p.y + (dy * step) / 6),
+        )
+      )
+        continue;
+      nodes.push({ x, y, parent: n });
+    }
+  }
+  const route = [];
+  for (let n = farthest; n >= 0; n = nodes[n].parent)
+    route.unshift({ x: nodes[n].x, y: nodes[n].y });
+  routes.set(key, route);
+  return route;
+}
 export function animalPosition(
   mapId: string,
   index: number,
   now: number,
   still = false,
 ) {
-  const home = habitatLayout(mapId)[index + 1];
-  const phase = now / 6000 + index * 2;
+  const route = animalRoute(mapId, index),
+    home = route[0];
+  const travel = (route.length - 1) * 1000,
+    pause = 1800;
+  const phase =
+    (((now + index * 2300) % (2 * (travel + pause))) + 2 * (travel + pause)) %
+    (2 * (travel + pause));
+  const returning = phase >= travel + pause;
+  const elapsed = returning ? phase - travel - pause : phase;
+  const distance = Math.min(travel, elapsed) / 1000;
+  const progress = still
+    ? 0
+    : returning
+      ? route.length - 1 - distance
+      : distance;
+  const segment = Math.min(Math.floor(progress), Math.max(0, route.length - 2));
+  const a = route[segment],
+    b = route[Math.min(segment + 1, route.length - 1)];
+  const fraction = progress - segment;
   return {
-    x: home.x + (still ? 0 : Math.sin(phase) * 18),
-    y: home.y + (still ? 0 : Math.sin(phase * 2) * 9),
-    right: Math.cos(phase) > 0,
+    x: still ? home.x : a.x + (b.x - a.x) * fraction,
+    y: still ? home.y : a.y + (b.y - a.y) * fraction,
+    right: still ? true : returning ? b.x <= a.x : b.x >= a.x,
+    moving: !still && travel > 0 && elapsed < travel,
   };
 }
 export function habitatTarget(
@@ -154,6 +237,7 @@ export function habitatTarget(
   wildlife: boolean,
   activities: boolean,
   now: number,
+  still = false,
 ) {
   if (person.zone !== "floor") return -1;
   const points = habitatLayout(mapId);
@@ -161,7 +245,7 @@ export function habitatTarget(
     distance = 64;
   for (let i = 0; i < points.length; i++) {
     if (i === 0 ? !activities : !wildlife || !activities) continue;
-    const p = i ? animalPosition(mapId, i - 1, now) : points[i];
+    const p = i ? animalPosition(mapId, i - 1, now, still) : points[i];
     const d = Math.hypot(p.x - person.x, p.y - person.y);
     if (d < distance) {
       target = i;
@@ -259,7 +343,7 @@ export function drawHabitat(
     r(-9, -10, 18, 13, color);
     r(4, -16, 10, 11, color);
     r(11, -13, 2, 2, 0x3f5147);
-    const stride = still ? 0 : Math.round(Math.sin(now / 160 + i) * 2);
+    const stride = !p.moving ? 0 : Math.round(Math.sin(now / 160 + i) * 2);
     r(-6, 2, 4, 4 + stride, 0x8b795e);
     r(5, 2, 4, 4 - stride, 0x8b795e);
     if (bird) {
