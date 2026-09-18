@@ -15,6 +15,13 @@
       "when": 1789624683048,
       "tag": "0001_peaceful_swarm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789629932850,
+      "tag": "0002_status_bubbles",
+      "breakpoints": true
     }
   ]
 }

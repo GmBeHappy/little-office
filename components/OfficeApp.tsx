@@ -77,6 +77,14 @@ import { Select } from "./Select";
 import { boardScope, whiteboardEnabled } from "@/shared/whiteboard";
 import { Avatar } from "./Avatar";
 import { AvatarEditor } from "./AvatarEditor";
+import {
+  STATUS_LABELS as statusLabel,
+  STATUS_ICONS,
+  STATUS_ICON_LABELS,
+  STATUS_PRESETS,
+  statusIcon,
+  statusIconSchema,
+} from "@/shared/status";
 import { DeviceSelect } from "./DeviceSelect";
 import { ToolbarMenu } from "./ToolbarMenu";
 import { WorkspaceSettings } from "./WorkspaceSettings";
@@ -91,12 +99,6 @@ const PixelMap = dynamic(() => import("./PixelMap"), {
 });
 const Whiteboard = dynamic(() => import("./Whiteboard"), { ssr: false });
 const EmotePicker = dynamic(() => import("./EmotePicker"), { ssr: false });
-const statusLabel = {
-  available: "Available",
-  busy: "Busy",
-  dnd: "Do not disturb",
-  away: "Away",
-};
 type AdminUser = {
   localPassword: boolean;
   id: string;
@@ -859,6 +861,7 @@ export default function OfficeApp() {
                             {p.id === user.id && <small>{t("(you)")}</small>}
                           </strong>
                           <span>
+                            {statusIcon(p.status, p.statusIcon)}{" "}
                             {p.statusText || t(statusLabel[p.status])}
                           </span>
                         </div>
@@ -1302,7 +1305,6 @@ export default function OfficeApp() {
               <Profile
                 user={user}
                 self={self}
-                send={send}
                 saved={async () => {
                   await refresh();
                   setModal(null);
@@ -1667,12 +1669,10 @@ function PasswordChange({ onDone }: { onDone: () => Promise<void> }) {
 function Profile({
   user,
   self,
-  send,
   saved,
 }: {
   user: User;
   self?: Person;
-  send: (c: Command) => void;
   saved: () => Promise<void>;
 }) {
   const { t } = useI18n();
@@ -1681,8 +1681,12 @@ function Profile({
     defaultValues: {
       name: user.name,
       avatar: user.avatar,
-      status: self?.status || "available",
-      statusText: self?.statusText || "",
+      status:
+        self?.status || (user.availability as Availability) || "available",
+      statusText: self?.statusText ?? user.statusText ?? "",
+      statusIcon: statusIconSchema.parse(
+        self?.statusIcon ?? user.statusIcon ?? "",
+      ),
     },
   });
   return (
@@ -1691,11 +1695,14 @@ function Profile({
         noValidate
         className="space-y-5"
         onSubmit={form.handleSubmit(
-          async ({ name, avatar, status, statusText }) => {
+          async ({ name, avatar, status, statusText, statusIcon }) => {
             form.clearErrors("root");
             try {
-              await api("/profile", { name, avatar }, "PATCH");
-              send({ type: "status", status, text: statusText });
+              await api(
+                "/profile",
+                { name, avatar, status, statusText, statusIcon },
+                "PATCH",
+              );
               await saved();
             } catch (error) {
               form.setError("root", { message: (error as Error).message });
@@ -1741,12 +1748,82 @@ function Profile({
             </Field>
           )}
         />
+        <fieldset className="status-presets">
+          <legend>{t("Quick status")}</legend>
+          <div>
+            {STATUS_PRESETS.map((preset) => (
+              <Button
+                type="button"
+                variant="plain"
+                key={preset.text}
+                onClick={() => {
+                  form.setValue("status", preset.status, { shouldDirty: true });
+                  form.setValue("statusText", t(preset.text), {
+                    shouldDirty: true,
+                  });
+                  form.setValue("statusIcon", preset.icon, {
+                    shouldDirty: true,
+                  });
+                }}
+              >
+                <span aria-hidden="true">{preset.icon}</span> {t(preset.text)}
+              </Button>
+            ))}
+          </div>
+        </fieldset>
+        <Controller
+          control={form.control}
+          name="statusIcon"
+          render={({ field }) => (
+            <Field>
+              <FieldLabel htmlFor="profile-status-icon">
+                {t("Status icon")}
+              </FieldLabel>
+              <Select
+                id="profile-status-icon"
+                label={t("Status icon")}
+                value={field.value || ""}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                options={STATUS_ICONS.map((icon, index) => ({
+                  value: icon,
+                  label:
+                    `${icon || statusIcon(form.watch("status"))} ${t(STATUS_ICON_LABELS[index])}`.trim(),
+                }))}
+              />
+            </Field>
+          )}
+        />
         <FormInput
           name="statusText"
           label={t("A little status")}
           placeholder={t("Making something good…")}
           maxLength={80}
         />
+        <div className="status-preview" aria-live="polite">
+          <span className="eyebrow">{t("BUBBLE PREVIEW")}</span>
+          {form.watch("status") === "available" ? (
+            <p>{t("Your bubble is hidden while available.")}</p>
+          ) : (
+            <div
+              className="status-preview-bubble"
+              data-status={form.watch("status")}
+            >
+              <span aria-hidden="true">
+                {statusIcon(form.watch("status"), form.watch("statusIcon"))}
+              </span>
+              <span>
+                {form.watch("statusText").trim() ||
+                  t(statusLabel[form.watch("status")])}
+              </span>
+            </div>
+          )}
+          <p>
+            {t(
+              "Shown above your avatar when busy, away, or on do not disturb. Hover or tap a bubble to read more.",
+            )}
+          </p>
+        </div>
         <FormError />
         <Button
           type="submit"

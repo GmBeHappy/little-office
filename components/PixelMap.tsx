@@ -25,6 +25,7 @@ import {
 import { wildlifeAnimation } from "@/shared/wildlife-animation";
 import { drawCharacter } from "@/shared/avatars";
 import type { Command } from "@/shared/protocol";
+import { STATUS_LABELS, statusIcon } from "@/shared/status";
 // Farm pickups render as pixel art above the avatar instead of emoji text.
 const FARM_ICON_EMOJIS: Record<
   string,
@@ -83,6 +84,9 @@ export default function PixelMap(props: Props) {
     joystick.setAttribute("aria-hidden", "true");
     const thumb = joystick.appendChild(document.createElement("i"));
     parent.appendChild(joystick);
+    const bubbles = document.createElement("div");
+    bubbles.className = "status-bubbles";
+    parent.appendChild(bubbles);
     const actionButton = document.createElement("button");
     actionButton.type = "button";
     actionButton.hidden = true;
@@ -102,6 +106,9 @@ export default function PixelMap(props: Props) {
           label: Phaser.GameObjects.Text;
           micIcon: Phaser.GameObjects.Graphics;
           wave: Phaser.GameObjects.Text;
+          bubble: HTMLButtonElement;
+          bubbleIcon: HTMLSpanElement;
+          bubbleText: HTMLSpanElement;
           color: string;
           walkTime: number;
           pose: Person["pose"];
@@ -984,11 +991,48 @@ export default function PixelMap(props: Props) {
         for (const [id, a] of this.avatars)
           if (!ids.has(id)) {
             a.container.destroy();
+            a.bubble.remove();
             this.avatars.delete(id);
           }
         for (const p of state.people) {
           let a = this.avatars.get(p.id);
           if (!a) {
+            const bubble = document.createElement("button");
+            bubble.type = "button";
+            bubble.className = "avatar-status-bubble";
+            bubble.hidden = true;
+            bubble.setAttribute("aria-expanded", "false");
+            const bubbleIcon = bubble.appendChild(
+              document.createElement("span"),
+            );
+            bubbleIcon.setAttribute("aria-hidden", "true");
+            bubbleIcon.className = "status-bubble-emoji";
+            const effect = bubble.appendChild(document.createElement("span"));
+            effect.className = "status-bubble-effect";
+            effect.setAttribute("aria-hidden", "true");
+            for (let particle = 0; particle < 3; particle++)
+              effect.appendChild(document.createElement("i"));
+            const bubbleText = bubble.appendChild(
+              document.createElement("span"),
+            );
+            bubbleText.className = "avatar-status-text";
+            bubble.addEventListener("click", () => {
+              bubble.setAttribute(
+                "aria-expanded",
+                String(bubble.getAttribute("aria-expanded") !== "true"),
+              );
+            });
+            bubble.addEventListener("blur", () =>
+              bubble.setAttribute("aria-expanded", "false"),
+            );
+            bubble.addEventListener("keydown", (event) => {
+              event.stopPropagation();
+              if (event.key === "Escape") {
+                bubble.setAttribute("aria-expanded", "false");
+                host.current?.focus({ preventScroll: true });
+              }
+            });
+            bubbles.appendChild(bubble);
             const body = this.add.graphics();
             const label = this.add
               .text(0, -51, p.name, {
@@ -1032,6 +1076,9 @@ export default function PixelMap(props: Props) {
               micIcon,
               wave,
               color: "",
+              bubble,
+              bubbleIcon,
+              bubbleText,
               walkTime: 0,
               pose: p.pose || "stand",
               poseSince: time,
@@ -1108,6 +1155,52 @@ export default function PixelMap(props: Props) {
               : 0;
           a.label.y = -57 - height - fishingSpace;
           a.wave.y = -66 - height - fishingSpace;
+          // Keep temporary reactions beside the name instead of reserving a
+          // permanent empty gap between the status bubble and the avatar.
+          a.wave.x = p.status === "available" ? 0 : a.label.width / 2 + 18;
+          const message = p.statusText.trim() || t(STATUS_LABELS[p.status]);
+          const icon = statusIcon(p.status, p.statusIcon);
+          const changed =
+            a.bubble.dataset.status !== p.status ||
+            a.bubbleText.textContent !== message ||
+            a.bubbleIcon.textContent !== icon;
+          if (changed) {
+            // Only animate actual changes, not each presence snapshot or arrival.
+            if (
+              a.bubble.dataset.status &&
+              p.status !== "available" &&
+              state.effectsEnabled
+            ) {
+              for (const animation of a.bubble.getAnimations())
+                if (animation.id === "status-change") animation.cancel();
+              a.bubble.animate(
+                [
+                  { scale: "0.96" },
+                  { scale: reducedMotion ? "1.02" : "1.08", offset: 0.45 },
+                  { scale: "1" },
+                ],
+                { id: "status-change", duration: 360, easing: "ease-out" },
+              );
+            }
+            a.bubble.dataset.effect =
+              icon === "☕" ? "steam" : icon === "🚿" ? "droplets" : "";
+          }
+          a.bubble.dataset.effectsEnabled = String(state.effectsEnabled);
+          if (a.bubbleText.textContent !== message)
+            a.bubbleText.textContent = message;
+          if (a.bubbleIcon.textContent !== icon)
+            a.bubbleIcon.textContent = icon;
+          a.bubble.dataset.status = p.status;
+          a.bubble.setAttribute(
+            "aria-label",
+            `${p.name}: ${t(STATUS_LABELS[p.status])}. ${message}`,
+          );
+          a.bubble.title = `${p.name}: ${message}`;
+          // Anchor to the nameplate's top edge; the screen-space gap below
+          // stays small at every map zoom and display density.
+          a.bubble.dataset.worldY = String(
+            a.container.y + a.label.y - a.label.height / 2,
+          );
           a.label.setText(
             p.id === state.self ? t("{name} · you", { name: p.name }) : p.name,
           );
@@ -1202,7 +1295,7 @@ export default function PixelMap(props: Props) {
             this.drawFarmIcon(
               g,
               farmIcon,
-              nudgeX,
+              nudgeX + a.wave.x,
               -76 - rise + nudgeY,
               Math.min(1, remaining / 600),
             );
@@ -1218,11 +1311,7 @@ export default function PixelMap(props: Props) {
                     ? "Zzz"
                     : (state.waves[p.id] || 0) > Date.now()
                       ? "👋"
-                      : p.status === "dnd"
-                        ? "⏾"
-                        : p.status === "away"
-                          ? "z"
-                          : "",
+                      : "",
           );
           if (p.id === state.self)
             this.cameras.main.centerOn(a.container.x, a.container.y);
@@ -1244,6 +1333,31 @@ export default function PixelMap(props: Props) {
         },
         audio: { noAudio: true },
         banner: false,
+      });
+      // Project after rendering so bubbles follow the same camera transform,
+      // including zoom, display density, jumps and viewport resizing.
+      game.events.on("postrender", () => {
+        const scene = game?.scene.getScenes(true)[0] as OfficeScene | undefined;
+        if (!scene) return;
+        const camera = scene.cameras.main;
+        for (const a of scene.avatars.values()) {
+          const point = camera
+            .getViewMatrix()
+            .transformPoint(a.container.x, Number(a.bubble.dataset.worldY));
+          const x = Math.round(point.x / density),
+            y = Math.round(point.y / density) - 3;
+          a.bubble.hidden =
+            a.bubble.dataset.status === "available" ||
+            x < 0 ||
+            x > parent.clientWidth ||
+            y < -30 ||
+            y > parent.clientHeight;
+          if (a.bubble.hidden) continue;
+          const halfWidth = a.bubble.offsetWidth / 2 + 6;
+          a.bubble.style.left = `${Math.max(halfWidth, Math.min(parent.clientWidth - halfWidth, x))}px`;
+          a.bubble.style.top = `${Math.max(a.bubble.offsetHeight + 8, y)}px`;
+          a.bubble.style.zIndex = String(Math.round(a.container.y));
+        }
       });
     };
     if (locale === "th") {
@@ -1267,11 +1381,12 @@ export default function PixelMap(props: Props) {
       ref={host}
       className="pixel-map"
       tabIndex={0}
-      onPointerDown={(event) =>
-        event.currentTarget.focus({ preventScroll: true })
-      }
+      onPointerDown={(event) => {
+        if (!(event.target as HTMLElement).closest(".avatar-status-bubble"))
+          event.currentTarget.focus({ preventScroll: true });
+      }}
       data-map-id={props.mapId}
-      role="img"
+      role="group"
       aria-label={
         t(
           "Interactive pixel office. Move with WASD or arrow keys, or touch and drag to walk. Release to stop. Press Space to jump. Tap a person or meeting room to interact, or use the Rooms list for keyboard-accessible navigation.",

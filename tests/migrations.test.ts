@@ -6,7 +6,76 @@ import { eq } from "drizzle-orm";
 import { fileURLToPath } from "node:url";
 import * as schema from "../server/schema";
 import { rectangle } from "./whiteboard-fixture";
+import { readMigrationFiles } from "drizzle-orm/migrator";
+import { createHash } from "node:crypto";
 const migrationsFolder = fileURLToPath(new URL("../drizzle", import.meta.url));
+
+for (const previous of ["upstream-main", "early-status-bubbles"] as const) {
+  test(`migration upgrade from ${previous} preserves status and daily map settings`, async () => {
+    const pg = new PGlite();
+    const db = drizzle(pg, { schema });
+    try {
+      const migrations = readMigrationFiles({ migrationsFolder });
+      await pg.exec(
+        "CREATE SCHEMA drizzle; CREATE TABLE drizzle.__drizzle_migrations (id serial PRIMARY KEY, hash text NOT NULL, created_at bigint);",
+      );
+      const apply = async (migration: {
+        sql: string[];
+        hash: string;
+        folderMillis: number;
+      }) => {
+        for (const sql of migration.sql) await pg.exec(sql);
+        await pg.query(
+          "INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1,$2)",
+          [migration.hash, migration.folderMillis],
+        );
+      };
+      await apply(migrations[0]);
+      if (previous === "upstream-main") {
+        await apply(migrations[1]);
+        await pg.exec(
+          `UPDATE workspace_settings SET daily_map='{"enabled":true,"date":"2026-09-17"}'`,
+        );
+      } else {
+        const sql = `ALTER TABLE "user" ADD COLUMN "statusIcon" text DEFAULT '' NOT NULL;`;
+        await apply({
+          sql: [sql],
+          hash: createHash("sha256").update(sql).digest("hex"),
+          folderMillis: 1789559960925,
+        });
+      }
+      await pg.exec(
+        `INSERT INTO "user" (id,name,email,"emailVerified",username,role,approved,avatar,availability,"statusText","mustChangePassword") VALUES ('retained','Robin','robin@local.invalid',true,'robin','owner',true,'sage','away','Quick break',false)`,
+      );
+      if (previous === "early-status-bubbles")
+        await pg.exec(
+          `UPDATE "user" SET "statusIcon"='☕' WHERE id='retained'`,
+        );
+      await migrate(db, { migrationsFolder });
+      await migrate(db, { migrationsFolder });
+      expect((await db.select().from(schema.users))[0]).toMatchObject({
+        username: "robin",
+        availability: "away",
+        statusText: "Quick break",
+        statusIcon: previous === "early-status-bubbles" ? "☕" : "",
+      });
+      expect((await db.select().from(schema.workspaces))[0].dailyMap).toEqual(
+        previous === "upstream-main"
+          ? { enabled: true, date: "2026-09-17" }
+          : { enabled: false, date: "" },
+      );
+      expect(
+        (
+          await pg.query<{ count: number }>(
+            "SELECT count(*)::integer AS count FROM drizzle.__drizzle_migrations",
+          )
+        ).rows[0].count,
+      ).toBe(previous === "upstream-main" ? 3 : 4);
+    } finally {
+      await pg.close();
+    }
+  }, 20000);
+}
 
 test("Drizzle creates a fresh database and applies the adoption baseline only once", async () => {
   const pg = new PGlite();
@@ -34,7 +103,7 @@ test("Drizzle creates a fresh database and applies the adoption baseline only on
     const rows = await pg.query(
       "SELECT count(*)::integer AS count FROM drizzle.__drizzle_migrations",
     );
-    expect(rows.rows).toEqual([{ count: 2 }]);
+    expect(rows.rows).toEqual([{ count: 3 }]);
     // A fresh install retains the same database-enforced unique keys and delete cascades.
     const constraints = await pg.query<{ name: string }>(
       `SELECT conname AS name FROM pg_constraint WHERE conname IN ('user_username_key','session_token_key','account_userId_fkey','session_userId_fkey') ORDER BY conname`,
@@ -83,6 +152,12 @@ test("upgrading a populated legacy database retains settings, drawings, S3 refer
     ).rows;
     await migrate(db, { migrationsFolder });
     await migrate(db, { migrationsFolder });
+    expect((await db.select().from(schema.users))[0]).toMatchObject({
+      username: "legacy_owner",
+      availability: "busy",
+      statusText: "Existing status",
+      statusIcon: "",
+    });
     expect(
       (await pg.query("SELECT id,actor,action,created_at FROM office_audit"))
         .rows,

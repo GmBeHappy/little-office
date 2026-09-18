@@ -43,13 +43,13 @@ beforeAll(async () => {
   );
   server = new PGLiteSocketServer({
     db: pg,
-    port: 15433,
+    // Let the OS choose a free port; fixed ports can be reserved on Windows.
+    port: 0,
     host: "127.0.0.1",
     maxConnections: 10,
   });
   await server.start();
-  process.env.DATABASE_URL =
-    "postgres://postgres:postgres@127.0.0.1:15433/postgres";
+  process.env.DATABASE_URL = `postgres://postgres:postgres@${server.getServerConn()}/postgres`;
   process.env.BETTER_AUTH_SECRET = crypto.randomUUID() + crypto.randomUUID();
   process.env.APP_URL = "http://localhost:3000";
   process.env.OFFICE_S3_ACCESS_KEY_ID = "";
@@ -60,7 +60,13 @@ beforeAll(async () => {
   pool = database.pool;
   auth = (await import("../server/auth")).auth;
   // Exercise the adapter transition with real accounts and a cookie from the old pg adapter.
-  const legacyAuth = betterAuth({ ...auth.options, database: pool });
+  const { statusIcon: _statusIcon, ...legacyFields } =
+    auth.options.user!.additionalFields!;
+  const legacyAuth = betterAuth({
+    ...auth.options,
+    database: pool,
+    user: { ...auth.options.user, additionalFields: legacyFields },
+  });
   for (const username of ["owner_test", "member_test"]) {
     const result = await legacyAuth.api.signUpEmail({
       body: {
@@ -101,6 +107,55 @@ afterAll(async () => {
   await pg?.close();
 });
 describe("authentication and authorization", () => {
+  test("status bubbles persist through profile saves and reject invalid icons and oversized text", async () => {
+    const body = {
+      name: "owner_test",
+      avatar: "sage",
+      status: "dnd",
+      statusText: "Deep work",
+      statusIcon: "🎧",
+    };
+    expect(
+      (await request("/profile", body, legacyCookie, "PATCH")).status,
+    ).toBe(200);
+    const me = await request("/me", undefined, legacyCookie);
+    expect(me.data.user).toMatchObject({
+      availability: "dnd",
+      statusText: "Deep work",
+      statusIcon: "🎧",
+    });
+    for (const invalid of [
+      { statusIcon: "<script>" },
+      { statusText: "x".repeat(81) },
+      { status: "invalid" },
+    ])
+      expect(
+        (
+          await request(
+            "/profile",
+            { ...body, ...invalid },
+            legacyCookie,
+            "PATCH",
+          )
+        ).status,
+      ).toBe(400);
+    // Profile edits from older clients must retain the saved status.
+    await request(
+      "/profile",
+      { name: "owner_test", avatar: "sage" },
+      legacyCookie,
+      "PATCH",
+    );
+    expect(
+      (await request("/me", undefined, legacyCookie)).data.user.statusIcon,
+    ).toBe("🎧");
+    await request(
+      "/profile",
+      { ...body, status: "available", statusText: "", statusIcon: "" },
+      legacyCookie,
+      "PATCH",
+    );
+  });
   test("Drizzle preserves pre-migration session cookies and password hashes", async () => {
     const me = await request("/me", undefined, legacyCookie);
     expect(me.status).toBe(200);

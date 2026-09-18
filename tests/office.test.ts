@@ -21,6 +21,61 @@ function setup() {
   return { office, events, retired };
 }
 describe("office behavior", () => {
+  test("status icons reach other people and survive reconnecting", () => {
+    const { office, events } = setup();
+    office.handle(
+      "a",
+      Command.parse({
+        type: "status",
+        status: "busy",
+        text: "Reviewing designs",
+        icon: "💻",
+      }),
+    );
+    office.broadcast();
+    expect(
+      events.b
+        .at(-1)
+        .people.find((person: { id: string }) => person.id === "a"),
+    ).toMatchObject({
+      status: "busy",
+      statusText: "Reviewing designs",
+      statusIcon: "💻",
+    });
+    office.handle(
+      "a",
+      Command.parse({ type: "status", status: "away", text: "Back soon" }),
+    );
+    expect(office.members.get("a")?.statusIcon).toBe("💻");
+    office.remove("a");
+    office.add(
+      {
+        id: "a",
+        name: "a",
+        role: "member",
+        availability: "dnd",
+        statusText: "Deep work",
+        statusIcon: "🎧",
+      },
+      "new-session",
+      Date.now() + 3600000,
+      () => {},
+      () => {},
+    );
+    expect(office.people().find((person) => person.id === "a")).toMatchObject({
+      status: "dnd",
+      statusText: "Deep work",
+      statusIcon: "🎧",
+    });
+    expect(
+      Command.safeParse({
+        type: "status",
+        status: "busy",
+        text: "",
+        icon: "bad",
+      }).success,
+    ).toBe(false);
+  });
   test("emotes accept one Unicode emoji and broadcast to all members without changing presence", () => {
     const { office, events } = setup();
     for (const emoji of ["😀", "👋🏽", "🇹🇭", "👨‍👩‍👧‍👦", "❤️", "1️⃣"]) {

@@ -49,6 +49,7 @@ export const auth = betterAuth({
       avatar: { type: "string", defaultValue: "sage", input: false },
       availability: { type: "string", defaultValue: "available", input: false },
       statusText: { type: "string", defaultValue: "", input: false },
+      statusIcon: { type: "string", defaultValue: "", input: false },
       mustChangePassword: {
         type: "boolean",
         defaultValue: false,
