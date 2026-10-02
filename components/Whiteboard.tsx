@@ -161,7 +161,6 @@ export default function Whiteboard({
           apply(message.elements);
           if (message.type === "saved" && message.batch === inFlight.current)
             inFlight.current = null;
-          if (ready) flushRef.current();
         } else if (message.type === "presence") {
           const collaborators = new Map<SocketId, Collaborator>();
           for (const person of message.people)
