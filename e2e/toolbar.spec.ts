@@ -61,8 +61,19 @@ test("compact navigation, emotes and custom toolbar menus work on desktop and mo
     const roster = a.getByRole("region", { name: "Conversation participants" });
     await expect(roster).toContainText("Jamie");
     expect((await roster.boundingBox())!.height).toBeLessThan(80);
-    await a.getByRole("button", { name: "Audio devices", exact: true }).click();
-    const audio = a.getByRole("dialog", { name: "Audio devices" });
+    await a.getByRole("button", { name: "Microphone", exact: true }).hover();
+    const audio = a.getByRole("group", { name: "Audio devices" });
+    await expect(audio).toBeVisible();
+    await expect(a.getByRole("dialog", { name: "Audio devices" })).toHaveCount(
+      0,
+    );
+    const barBounds = (await a.locator(".controlbar").boundingBox())!;
+    const panelBounds = (await audio.boundingBox())!;
+    const controlsBounds = (await a.locator(".media-controls").boundingBox())!;
+    expect(panelBounds.y).toBeGreaterThanOrEqual(barBounds.y);
+    expect(panelBounds.y + panelBounds.height).toBeLessThanOrEqual(
+      controlsBounds.y,
+    );
     const mic = audio.getByRole("combobox", {
       name: "Microphone",
       exact: true,
@@ -74,10 +85,8 @@ test("compact navigation, emotes and custom toolbar menus work on desktop and mo
     await expect(audio).toBeVisible();
     await a.keyboard.press("Escape");
     await expect(audio).toHaveCount(0);
-    await a
-      .getByRole("button", { name: "Camera devices", exact: true })
-      .click();
-    const camera = a.getByRole("dialog", { name: "Camera devices" });
+    await a.getByRole("button", { name: "Camera", exact: true }).hover();
+    const camera = a.getByRole("group", { name: "Camera devices" });
     await expect(
       camera.getByRole("button", {
         name: "Allow camera access & refresh devices",
@@ -124,8 +133,9 @@ test("compact navigation, emotes and custom toolbar menus work on desktop and mo
     expect(
       (await a.locator(".location-card").boundingBox())!.height,
     ).toBeLessThan(80);
-    await a.getByRole("button", { name: "อุปกรณ์เสียง", exact: true }).click();
-    const thaiAudio = a.getByRole("dialog", { name: "อุปกรณ์เสียง" });
+    await a.getByRole("button", { name: "อุปกรณ์เสียง", exact: true }).focus();
+    await a.keyboard.press("Enter");
+    const thaiAudio = a.getByRole("group", { name: "อุปกรณ์เสียง" });
     await thaiAudio
       .getByRole("combobox", { name: "ไมโครโฟน", exact: true })
       .click();

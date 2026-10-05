@@ -36,6 +36,7 @@ test("status bubbles share presets, save custom messages and icons, and clear wh
     await owner
       .getByRole("button", { name: "Your profile", exact: true })
       .click();
+    await owner.getByRole("tab", { name: "Status", exact: true }).click();
     let profile = owner.getByRole("dialog", {
       name: "Your profile",
       exact: true,
@@ -64,6 +65,7 @@ test("status bubbles share presets, save custom messages and icons, and clear wh
     await owner
       .getByRole("button", { name: "Your profile", exact: true })
       .click();
+    await owner.getByRole("tab", { name: "Status", exact: true }).click();
     profile = owner.getByRole("dialog", { name: "Your profile", exact: true });
     await expect(
       profile.getByLabel("A little status", { exact: true }),
@@ -71,6 +73,7 @@ test("status bubbles share presets, save custom messages and icons, and clear wh
     const custom =
       "Reviewing designs — back after lunch. Please leave a message for me.";
     await profile.getByLabel("A little status", { exact: true }).fill(custom);
+    await profile.getByText("Customize status icon", { exact: true }).click();
     await selectValue(
       owner,
       profile.getByRole("combobox", { name: "Status icon", exact: true }),
@@ -131,6 +134,7 @@ test("status bubbles share presets, save custom messages and icons, and clear wh
     await owner
       .getByRole("button", { name: "Your profile", exact: true })
       .click();
+    await owner.getByRole("tab", { name: "Status", exact: true }).click();
     await profile
       .getByRole("button", { name: "Back in 10 minutes", exact: true })
       .click();
@@ -145,11 +149,13 @@ test("status bubbles share presets, save custom messages and icons, and clear wh
     await owner
       .getByRole("button", { name: "Your profile", exact: true })
       .click();
+    await owner.getByRole("tab", { name: "Status", exact: true }).click();
     await selectValue(
       owner,
       profile.getByRole("combobox", { name: "Availability", exact: true }),
       "busy",
     );
+    await profile.getByText("Customize status icon", { exact: true }).click();
     await selectValue(
       owner,
       profile.getByRole("combobox", { name: "Status icon", exact: true }),
@@ -167,6 +173,7 @@ test("status bubbles share presets, save custom messages and icons, and clear wh
     await owner
       .getByRole("button", { name: "Your profile", exact: true })
       .click();
+    await owner.getByRole("tab", { name: "Status", exact: true }).click();
     await selectValue(
       owner,
       profile.getByRole("combobox", { name: "Availability", exact: true }),

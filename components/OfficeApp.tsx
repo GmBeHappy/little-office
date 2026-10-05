@@ -87,6 +87,13 @@ import {
 } from "@/shared/status";
 import { DeviceSelect } from "./DeviceSelect";
 import { ToolbarMenu } from "./ToolbarMenu";
+import { DeviceBar } from "./DeviceBar";
+import { NameTagSettings } from "./NameTagSettings";
+import {
+  DEFAULT_NAME_TAGS,
+  readNameTagPreferences,
+  type NameTagPreferences,
+} from "@/lib/name-tags";
 import { WorkspaceSettings } from "./WorkspaceSettings";
 import {
   DEFAULT_WORKSPACE,
@@ -116,6 +123,34 @@ export default function OfficeApp() {
   const [mapEffectsPreference, setMapEffectsPreference] = useState<
     string | null
   >(null);
+  const [nameTags, setNameTags] = useState(DEFAULT_NAME_TAGS);
+  useEffect(() => {
+    let preference = DEFAULT_NAME_TAGS;
+    try {
+      if (user)
+        preference = readNameTagPreferences(
+          JSON.parse(
+            localStorage.getItem(`office-name-tags:${user.id}`) || "null",
+          ),
+        );
+    } catch {
+      /* Use defaults when browser storage is unavailable or invalid. */
+    }
+    setNameTags(preference);
+  }, [user?.id]);
+  const changeNameTags = (value: NameTagPreferences) => {
+    const preference = readNameTagPreferences(value);
+    setNameTags(preference);
+    try {
+      if (user)
+        localStorage.setItem(
+          `office-name-tags:${user.id}`,
+          JSON.stringify(preference),
+        );
+    } catch {
+      /* The preference still applies for this visit. */
+    }
+  };
   const [reduceMapMotion, setReduceMapMotion] = useState(true);
   useEffect(() => {
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -654,6 +689,7 @@ export default function OfficeApp() {
                 wildlifeEnabled={workspace.features?.wildlife !== false}
                 activitiesEnabled={workspace.features?.activities !== false}
                 effectsEnabled={mapEffectsEnabled}
+                nameTags={nameTags}
                 people={people}
                 self={user.id}
                 speaking={media.speaking}
@@ -996,178 +1032,213 @@ export default function OfficeApp() {
           </aside>
         )}
       </div>
-      <footer className="controlbar" data-media-connected={media.connected}>
-        <Button
-          variant="plain"
-          className="self-control"
-          onClick={() => setModal("profile")}
-        >
-          <Avatar color={self?.avatar || user.avatar} />
-          <div>
-            <strong>{user.name}</strong>
-            <span>
-              <i
-                className={`status-dot-inline ${self?.status || "available"}`}
-              />
-              {t(statusLabel[self?.status || "available"])}
-            </span>
-          </div>
-          <ChevronDown size={15} />
-        </Button>
-        <div className="media-controls">
-          <div className="device-control">
-            <Control
-              icon={
-                media.speaking.includes(user.id) ? (
-                  <SpeakingIndicator />
-                ) : media.mic ? (
-                  <Mic />
-                ) : (
-                  <MicOff />
-                )
-              }
-              label={t("Microphone")}
-              speaking={media.speaking.includes(user.id)}
-              on={media.mic}
-              onClick={() => void media.toggle("mic")}
-            />
-            <ToolbarMenu
-              label={t("Audio devices")}
-              onOpen={() => void media.enumerate()}
-              mode="popover"
-              openOnHover
+      <DeviceBar
+        connected={media.connected}
+        onOpen={() => void media.enumerate()}
+        audio={
+          <>
+            <DeviceSelect media={media} kind="audioinput" />
+            <DeviceSelect media={media} kind="audiooutput" />
+            {!media.outputSupported && (
+              <p className="muted">
+                {t(
+                  "This browser uses your system output. Select your speakers or headphones in your system sound settings.",
+                )}
+              </p>
+            )}
+            {media.outputSupported && media.outputPickerSupported && (
+              <Button
+                variant="secondary"
+                className="secondary"
+                disabled={media.deviceBusy}
+                onClick={() => void media.chooseOutput()}
+              >
+                {t("Choose another speaker…")}
+              </Button>
+            )}
+            {!media.microphoneAllowed && (
+              <Button
+                variant="secondary"
+                className="secondary"
+                disabled={media.deviceBusy}
+                onClick={() => void media.enumerate(true)}
+              >
+                {t("Allow microphone access & refresh devices")}
+              </Button>
+            )}
+          </>
+        }
+        camera={
+          <>
+            <DeviceSelect media={media} kind="videoinput" />
+            {!media.cameraAllowed && (
+              <Button
+                variant="secondary"
+                className="secondary"
+                disabled={media.deviceBusy}
+                onClick={() => void media.enumerate("videoinput")}
+              >
+                {t("Allow camera access & refresh devices")}
+              </Button>
+            )}
+          </>
+        }
+      >
+        {({ active, panelId, show, toggle }) => (
+          <>
+            <Button
+              variant="plain"
+              className="self-control"
+              onClick={() => setModal("profile")}
             >
-              {() => (
-                <>
-                  <DeviceSelect media={media} kind="audioinput" />
-                  <DeviceSelect media={media} kind="audiooutput" />
-                  {!media.outputSupported && (
-                    <p className="muted">
-                      {t(
-                        "This browser uses your system output. Select your speakers or headphones in your system sound settings.",
-                      )}
-                    </p>
-                  )}
-                  {media.outputSupported && media.outputPickerSupported && (
-                    <Button
-                      variant="secondary"
-                      className="secondary"
-                      disabled={media.deviceBusy}
-                      onClick={() => void media.chooseOutput()}
-                    >
-                      {t("Choose another speaker…")}
-                    </Button>
-                  )}
-                  {!media.microphoneAllowed && (
-                    <Button
-                      variant="secondary"
-                      className="secondary"
-                      disabled={media.deviceBusy}
-                      onClick={() => void media.enumerate(true)}
-                    >
-                      {t("Allow microphone access & refresh devices")}
-                    </Button>
-                  )}
-                </>
-              )}
-            </ToolbarMenu>
-          </div>
-          <div className="device-control">
-            <Control
-              icon={media.camera ? <Video /> : <VideoOff />}
-              label={t("Camera")}
-              on={media.camera}
-              onClick={() => void media.toggle("camera")}
-            />
-            <ToolbarMenu
-              label={t("Camera devices")}
-              onOpen={() => void media.enumerate()}
-              mode="popover"
-              openOnHover
-            >
-              {() => (
-                <>
-                  <DeviceSelect media={media} kind="videoinput" />
-                  {!media.cameraAllowed && (
-                    <Button
-                      variant="secondary"
-                      className="secondary"
-                      disabled={media.deviceBusy}
-                      onClick={() => void media.enumerate("videoinput")}
-                    >
-                      {t("Allow camera access & refresh devices")}
-                    </Button>
-                  )}
-                </>
-              )}
-            </ToolbarMenu>
-          </div>
-          <Control
-            icon={<MonitorUp />}
-            label={isSharing ? t("Stop sharing") : t("Share screen")}
-            on={isSharing}
-            onClick={() => {
-              if (isSharing) {
-                void media.share(false);
-                send({ type: "present", enabled: false });
-              } else if (!media.connected)
-                notify("Join a conversation before sharing your screen.");
-              else
-                void media
-                  .prepareShare()
-                  .then(() => send({ type: "present", enabled: true }))
-                  .catch((e) => notify((e as Error).message));
-            }}
-          />
-          {whiteboardEnabled(workspace) && (
-            <Control
-              icon={<PencilRuler />}
-              label={t("Whiteboard")}
-              on={!!whiteboard}
-              onClick={() => {
-                if (self && !whiteboard)
-                  setWhiteboard({
-                    scope: boardScope(workspace.mapId, self),
-                    name: currentZone.name,
-                  });
-              }}
-            />
-          )}
-          <span className="control-divider" />
-          <ToolbarMenu label={t("Emote")} icon={<Smile />}>
-            {(close) => (
-              <EmotePicker
-                choose={(emoji) => {
-                  send({ type: "emote", emoji });
-                  close();
+              <Avatar color={self?.avatar || user.avatar} />
+              <div>
+                <strong>{user.name}</strong>
+                <span>
+                  <i
+                    className={`status-dot-inline ${self?.status || "available"}`}
+                  />
+                  {t(statusLabel[self?.status || "available"])}
+                </span>
+              </div>
+              <ChevronDown size={15} />
+            </Button>
+            <div className="media-controls">
+              <div
+                className="device-control"
+                onPointerMove={(event) => {
+                  if (event.pointerType === "mouse") show("audio");
+                }}
+              >
+                <Control
+                  icon={
+                    media.speaking.includes(user.id) ? (
+                      <SpeakingIndicator />
+                    ) : media.mic ? (
+                      <Mic />
+                    ) : (
+                      <MicOff />
+                    )
+                  }
+                  label={t("Microphone")}
+                  speaking={media.speaking.includes(user.id)}
+                  on={media.mic}
+                  onClick={() => void media.toggle("mic")}
+                />
+                <Button
+                  variant="plain"
+                  className="device-menu-trigger"
+                  data-device-trigger
+                  aria-label={t("Audio devices")}
+                  aria-expanded={active === "audio"}
+                  aria-controls={active === "audio" ? panelId : undefined}
+                  onClick={() => toggle("audio")}
+                >
+                  <ChevronDown
+                    size={14}
+                    className={
+                      active === "audio" ? "" : "device-chevron-closed"
+                    }
+                  />
+                </Button>
+              </div>
+              <div
+                className="device-control"
+                onPointerMove={(event) => {
+                  if (event.pointerType === "mouse") show("camera");
+                }}
+              >
+                <Control
+                  icon={media.camera ? <Video /> : <VideoOff />}
+                  label={t("Camera")}
+                  on={media.camera}
+                  onClick={() => void media.toggle("camera")}
+                />
+                <Button
+                  variant="plain"
+                  className="device-menu-trigger"
+                  data-device-trigger
+                  aria-label={t("Camera devices")}
+                  aria-expanded={active === "camera"}
+                  aria-controls={active === "camera" ? panelId : undefined}
+                  onClick={() => toggle("camera")}
+                >
+                  <ChevronDown
+                    size={14}
+                    className={
+                      active === "camera" ? "" : "device-chevron-closed"
+                    }
+                  />
+                </Button>
+              </div>
+              <Control
+                icon={<MonitorUp />}
+                label={isSharing ? t("Stop sharing") : t("Share screen")}
+                on={isSharing}
+                onClick={() => {
+                  if (isSharing) {
+                    void media.share(false);
+                    send({ type: "present", enabled: false });
+                  } else if (!media.connected)
+                    notify("Join a conversation before sharing your screen.");
+                  else
+                    void media
+                      .prepareShare()
+                      .then(() => send({ type: "present", enabled: true }))
+                      .catch((e) => notify((e as Error).message));
                 }}
               />
-            )}
-          </ToolbarMenu>
-        </div>
-        <div className="audio-control">
-          {media.soundBlocked && (
-            <Button
-              variant="secondary"
-              className="secondary enable-sound"
-              onClick={() => void media.enableSound()}
-            >
-              {t("Enable sound")}
-            </Button>
-          )}
-          {self?.conversation && self.conversation !== "floor" && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="icon-button leave-call"
-              aria-label={t("Leave conversation")}
-              onClick={() => send({ type: "leave" })}
-            >
-              <LogOut size={17} />
-            </Button>
-          )}
-        </div>
-      </footer>
+              {whiteboardEnabled(workspace) && (
+                <Control
+                  icon={<PencilRuler />}
+                  label={t("Whiteboard")}
+                  on={!!whiteboard}
+                  onClick={() => {
+                    if (self && !whiteboard)
+                      setWhiteboard({
+                        scope: boardScope(workspace.mapId, self),
+                        name: currentZone.name,
+                      });
+                  }}
+                />
+              )}
+              <span className="control-divider" />
+              <ToolbarMenu label={t("Emote")} icon={<Smile />}>
+                {(close) => (
+                  <EmotePicker
+                    choose={(emoji) => {
+                      send({ type: "emote", emoji });
+                      close();
+                    }}
+                  />
+                )}
+              </ToolbarMenu>
+            </div>
+            <div className="audio-control">
+              {media.soundBlocked && (
+                <Button
+                  variant="secondary"
+                  className="secondary enable-sound"
+                  onClick={() => void media.enableSound()}
+                >
+                  {t("Enable sound")}
+                </Button>
+              )}
+              {self?.conversation && self.conversation !== "floor" && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="icon-button leave-call"
+                  aria-label={t("Leave conversation")}
+                  onClick={() => send({ type: "leave" })}
+                >
+                  <LogOut size={17} />
+                </Button>
+              )}
+            </div>
+          </>
+        )}
+      </DeviceBar>
       {whiteboard && (
         <Whiteboard
           scope={whiteboard.scope}
@@ -1256,7 +1327,7 @@ export default function OfficeApp() {
       >
         {modal && (
           <DialogContent
-            className={`modal ${modal === "settings" ? "max-w-[920px]" : modal === "profile" ? "max-w-[740px]" : ""}`}
+            className={`modal ${modal === "settings" ? "max-w-[920px]" : modal === "profile" ? "profile-dialog max-w-[740px]" : ""}`}
             closeLabel={t("Close dialog")}
           >
             <DialogTitle className="sr-only">
@@ -1324,6 +1395,8 @@ export default function OfficeApp() {
                 initialTab={settingsTab}
                 mapEffectsEnabled={mapEffectsEnabled}
                 changeMapEffects={changeMapEffects}
+                nameTags={nameTags}
+                changeNameTags={changeNameTags}
                 user={user}
                 config={config!}
                 refresh={refresh}
@@ -1683,6 +1756,7 @@ function Profile({
   saved: () => Promise<void>;
 }) {
   const { t } = useI18n();
+  const [tab, setTab] = useState("profile");
   const form = useForm({
     resolver: zodResolver(profileSchema),
     defaultValues: {
@@ -1700,7 +1774,7 @@ function Profile({
     <FormProvider {...form}>
       <form
         noValidate
-        className="space-y-5"
+        className="profile-form"
         onSubmit={form.handleSubmit(
           async ({ name, avatar, status, statusText, statusIcon }) => {
             form.clearErrors("root");
@@ -1715,136 +1789,174 @@ function Profile({
               form.setError("root", { message: (error as Error).message });
             }
           },
+          (errors) => setTab(errors.name ? "profile" : "status"),
         )}
       >
-        <div className="eyebrow">{t("A LITTLE BIT OF YOU")}</div>
-        <h2>{t("Your office self.")}</h2>
-        <Controller
-          control={form.control}
-          name="avatar"
-          render={({ field }) => (
-            <AvatarEditor value={field.value} onChange={field.onChange} />
-          )}
-        />
-        <FormInput
-          name="name"
-          label={t("Your name")}
-          maxLength={40}
-          required
-          autoComplete="name"
-        />
-        <Controller
-          control={form.control}
-          name="status"
-          render={({ field }) => (
-            <Field>
-              <FieldLabel htmlFor="profile-availability">
-                {t("Availability")}
-              </FieldLabel>
-              <Select
-                id="profile-availability"
-                label={t("Availability")}
-                value={field.value}
-                onChange={field.onChange}
-                onBlur={field.onBlur}
-                options={Object.entries(statusLabel).map(([value, text]) => ({
-                  value,
-                  label: t(text),
-                }))}
+        <header className="profile-heading">
+          <div className="eyebrow">{t("A LITTLE BIT OF YOU")}</div>
+          <h2>{t("Your office self.")}</h2>
+        </header>
+        <Tabs value={tab} onValueChange={setTab} className="profile-tabs">
+          <TabsList aria-label={t("Profile sections")}>
+            <TabsTrigger value="profile">{t("Profile")}</TabsTrigger>
+            <TabsTrigger value="status">{t("Status")}</TabsTrigger>
+            <TabsTrigger value="appearance">{t("Appearance")}</TabsTrigger>
+          </TabsList>
+          <div className="profile-scroll">
+            <TabsContent value="profile" className="profile-section">
+              <div className="profile-identity-preview">
+                <Avatar color={form.watch("avatar")} />
+                <div>
+                  <strong>{form.watch("name") || user.name}</strong>
+                  <span>{t("Your profile in the office")}</span>
+                </div>
+              </div>
+              <FormInput
+                name="name"
+                label={t("Your name")}
+                maxLength={40}
+                required
+                autoComplete="name"
               />
-            </Field>
-          )}
-        />
-        <fieldset className="status-presets">
-          <legend>{t("Quick status")}</legend>
-          <div>
-            {STATUS_PRESETS.map((preset) => (
-              <Button
-                type="button"
-                variant="plain"
-                key={preset.text}
-                onClick={() => {
-                  form.setValue("status", preset.status, { shouldDirty: true });
-                  form.setValue("statusText", t(preset.text), {
-                    shouldDirty: true,
-                  });
-                  form.setValue("statusIcon", preset.icon, {
-                    shouldDirty: true,
-                  });
-                }}
-              >
-                <span aria-hidden="true">{preset.icon}</span> {t(preset.text)}
-              </Button>
-            ))}
+              <p className="muted">
+                {t("This is the name your teammates see.")}
+              </p>
+            </TabsContent>
+            <TabsContent value="status" className="profile-section">
+              <Controller
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <Field>
+                    <FieldLabel htmlFor="profile-availability">
+                      {t("Availability")}
+                    </FieldLabel>
+                    <Select
+                      id="profile-availability"
+                      label={t("Availability")}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      options={Object.entries(statusLabel).map(
+                        ([value, text]) => ({
+                          value,
+                          label: t(text),
+                        }),
+                      )}
+                    />
+                  </Field>
+                )}
+              />
+              <fieldset className="status-presets">
+                <legend>{t("Quick status")}</legend>
+                <div>
+                  {STATUS_PRESETS.map((preset) => (
+                    <Button
+                      type="button"
+                      variant="plain"
+                      key={preset.text}
+                      onClick={() => {
+                        form.setValue("status", preset.status, {
+                          shouldDirty: true,
+                        });
+                        form.setValue("statusText", t(preset.text), {
+                          shouldDirty: true,
+                        });
+                        form.setValue("statusIcon", preset.icon, {
+                          shouldDirty: true,
+                        });
+                      }}
+                    >
+                      <span aria-hidden="true">{preset.icon}</span>{" "}
+                      {t(preset.text)}
+                    </Button>
+                  ))}
+                </div>
+              </fieldset>
+              <FormInput
+                name="statusText"
+                label={t("A little status")}
+                placeholder={t("Making something good…")}
+                maxLength={80}
+              />
+              <details className="profile-status-options">
+                <summary>{t("Customize status icon")}</summary>
+                <Controller
+                  control={form.control}
+                  name="statusIcon"
+                  render={({ field }) => (
+                    <Field>
+                      <FieldLabel htmlFor="profile-status-icon">
+                        {t("Status icon")}
+                      </FieldLabel>
+                      <Select
+                        id="profile-status-icon"
+                        label={t("Status icon")}
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        options={STATUS_ICONS.map((icon, index) => ({
+                          value: icon,
+                          label:
+                            `${icon || statusIcon(form.watch("status"))} ${t(STATUS_ICON_LABELS[index])}`.trim(),
+                        }))}
+                      />
+                    </Field>
+                  )}
+                />
+              </details>
+              <div className="status-preview" aria-live="polite">
+                <span className="eyebrow">{t("BUBBLE PREVIEW")}</span>
+                {form.watch("status") === "available" ? (
+                  <p>{t("Your bubble is hidden while available.")}</p>
+                ) : (
+                  <div
+                    className="status-preview-bubble"
+                    data-status={form.watch("status")}
+                  >
+                    <span aria-hidden="true">
+                      {statusIcon(
+                        form.watch("status"),
+                        form.watch("statusIcon"),
+                      )}
+                    </span>
+                    <span>
+                      {form.watch("statusText").trim() ||
+                        t(statusLabel[form.watch("status")])}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+            <TabsContent value="appearance" className="profile-section">
+              <Controller
+                control={form.control}
+                name="avatar"
+                render={({ field }) => (
+                  <AvatarEditor value={field.value} onChange={field.onChange} />
+                )}
+              />
+            </TabsContent>
           </div>
-        </fieldset>
-        <Controller
-          control={form.control}
-          name="statusIcon"
-          render={({ field }) => (
-            <Field>
-              <FieldLabel htmlFor="profile-status-icon">
-                {t("Status icon")}
-              </FieldLabel>
-              <Select
-                id="profile-status-icon"
-                label={t("Status icon")}
-                value={field.value || ""}
-                onChange={field.onChange}
-                onBlur={field.onBlur}
-                options={STATUS_ICONS.map((icon, index) => ({
-                  value: icon,
-                  label:
-                    `${icon || statusIcon(form.watch("status"))} ${t(STATUS_ICON_LABELS[index])}`.trim(),
-                }))}
-              />
-            </Field>
-          )}
-        />
-        <FormInput
-          name="statusText"
-          label={t("A little status")}
-          placeholder={t("Making something good…")}
-          maxLength={80}
-        />
-        <div className="status-preview" aria-live="polite">
-          <span className="eyebrow">{t("BUBBLE PREVIEW")}</span>
-          {form.watch("status") === "available" ? (
-            <p>{t("Your bubble is hidden while available.")}</p>
-          ) : (
-            <div
-              className="status-preview-bubble"
-              data-status={form.watch("status")}
-            >
-              <span aria-hidden="true">
-                {statusIcon(form.watch("status"), form.watch("statusIcon"))}
-              </span>
-              <span>
-                {form.watch("statusText").trim() ||
-                  t(statusLabel[form.watch("status")])}
-              </span>
-            </div>
-          )}
-          <p>
-            {t(
-              "Shown above your avatar when busy, away, or on do not disturb. Hover or tap a bubble to read more.",
-            )}
-          </p>
-        </div>
-        <FormError />
-        <Button
-          type="submit"
-          className="primary"
-          disabled={form.formState.isSubmitting}
-        >
-          {t("Save changes")}
-          <Check size={16} />
-        </Button>
+        </Tabs>
+        <footer className="profile-save-bar">
+          <FormError />
+          <Button
+            type="submit"
+            className="primary"
+            disabled={form.formState.isSubmitting}
+          >
+            {t("Save changes")}
+            <Check size={16} />
+          </Button>
+        </footer>
       </form>
     </FormProvider>
   );
 }
 function SettingsPanel({
+  nameTags,
+  changeNameTags,
   mapEffectsEnabled,
   changeMapEffects,
   workspace,
@@ -1855,6 +1967,8 @@ function SettingsPanel({
   notify,
   media,
 }: {
+  nameTags: NameTagPreferences;
+  changeNameTags: (value: NameTagPreferences) => void;
   mapEffectsEnabled: boolean;
   changeMapEffects: (enabled: boolean) => void;
   workspace: Workspace;
@@ -1928,30 +2042,37 @@ function SettingsPanel({
       </TabsList>
       <TabsContent value={tab} className="mt-0">
         {tab === "display" && (
-          <div className="workspace-feature-card">
-            <div className="workspace-feature-icon">
-              <Leaf size={25} />
-            </div>
-            <div>
-              <h4 id="map-effects-label">{t("Map effects")}</h4>
-              <p id="map-effects-description">
-                {t(
-                  "Moving water and falling leaves or petals. Saved for your account on this browser.",
-                )}
-              </p>
-              <small>
-                {t(
-                  "Off by default when your device requests reduced motion. You can turn effects on here.",
-                )}
-              </small>
-            </div>
-            <Switch
-              className="feature-switch"
-              aria-labelledby="map-effects-label"
-              aria-describedby="map-effects-description"
-              checked={mapEffectsEnabled}
-              onCheckedChange={changeMapEffects}
+          <div className="display-settings">
+            <NameTagSettings
+              value={nameTags}
+              onChange={changeNameTags}
+              name={user.name}
             />
+            <div className="workspace-feature-card">
+              <div className="workspace-feature-icon">
+                <Leaf size={25} />
+              </div>
+              <div>
+                <h4 id="map-effects-label">{t("Map effects")}</h4>
+                <p id="map-effects-description">
+                  {t(
+                    "Moving water and falling leaves or petals. Saved for your account on this browser.",
+                  )}
+                </p>
+                <small>
+                  {t(
+                    "Off by default when your device requests reduced motion. You can turn effects on here.",
+                  )}
+                </small>
+              </div>
+              <Switch
+                className="feature-switch"
+                aria-labelledby="map-effects-label"
+                aria-describedby="map-effects-description"
+                checked={mapEffectsEnabled}
+                onCheckedChange={changeMapEffects}
+              />
+            </div>
           </div>
         )}
         {tab === "activity" && user.role === "owner" && <ActivityLog />}

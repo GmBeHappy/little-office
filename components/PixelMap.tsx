@@ -1,4 +1,5 @@
 "use client";
+import { nameTagColors, type NameTagPreferences } from "@/lib/name-tags";
 import { useI18n } from "@/lib/i18n";
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
@@ -48,6 +49,7 @@ type Props = {
   activitiesEnabled: boolean;
   mapId: MapId;
   effectsEnabled: boolean;
+  nameTags: NameTagPreferences;
   people: Person[];
   self: string;
   speaking: string[];
@@ -1153,6 +1155,26 @@ export default function PixelMap(props: Props) {
             fishingPhase(fishing, fishingTime) !== "idle"
               ? 28
               : 0;
+          const isSpeaking = state.speaking.includes(p.id);
+          const tagScale = state.nameTags.size / 12;
+          const colors = nameTagColors(state.nameTags, isSpeaking);
+          const tagStyleKey = `${state.nameTags.size}:${state.nameTags.opacity}:${isSpeaking}`;
+          if (a.label.getData("nameTagStyle") !== tagStyleKey) {
+            a.label.setStyle({
+              fontSize: `${state.nameTags.size}px`,
+              backgroundColor: colors.background,
+              color: colors.text,
+              stroke: "#faf7e9",
+              strokeThickness: colors.outline,
+              padding: {
+                left: 6 * tagScale,
+                right: 24 * tagScale,
+                top: 3 * tagScale,
+                bottom: 3 * tagScale,
+              },
+            });
+            a.label.setData("nameTagStyle", tagStyleKey);
+          }
           a.label.y = -57 - height - fishingSpace;
           a.wave.y = -66 - height - fishingSpace;
           // Keep temporary reactions beside the name instead of reserving a
@@ -1220,18 +1242,13 @@ export default function PixelMap(props: Props) {
             g.lineStyle(2, 0xfaf6d7, 0.9);
             g.strokeEllipse(0, 3, 37, 17);
           }
-          const isSpeaking = state.speaking.includes(p.id);
-          const labelBackground = isSpeaking ? "#28794f" : "#faf7e9";
-          if (a.label.style.backgroundColor !== labelBackground) {
-            a.label.setBackgroundColor(labelBackground);
-            a.label.setColor(isSpeaking ? "#ffffff" : "#3b4839");
-          }
-          const micColor = isSpeaking
+          const micColor = colors.lightText
             ? 0xffffff
             : p.microphone
               ? 0x487950
               : 0x9b766b;
-          a.micIcon.setPosition(a.label.width / 2 - 13, a.label.y);
+          a.micIcon.setScale(tagScale);
+          a.micIcon.setPosition(a.label.width / 2 - 13 * tagScale, a.label.y);
           a.micIcon.clear().lineStyle(1.5, micColor, 1);
           a.micIcon.strokeRoundedRect(-2, -7, 5, 9, 2);
           a.micIcon.lineBetween(-5, -2, -5, 2);

@@ -37,13 +37,16 @@ test("custom avatars save, sync to teammates, survive reconnect, and fit mobile"
   await login(page, 0);
   await login(other, 1);
   await page.getByRole("button", { name: "Your profile", exact: true }).click();
+  await page.getByRole("tab", { name: "Appearance", exact: true }).click();
   const editor = page.locator(".avatar-editor");
   await expect(editor.locator(".skin-tone-options button")).toHaveCount(5);
   for (const group of ["Hair", "Hat", "Clothes"] as const) {
+    await editor.getByRole("tab", { name: group, exact: true }).click();
     const carousel = editor.getByRole("group", { name: group, exact: true });
     await expect(carousel).toHaveAttribute("data-option-count", "15");
     await expect(carousel.locator(".avatar-carousel-choice")).toHaveCount(3);
   }
+  await editor.getByRole("tab", { name: "Hair", exact: true }).click();
   await editor.getByRole("button", { name: "Next Hair", exact: true }).click();
   await expect(
     editor.getByRole("button", { name: "Ponytail", exact: true }),
@@ -61,10 +64,12 @@ test("custom avatars save, sync to teammates, survive reconnect, and fit mobile"
       .locator(".avatar-preview-stage svg")
       .getAttribute("data-avatar"),
   ).not.toBe(beforeRandom);
+  await editor.getByRole("tab", { name: "Skin tone", exact: true }).click();
   await editor
     .getByRole("button", { name: "Deep skin tone", exact: true })
     .click();
   for (const group of ["Hair", "Hat", "Clothes"] as const) {
+    await editor.getByRole("tab", { name: group, exact: true }).click();
     const carousel = editor.getByRole("group", { name: group, exact: true });
     for (let i = 0; i < 15; i++) {
       if ((await carousel.getAttribute("data-selected")) === "14") break;
@@ -109,6 +114,8 @@ test("custom avatars save, sync to teammates, survive reconnect, and fit mobile"
     id,
   );
   await page.getByRole("button", { name: "Your profile", exact: true }).click();
+  await page.getByRole("tab", { name: "Appearance", exact: true }).click();
+  await editor.getByRole("tab", { name: "Hat", exact: true }).click();
   await editor.getByRole("button", { name: "No hat", exact: true }).click();
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
   await expect(page.locator(".header-avatar svg")).toHaveAttribute(
@@ -119,6 +126,7 @@ test("custom avatars save, sync to teammates, survive reconnect, and fit mobile"
   if (await badge.isVisible()) await badge.click();
   await page.setViewportSize({ width: 390, height: 700 });
   await page.getByRole("button", { name: "Your profile", exact: true }).click();
+  await page.getByRole("tab", { name: "Appearance", exact: true }).click();
   await expect(editor.locator(".avatar-preview-stage svg")).toHaveAttribute(
     "data-avatar",
     id,
@@ -126,6 +134,7 @@ test("custom avatars save, sync to teammates, survive reconnect, and fit mobile"
   expect(await editor.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
     true,
   );
+  await editor.getByRole("tab", { name: "Clothes", exact: true }).click();
   await editor
     .getByRole("button", { name: "Rainbow tee", exact: true })
     .scrollIntoViewIfNeeded();

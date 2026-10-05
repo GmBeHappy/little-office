@@ -9,11 +9,10 @@ export async function api<T = Record<string, unknown>>(
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  const data = await response.json();
-  if (!response.ok)
-    throw new Error(
-      data.error || data.message || "Something went wrong. Please try again.",
-    );
+  const data = await response.json().catch(() => null);
+  const fallback = "Something went wrong. Please try again.";
+  if (!response.ok) throw new Error(data?.error || data?.message || fallback);
+  if (data === null) throw new Error(fallback);
   return data;
 }
 export type User = {

@@ -104,6 +104,7 @@ describe("office behavior", () => {
     c.direction = "right";
     b.x = a.x + 30;
     c.x = a.x - 60;
+    b.y = c.y = a.y;
     const now = Date.now();
     office.handle("a", { type: "nudge" }, now);
     expect(events.b.filter((e) => e.type === "nudge")).toEqual([

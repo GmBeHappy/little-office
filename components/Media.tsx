@@ -793,6 +793,19 @@ export function MediaTracks({
       </div>
     );
   }
+  const chromeToggle = (
+    <Button
+      variant="plain"
+      className={chromeHidden ? "media-chrome-toggle" : "media-view-button"}
+      aria-label={
+        chromeHidden ? t("Show media controls") : t("Hide media controls")
+      }
+      title={chromeHidden ? t("Show media controls") : t("Hide media controls")}
+      onClick={() => setChromeHidden((hidden) => !hidden)}
+    >
+      {chromeHidden ? <PanelTop size={18} /> : <PanelTopClose size={18} />}
+    </Button>
+  );
   return (
     <>
       <div className="audio-tracks" aria-hidden="true">
@@ -818,27 +831,7 @@ export function MediaTracks({
             role="region"
             aria-label={t("Expanded video")}
           >
-            <Button
-              variant="plain"
-              className="media-chrome-toggle"
-              aria-label={
-                chromeHidden
-                  ? t("Show media controls")
-                  : t("Hide media controls")
-              }
-              title={
-                chromeHidden
-                  ? t("Show media controls")
-                  : t("Hide media controls")
-              }
-              onClick={() => setChromeHidden((hidden) => !hidden)}
-            >
-              {chromeHidden ? (
-                <PanelTop size={18} />
-              ) : (
-                <PanelTopClose size={18} />
-              )}
-            </Button>
+            {chromeHidden && chromeToggle}
             <header className="media-view-header">
               <Button
                 variant="plain"
@@ -927,6 +920,7 @@ export function MediaTracks({
                     <Maximize2 size={19} />
                   )}
                 </Button>
+                {!chromeHidden && chromeToggle}
               </div>
             </header>
             {fullscreenError && (

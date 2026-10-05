@@ -1,4 +1,10 @@
 import "./prepare-assets";
+const migration = Bun.spawn(["bun", "scripts/migrate.ts"], {
+  stdout: "inherit",
+  stderr: "inherit",
+});
+const migrationExit = await migration.exited;
+if (migrationExit !== 0) process.exit(migrationExit);
 const api = Bun.spawn(["bun", "--watch", "server/index.ts"], {
   stdout: "inherit",
   stderr: "inherit",

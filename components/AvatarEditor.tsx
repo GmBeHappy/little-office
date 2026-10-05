@@ -1,6 +1,7 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import {
   Check,
   ChevronLeft,
@@ -167,66 +168,81 @@ export function AvatarEditor({
         </div>
         <p>{t("Mix your look. Save to wear it in the office.")}</p>
       </div>
-      <div className="avatar-options">
-        <fieldset>
-          <legend>{t("Skin tone")}</legend>
-          <div className="skin-tone-options">
-            {SKIN_TONES.map((tone, index) => (
-              <Button
-                variant="plain"
-                type="button"
-                key={tone.name}
-                aria-label={t("{name} skin tone", { name: t(tone.name) })}
-                aria-pressed={appearance.skin === index}
-                style={
-                  {
-                    "--skin-tone": `#${tone.color.toString(16).padStart(6, "0")}`,
-                  } as React.CSSProperties
-                }
-                onClick={() =>
-                  onChange(
-                    avatarId({
-                      ...appearance,
-                      skin: index as Appearance["skin"],
-                    }),
-                  )
-                }
-              >
-                <span className="skin-tone-swatch">
-                  {appearance.skin === index && <Check size={16} />}
-                </span>
-                <small>{t(tone.name)}</small>
-              </Button>
-            ))}
-          </div>
-        </fieldset>
+      <Tabs defaultValue="skin" className="avatar-options">
+        <TabsList
+          className="avatar-category-tabs"
+          aria-label={t("Character categories")}
+        >
+          <TabsTrigger value="skin">{t("Skin tone")}</TabsTrigger>
+          {groups.map((group) => (
+            <TabsTrigger key={group.key} value={group.key}>
+              {t(group.label)}
+            </TabsTrigger>
+          ))}
+          <TabsTrigger value="presets">{t("Presets")}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="skin">
+          <fieldset>
+            <legend>{t("Skin tone")}</legend>
+            <div className="skin-tone-options">
+              {SKIN_TONES.map((tone, index) => (
+                <Button
+                  variant="plain"
+                  type="button"
+                  key={tone.name}
+                  aria-label={t("{name} skin tone", { name: t(tone.name) })}
+                  aria-pressed={appearance.skin === index}
+                  style={
+                    {
+                      "--skin-tone": `#${tone.color.toString(16).padStart(6, "0")}`,
+                    } as React.CSSProperties
+                  }
+                  onClick={() =>
+                    onChange(
+                      avatarId({
+                        ...appearance,
+                        skin: index as Appearance["skin"],
+                      }),
+                    )
+                  }
+                >
+                  <span className="skin-tone-swatch">
+                    {appearance.skin === index && <Check size={16} />}
+                  </span>
+                  <small>{t(tone.name)}</small>
+                </Button>
+              ))}
+            </div>
+          </fieldset>
+        </TabsContent>
         {groups.map((group) => (
-          <StyleCarousel
-            key={group.key}
-            label={group.label}
-            options={group.options}
-            selected={appearance[group.key]}
-            onSelect={(index) =>
-              onChange(
-                avatarId({
+          <TabsContent key={group.key} value={group.key}>
+            <StyleCarousel
+              key={group.key}
+              label={group.label}
+              options={group.options}
+              selected={appearance[group.key]}
+              onSelect={(index) =>
+                onChange(
+                  avatarId({
+                    ...appearance,
+                    [group.key]: index,
+                  } as Appearance),
+                )
+              }
+              avatar={(index) => {
+                const next = {
                   ...appearance,
                   [group.key]: index,
-                } as Appearance),
-              )
-            }
-            avatar={(index) => {
-              const next = {
-                ...appearance,
-                [group.key]: index,
-              } as Appearance;
-              return avatarId(
-                group.key === "hair" ? { ...next, hat: 0 } : next,
-              );
-            }}
-          />
+                } as Appearance;
+                return avatarId(
+                  group.key === "hair" ? { ...next, hat: 0 } : next,
+                );
+              }}
+            />
+          </TabsContent>
         ))}
-        <details className="avatar-presets">
-          <summary>{t("Start from a preset")}</summary>
+        <TabsContent value="presets" className="avatar-presets">
           <div
             className="avatar-picker"
             role="group"
@@ -247,8 +263,8 @@ export function AvatarEditor({
               </Button>
             ))}
           </div>
-        </details>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -63,11 +63,12 @@ export class Office {
           .get(invite.to)
           ?.send({ type: "invitation-ended", id: invite.id });
       this.invites.clear();
-      let i = 0;
+      const placed: { x: number; y: number }[] = [];
       for (const member of this.members.values()) {
-        member.x = WORLD.spawn.x + (i % 2) * 32;
-        member.y = WORLD.spawn.y + (Math.floor(i / 2) % 8) * 32;
-        i++;
+        const position = this.spawnPosition(placed);
+        member.x = position.x;
+        member.y = position.y;
+        placed.push(position);
         member.zone = "floor";
         member.pose = "stand";
         member.microphone = false;
@@ -133,6 +134,43 @@ export class Office {
       this.generations.set(group, crypto.randomUUID());
     return `office-${this.epoch}-${this.generations.get(group)}`;
   }
+  private spawnPosition(occupied: { x: number; y: number }[]) {
+    // Search outward through connected, walkable commons so arrivals cannot
+    // land inside furniture, water, or a meeting room.
+    const queue = [{ ...WORLD.spawn }];
+    const visited = new Set<string>([`${WORLD.spawn.x},${WORLD.spawn.y}`]);
+    let best = queue[0];
+    let bestClearance = -1;
+    for (let i = 0; i < queue.length; i++) {
+      const point = queue[i];
+      const clearance = occupied.reduce(
+        (distance, other) =>
+          Math.min(distance, Math.hypot(point.x - other.x, point.y - other.y)),
+        Infinity,
+      );
+      if (clearance >= 64) return point;
+      if (clearance > bestClearance) {
+        best = point;
+        bestClearance = clearance;
+      }
+      for (const [dx, dy] of [
+        [16, 0],
+        [0, 16],
+        [-16, 0],
+        [0, -16],
+      ]) {
+        const x = point.x + dx;
+        const y = point.y + dy;
+        const key = `${x},${y}`;
+        if (visited.has(key)) continue;
+        visited.add(key);
+        if (walkable(x, y, this.blocks) && zoneAt(x, y, this.zones) === "floor")
+          queue.push({ x, y });
+      }
+    }
+    // If the commons is packed, use its least crowded reachable point.
+    return best;
+  }
   add(
     user: {
       id: string;
@@ -159,7 +197,7 @@ export class Office {
       id: user.id,
       name: user.name,
       avatar: isAvatar(user.avatar) ? user.avatar : "sage",
-      ...WORLD.spawn,
+      ...this.spawnPosition([...this.members.values()]),
       direction: "down",
       moving: false,
       pose: "stand",

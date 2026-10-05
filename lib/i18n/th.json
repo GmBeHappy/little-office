@@ -725,5 +725,19 @@
   "Make garden coffee": "ชงกาแฟในสวน",
   "Beans ground": "บดเมล็ดกาแฟแล้ว",
   "Coffee brewing": "กำลังชงกาแฟ",
-  "Coffee ready to share": "กาแฟพร้อมแบ่งปัน"
+  "Coffee ready to share": "กาแฟพร้อมแบ่งปัน",
+  "Profile": "โปรไฟล์",
+  "Appearance": "รูปลักษณ์",
+  "Profile sections": "ส่วนต่าง ๆ ของโปรไฟล์",
+  "Your profile in the office": "โปรไฟล์ของคุณในออฟฟิศ",
+  "This is the name your teammates see.": "ชื่อนี้จะแสดงให้เพื่อนร่วมทีมเห็น",
+  "Customize status icon": "ปรับแต่งไอคอนสถานะ",
+  "Character categories": "หมวดหมู่ตัวละคร",
+  "Presets": "แบบสำเร็จรูป",
+  "Avatar name tags": "ป้ายชื่อเหนืออวาตาร์",
+  "Adjust all name tags on your map. Saved for your account on this browser.": "ปรับป้ายชื่อทั้งหมดบนแผนที่ของคุณ บันทึกสำหรับบัญชีนี้ในเบราว์เซอร์นี้",
+  "Name tag preview": "ตัวอย่างป้ายชื่อ",
+  "Name tag size": "ขนาดป้ายชื่อ",
+  "Background opacity": "ความทึบของพื้นหลัง",
+  "0% is transparent. Name text stays visible.": "0% คือพื้นหลังโปร่งใส โดยยังแสดงข้อความชื่อ"
 }
