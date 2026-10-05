@@ -169,6 +169,6 @@ export type Snapshot = {
   epoch: string;
   self: string;
   people: Person[];
-  presenters: Record<string, string>;
+  presenters: Record<string, string[]>;
   locks: Record<string, boolean>;
 };

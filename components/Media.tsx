@@ -5,10 +5,15 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowLeft,
+  BarChart3,
   Grid2X2,
   Maximize2,
   Minimize2,
   Monitor,
+  PanelTop,
+  PanelTopClose,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import {
   Room,
@@ -614,7 +619,9 @@ export function MediaTracks({
   const { t } = useI18n();
   const [view, setView] = useState<"grid" | "screen" | null>(null);
   const [screenId, setScreenId] = useState("");
+  const [pinnedScreenId, setPinnedScreenId] = useState("");
   const [fullscreen, setFullscreen] = useState(false);
+  const [chromeHidden, setChromeHidden] = useState(false);
   const [fullscreenError, setFullscreenError] = useState(false);
   const back = useRef<HTMLButtonElement>(null);
   const ownsFullscreen = useRef(false);
@@ -645,9 +652,12 @@ export function MediaTracks({
     (item) => item.pub.source === Track.Source.Camera,
   );
   const screen =
-    screens.find((item) => item.pub.trackSid === screenId) || screens[0];
+    screens.find((item) => item.pub.trackSid === pinnedScreenId) ||
+    screens.find((item) => item.pub.trackSid === screenId) ||
+    screens[0];
   function closeView() {
     setView(null);
+    setChromeHidden(false);
     if (ownsFullscreen.current && document.fullscreenElement) {
       ownsFullscreen.current = false;
       void document.exitFullscreen().catch(() => {});
@@ -661,6 +671,15 @@ export function MediaTracks({
     else if (view === "grid" && !cameras.length)
       setView(screens.length ? "screen" : null);
   }, [view, !!screen, cameras.length, screens.length]);
+  useEffect(() => {
+    if (
+      pinnedScreenId &&
+      !screens.some((item) => item.pub.trackSid === pinnedScreenId)
+    )
+      setPinnedScreenId("");
+    if (screenId && !screens.some((item) => item.pub.trackSid === screenId))
+      setScreenId("");
+  }, [pinnedScreenId, screenId, screens]);
   const expanded = view !== null;
   useEffect(() => {
     if (!expanded) return;
@@ -711,13 +730,41 @@ export function MediaTracks({
     setScreenId(id);
     setView("screen");
   }
-  function tile(item: (typeof tracks)[number], expandable = false) {
+  function togglePin() {
+    if (!screen) return;
+    setPinnedScreenId((current) =>
+      current === screen.pub.trackSid ? "" : screen.pub.trackSid,
+    );
+  }
+  function tile(
+    item: (typeof tracks)[number],
+    expandable = false,
+    selectable = false,
+    expandedStats = false,
+  ) {
     const shared = item.pub.source === Track.Source.ScreenShare;
     return (
       <div
-        className={`video-tile ${shared ? "screen-tile" : ""}`}
+        className={`video-tile ${shared ? "screen-tile" : ""} ${
+          selectable && screen?.pub.trackSid === item.pub.trackSid
+            ? "selected-source"
+            : ""
+        }`}
         data-speaking={speaking.includes(item.identity)}
         key={item.pub.trackSid}
+        onClick={selectable ? () => openScreen(item.pub.trackSid) : undefined}
+        onKeyDown={
+          selectable
+            ? (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openScreen(item.pub.trackSid);
+                }
+              }
+            : undefined
+        }
+        role={selectable ? "button" : undefined}
+        tabIndex={selectable ? 0 : undefined}
       >
         <AttachedTrack pub={item.pub} local={item.local} />
         <span className="video-caption">
@@ -726,6 +773,7 @@ export function MediaTracks({
           {item.local ? t(" · you") : ""}
           {shared ? t(" · presenting") : ""}
         </span>
+        {shared && <TrackStats pub={item.pub} expanded={expandedStats} />}
         {expandable && (
           <Button
             variant="plain"
@@ -766,10 +814,31 @@ export function MediaTracks({
       {expanded &&
         createPortal(
           <section
-            className="media-expanded"
+            className={`media-expanded ${chromeHidden ? "media-chrome-hidden" : ""}`}
             role="region"
             aria-label={t("Expanded video")}
           >
+            <Button
+              variant="plain"
+              className="media-chrome-toggle"
+              aria-label={
+                chromeHidden
+                  ? t("Show media controls")
+                  : t("Hide media controls")
+              }
+              title={
+                chromeHidden
+                  ? t("Show media controls")
+                  : t("Hide media controls")
+              }
+              onClick={() => setChromeHidden((hidden) => !hidden)}
+            >
+              {chromeHidden ? (
+                <PanelTop size={18} />
+              ) : (
+                <PanelTopClose size={18} />
+              )}
+            </Button>
             <header className="media-view-header">
               <Button
                 variant="plain"
@@ -786,7 +855,14 @@ export function MediaTracks({
                     ? t("{name}'s screen", { name: screen.name })
                     : t("Camera grid")}
                 </h2>
-                <span>{t("{count} cameras", { count: cameras.length })}</span>
+                <span>
+                  {view === "screen" && screen
+                    ? t("{count} shared screens · {cameras} cameras", {
+                        count: screens.length,
+                        cameras: cameras.length,
+                      })
+                    : t("{count} cameras", { count: cameras.length })}
+                </span>
               </div>
               <div className="media-view-actions">
                 {!!cameras.length && (
@@ -805,10 +881,33 @@ export function MediaTracks({
                     variant="plain"
                     className="media-view-button"
                     aria-pressed={view === "screen"}
-                    onClick={() => openScreen(screens[0].pub.trackSid)}
+                    onClick={() =>
+                      openScreen(
+                        screen?.pub.trackSid || screens[0].pub.trackSid,
+                      )
+                    }
                   >
                     <Monitor size={18} />
                     <span>{t("Shared screen")}</span>
+                  </Button>
+                )}
+                {view === "screen" && screen && (
+                  <Button
+                    variant="plain"
+                    className="media-view-button"
+                    aria-pressed={pinnedScreenId === screen.pub.trackSid}
+                    onClick={togglePin}
+                  >
+                    {pinnedScreenId === screen.pub.trackSid ? (
+                      <PinOff size={18} />
+                    ) : (
+                      <Pin size={18} />
+                    )}
+                    <span>
+                      {pinnedScreenId === screen.pub.trackSid
+                        ? t("Unpin screen")
+                        : t("Pin screen")}
+                    </span>
                   </Button>
                 )}
                 <Button
@@ -839,11 +938,23 @@ export function MediaTracks({
             )}
             {view === "screen" && screen ? (
               <div
-                className={`media-screen-stage ${cameras.length ? "has-cameras" : ""}`}
+                className={`media-screen-stage ${
+                  cameras.length || screens.length > 1 ? "has-rail" : ""
+                }`}
               >
-                <div className="media-spotlight">{tile(screen)}</div>
-                {!!cameras.length && (
+                <div className="media-spotlight">
+                  {tile(screen, false, false, true)}
+                </div>
+                {!!(cameras.length || screens.length > 1) && (
                   <div className="media-camera-rail">
+                    {screens.length > 1 && (
+                      <div
+                        className="media-share-rail"
+                        aria-label={t("Shared screens")}
+                      >
+                        {screens.map((item) => tile(item, false, true))}
+                      </div>
+                    )}
                     {cameras.map((item) => tile(item))}
                   </div>
                 )}
@@ -872,6 +983,82 @@ export function MediaTracks({
           document.querySelector(".app-shell") || document.body,
         )}
     </>
+  );
+}
+function formatBitrate(bits: number) {
+  if (!bits) return "—";
+  if (bits >= 1_000_000) return `${(bits / 1_000_000).toFixed(1)} Mbps`;
+  return `${Math.round(bits / 1_000)} Kbps`;
+}
+function TrackStats({
+  pub,
+  expanded = false,
+}: {
+  pub: TrackPublication;
+  expanded?: boolean;
+}) {
+  const { t } = useI18n();
+  const [stats, setStats] = useState({
+    width: 0,
+    height: 0,
+    fps: 0,
+    bitrate: 0,
+  });
+  useEffect(() => {
+    let disposed = false;
+    const read = async () => {
+      const track = pub.track;
+      if (!track) return;
+      const settings = track.mediaStreamTrack.getSettings();
+      let width = settings.width || pub.dimensions?.width || 0;
+      let height = settings.height || pub.dimensions?.height || 0;
+      let fps = settings.frameRate || 0;
+      let bitrate = track.currentBitrate || 0;
+      try {
+        const report = await track.getRTCStatsReport();
+        report?.forEach((entry) => {
+          const stat = entry as RTCInboundRtpStreamStats &
+            RTCOutboundRtpStreamStats & {
+              frameWidth?: number;
+              frameHeight?: number;
+              framesPerSecond?: number;
+              mediaType?: string;
+            };
+          if (stat.type !== "inbound-rtp" && stat.type !== "outbound-rtp")
+            return;
+          if (stat.kind && stat.kind !== "video" && stat.mediaType !== "video")
+            return;
+          width = stat.frameWidth || width;
+          height = stat.frameHeight || height;
+          fps = stat.framesPerSecond || fps;
+          const bytes = stat.bytesReceived ?? stat.bytesSent;
+          if (typeof bytes === "number" && typeof stat.timestamp === "number")
+            bitrate = track.currentBitrate || bitrate;
+        });
+      } catch {
+        /* Stats can disappear while a remote publication is being replaced. */
+      }
+      if (!disposed) setStats({ width, height, fps, bitrate });
+    };
+    void read();
+    const timer = setInterval(() => void read(), 1000);
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+    };
+  }, [pub, pub.track]);
+  const resolution =
+    stats.width && stats.height ? `${stats.width}×${stats.height}` : t("Auto");
+  return (
+    <span
+      className={`video-stats ${expanded ? "video-stats-expanded" : ""}`}
+      title={t("Resolution, frame rate, and current bitrate")}
+    >
+      <BarChart3 size={12} />
+      <span>{resolution}</span>
+      {stats.fps ? <span>{Math.round(stats.fps)} fps</span> : null}
+      <span>{formatBitrate(stats.bitrate)}</span>
+    </span>
   );
 }
 function AttachedTrack({

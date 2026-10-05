@@ -20,6 +20,7 @@ export const Command = z.discriminatedUnion("type", [
     type: z.literal("microphone"),
     room: z.string().max(200),
     enabled: z.boolean(),
+    speaking: z.boolean().optional(),
   }),
   z.object({
     type: z.literal("pose"),

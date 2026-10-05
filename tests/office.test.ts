@@ -188,6 +188,21 @@ describe("office behavior", () => {
     office.handle("a", { type: "microphone", room: a.room, enabled: true });
     expect(a.microphone).toBe(true);
   });
+  test("speaking refreshes activity and returns an automatically away member to their manual status", () => {
+    const { office } = setup();
+    const member = office.members.get("a")!;
+    const now = Date.now();
+    member.activity = now - 300001;
+    office.tick(0.05, now);
+    expect(member.status).toBe("away");
+    office.handle(
+      "a",
+      { type: "microphone", room: member.room, enabled: true, speaking: true },
+      now + 10,
+    );
+    expect(member.status).toBe("available");
+    expect(member.activity).toBe(now + 10);
+  });
   test("all maps have the advertised seats and reachable safe entrances", () => {
     expect(MAPS.filter((map) => map.size === "small")).toHaveLength(12);
     expect(MAPS.filter((map) => map.size === "large")).toHaveLength(3);
@@ -472,15 +487,14 @@ describe("office behavior", () => {
     });
     expect(office.members.get("b")!.zone).toBe("library");
   });
-  test("private-room departure changes its media generation and clears the presenter", () => {
+  test("private-room departure changes its media generation and clears presenters", () => {
     const { office, retired } = setup();
     for (const id of ["a", "b"])
       office.handle(id, { type: "zone", zone: "studio" });
     const old = office.members.get("a")!.room;
     office.handle("a", { type: "present", enabled: true });
-    expect(() =>
-      office.handle("b", { type: "present", enabled: true }),
-    ).toThrow("already presenting");
+    office.handle("b", { type: "present", enabled: true });
+    expect(office.presenters["zone:studio"]).toEqual(["a", "b"]);
     office.handle("a", { type: "zone", zone: "floor" });
     expect(retired).toContain(old);
     expect(office.members.get("b")!.room).not.toBe(old);

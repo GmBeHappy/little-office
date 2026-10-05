@@ -88,7 +88,7 @@ export class Office {
   members = new Map<string, Member>();
   invites = new Map<string, Invitation>();
   generations = new Map<string, string>();
-  presenters: Record<string, string> = {};
+  presenters: Record<string, string[]> = {};
   locks: Record<string, boolean> = { studio: false, library: false };
   cooldowns = new Map<string, number>();
   dirty = false;
@@ -119,6 +119,13 @@ export class Office {
     if (!member.sharing) return;
     member.sharing = false;
     this.log(member, "screen.stop");
+  }
+  removePresenter(group: string, id: string) {
+    const presenters = this.presenters[group];
+    if (!presenters) return;
+    const next = presenters.filter((presenter) => presenter !== id);
+    if (next.length) this.presenters[group] = next;
+    else delete this.presenters[group];
   }
   room(group: string) {
     if (!group) return "";
@@ -203,7 +210,7 @@ export class Office {
     member.room = this.room(group);
     member.microphone = false;
     if (old) {
-      if (this.presenters[old] === member.id) delete this.presenters[old];
+      this.removePresenter(old, member.id);
       this.rotate(old);
       // A one-person direct call ends when its counterpart leaves.
       if (old.startsWith("call:"))
@@ -356,7 +363,14 @@ export class Office {
       }
 
       case "microphone":
-        if (command.room === m.room) m.microphone = !!m.room && command.enabled;
+        if (command.room === m.room) {
+          m.microphone = !!m.room && command.enabled;
+          if (command.speaking) {
+            m.activity = now;
+            if (m.status === "away" && m.manualStatus !== "away")
+              m.status = m.manualStatus;
+          }
+        }
         break;
       case "pose":
         if (command.pose === "fish") {
@@ -528,7 +542,7 @@ export class Office {
         if (!command.enabled) this.stopSharing(m);
         else if (
           m.room &&
-          this.presenters[m.conversation] === id &&
+          this.presenters[m.conversation]?.includes(id) &&
           !m.sharing
         ) {
           m.sharing = true;
@@ -539,24 +553,28 @@ export class Office {
       case "present": {
         if (!m.conversation)
           throw new Error("Join a conversation before sharing.");
-        const presenter = this.presenters[m.conversation];
-        if (command.enabled && presenter && presenter !== id)
-          throw new Error("Someone is already presenting.");
-        if (!command.enabled) this.stopSharing(m);
-        if (command.enabled) this.presenters[m.conversation] = id;
-        else if (presenter === id) delete this.presenters[m.conversation];
         const group = m.conversation,
           room = m.room;
+        if (!command.enabled) {
+          this.stopSharing(m);
+          this.removePresenter(group, id);
+        } else {
+          const presenters = this.presenters[group] || [];
+          if (!presenters.includes(id))
+            this.presenters[group] = [...presenters, id];
+        }
         this.permissions(room, id, command.enabled)
           .then(() => {
             if (
               m.room === room &&
-              (!command.enabled || this.presenters[group] === id)
+              (command.enabled
+                ? this.presenters[group]?.includes(id)
+                : !this.presenters[group]?.includes(id))
             )
               m.send({ type: "presenter", enabled: command.enabled });
           })
           .catch(() => {
-            if (this.presenters[group] === id) delete this.presenters[group];
+            if (command.enabled) this.removePresenter(group, id);
             m.send({
               type: "error",
               message:

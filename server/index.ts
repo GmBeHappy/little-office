@@ -805,7 +805,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       room,
       m.id,
       m.name,
-      office.presenters[m.conversation] === m.id,
+      office.presenters[m.conversation]?.includes(m.id) || false,
     );
     const current = office.members.get(m.id);
     if (

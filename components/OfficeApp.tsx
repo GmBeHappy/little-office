@@ -226,12 +226,14 @@ export default function OfficeApp() {
   const media = useOfficeMedia(self, people, notify, user?.id);
   const mediaRef = useRef(media);
   mediaRef.current = media;
+  const selfSpeaking = !!user && media.speaking.includes(user.id);
   useEffect(() => {
     if (!self || connection !== "Connected") return;
     send({
       type: "microphone",
       room: self.room,
       enabled: media.connected && media.room?.name === self.room && media.mic,
+      speaking: selfSpeaking,
     });
   }, [
     self?.room,
@@ -239,6 +241,7 @@ export default function OfficeApp() {
     media.connected,
     media.room?.name,
     media.mic,
+    selfSpeaking,
     send,
   ]);
   useEffect(() => {
@@ -1031,6 +1034,8 @@ export default function OfficeApp() {
             <ToolbarMenu
               label={t("Audio devices")}
               onOpen={() => void media.enumerate()}
+              mode="popover"
+              openOnHover
             >
               {() => (
                 <>
@@ -1077,6 +1082,8 @@ export default function OfficeApp() {
             <ToolbarMenu
               label={t("Camera devices")}
               onOpen={() => void media.enumerate()}
+              mode="popover"
+              openOnHover
             >
               {() => (
                 <>

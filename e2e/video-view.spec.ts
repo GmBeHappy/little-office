@@ -16,7 +16,7 @@ test("camera grid and expanded sharing preserve audio, support fullscreen, and r
     const [a, b] = await Promise.all(
       contexts.map((context) => context.newPage()),
     );
-    await a.addInitScript(() => {
+    const mockDisplayMedia = () => {
       navigator.mediaDevices.getDisplayMedia = async () => {
         const canvas = document.createElement("canvas");
         canvas.width = 1280;
@@ -43,7 +43,10 @@ test("camera grid and expanded sharing preserve audio, support fullscreen, and r
           .addEventListener("ended", () => clearInterval(timer));
         return stream;
       };
-    });
+    };
+    await Promise.all(
+      [a, b].map((page) => page.addInitScript(mockDisplayMedia)),
+    );
     let walking = 0;
     b.on("websocket", (socket) => {
       if (!socket.url().includes("/api/office")) return;
@@ -132,6 +135,8 @@ test("camera grid and expanded sharing preserve audio, support fullscreen, and r
       .click();
     await a.getByRole("button", { name: "Share screen", exact: true }).click();
     await expect(b.locator(".screen-tile video")).toBeVisible();
+    await b.getByRole("button", { name: "Share screen", exact: true }).click();
+    await expect(a.locator(".screen-tile video")).toHaveCount(2);
     const sharingEvents = async (action: string) => {
       const response = await a.request.get(
         `/api/admin/activity?action=${action}`,
@@ -146,9 +151,29 @@ test("camera grid and expanded sharing preserve audio, support fullscreen, and r
       .poll(async () => (await sharingEvents("screen.start")).length)
       .toBe(1);
     await b
+      .locator(".video-strip .screen-tile")
+      .filter({ hasText: "Robin" })
       .getByRole("button", { name: "ขยายหน้าจอที่แชร์", exact: true })
       .click();
     await expect(expanded.getByRole("heading")).toHaveText("หน้าจอของ Robin");
+    await expect(
+      expanded.getByRole("button", { name: "Pin screen", exact: true }),
+    ).toBeVisible();
+    await expanded
+      .getByRole("button", { name: "Pin screen", exact: true })
+      .click();
+    await expect(
+      expanded.getByRole("button", { name: "Unpin screen", exact: true }),
+    ).toBeVisible();
+    await expanded
+      .getByRole("button", { name: "Hide media controls", exact: true })
+      .click();
+    await expect(
+      expanded.getByRole("button", { name: "Back to map", exact: true }),
+    ).toBeHidden();
+    await expanded
+      .getByRole("button", { name: "Show media controls", exact: true })
+      .click();
     await expect(expanded.locator(".media-spotlight video")).toHaveCSS(
       "object-fit",
       "contain",
@@ -186,6 +211,7 @@ test("camera grid and expanded sharing preserve audio, support fullscreen, and r
       .getByRole("button", { name: "หน้าจอที่แชร์", exact: true })
       .click();
     await a.getByRole("button", { name: "Stop sharing", exact: true }).click();
+    await b.getByRole("button", { name: "Stop sharing", exact: true }).click();
     await expect
       .poll(async () => (await sharingEvents("screen.stop")).length)
       .toBe(1);
