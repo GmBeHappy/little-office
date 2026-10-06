@@ -11,6 +11,11 @@ export const Command = z.discriminatedUnion("type", [
     room: z.string().max(200),
     enabled: z.boolean(),
   }),
+  z.object({
+    type: z.literal("screen-view"),
+    room: z.string().max(200),
+    publisher: z.string().min(1).max(80).nullable(),
+  }),
   z.object({ type: z.literal("jump") }),
   z.object({
     type: z.literal("emote"),

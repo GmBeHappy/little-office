@@ -15,6 +15,7 @@ import {
 } from "../shared/world";
 import type { ActivityEvent } from "../shared/activity";
 import type { Command } from "../shared/protocol";
+import { boardScope, whiteboardEnabled } from "../shared/whiteboard";
 import {
   DEFAULT_WORKSPACE,
   getMap,
@@ -35,6 +36,7 @@ type Member = Person & {
   connectionId: string;
   expires: number;
   sharing: boolean;
+  whiteboardScope?: string;
 };
 export class Office {
   habitat = emptyHabitat();
@@ -119,7 +121,37 @@ export class Office {
   stopSharing(member: Member) {
     if (!member.sharing) return;
     member.sharing = false;
+    for (const viewer of this.members.values())
+      if (viewer.watching === member.id) viewer.watching = undefined;
+    this.dirty = true;
     this.log(member, "screen.stop");
+  }
+  setWhiteboard(id: string, connectionId: string, scope?: string) {
+    const member = this.members.get(id);
+    if (!member || member.connectionId !== connectionId) return;
+    member.whiteboardScope = scope;
+    member.activity = Date.now();
+    if (member.status === "away" && member.manualStatus !== "away")
+      member.status = member.manualStatus;
+    this.dirty = true;
+  }
+  private whiteboardActive(member: Member) {
+    return (
+      !!member.whiteboardScope &&
+      whiteboardEnabled(this.workspace) &&
+      member.whiteboardScope === boardScope(this.workspace.mapId, member)
+    );
+  }
+  private screenViewTarget(member: Member) {
+    const publisher = member.watching && this.members.get(member.watching);
+    return publisher &&
+      publisher.id !== member.id &&
+      publisher.sharing &&
+      publisher.room === member.room &&
+      publisher.conversation === member.conversation &&
+      (member.conversation !== "floor" || nearby(member, publisher))
+      ? publisher.id
+      : undefined;
   }
   removePresenter(group: string, id: string) {
     const presenters = this.presenters[group];
@@ -237,6 +269,7 @@ export class Office {
       if (member.conversation === group) {
         this.stopSharing(member);
         member.room = this.room(group);
+        member.watching = undefined;
         member.microphone = false;
       }
   }
@@ -245,6 +278,7 @@ export class Office {
     if (old === group) return;
     this.stopSharing(member);
     member.conversation = group;
+    member.watching = undefined;
     member.room = this.room(group);
     member.microphone = false;
     if (old) {
@@ -575,6 +609,12 @@ export class Office {
         }
         break;
       }
+      case "screen-view": {
+        if (command.room !== m.room) break;
+        m.watching = command.publisher || undefined;
+        m.watching = this.screenViewTarget(m);
+        break;
+      }
       case "screen-share": {
         if (command.room !== m.room) break;
         if (!command.enabled) this.stopSharing(m);
@@ -639,6 +679,8 @@ export class Office {
       }
       if (
         now - m.activity > 300000 &&
+        !m.sharing &&
+        !this.whiteboardActive(m) &&
         (!m.conversation || m.conversation === "floor") &&
         m.manualStatus === "available"
       )
@@ -690,8 +732,8 @@ export class Office {
         this.locks[zone] = false;
   }
   people(): Person[] {
-    return [...this.members.values()].map(
-      ({
+    return [...this.members.values()].map((member) => {
+      const {
         id,
         name,
         avatar,
@@ -705,11 +747,13 @@ export class Office {
         status,
         statusText,
         statusIcon,
+        sharing,
         zone,
         conversation,
         room,
         seq,
-      }) => ({
+      } = member;
+      return {
         id,
         name,
         avatar,
@@ -723,12 +767,15 @@ export class Office {
         status,
         statusText,
         statusIcon,
+        sharing,
+        watching: this.screenViewTarget(member),
+        whiteboard: this.whiteboardActive(member),
         zone,
         conversation,
         room,
         seq,
-      }),
-    );
+      };
+    });
   }
   broadcast() {
     const people = this.people();

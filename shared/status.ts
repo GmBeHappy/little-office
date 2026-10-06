@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Availability } from "./world";
+import type { Availability, Person } from "./world";
 
 export const STATUS_ICONS = [
   "",
@@ -47,4 +47,31 @@ export const STATUS_PRESETS = [
 
 export function statusIcon(status: Availability, icon?: string) {
   return icon || { available: "", busy: "💻", dnd: "⛔", away: "☕" }[status];
+}
+
+export function personStatus(
+  person: Pick<
+    Person,
+    "status" | "statusText" | "statusIcon" | "sharing" | "whiteboard"
+  >,
+) {
+  const activity = person.sharing || person.whiteboard;
+  return {
+    status:
+      activity && person.status !== "dnd" ? ("busy" as const) : person.status,
+    label:
+      person.sharing && person.whiteboard
+        ? "Sharing screen · Using whiteboard"
+        : person.sharing
+          ? "Sharing screen"
+          : person.whiteboard
+            ? "Using whiteboard"
+            : STATUS_LABELS[person.status],
+    icon: person.sharing
+      ? "🖥️"
+      : person.whiteboard
+        ? "✏️"
+        : statusIcon(person.status, person.statusIcon),
+    text: activity ? "" : person.statusText.trim(),
+  };
 }

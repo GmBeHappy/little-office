@@ -24,6 +24,8 @@ import { useI18n, LanguageToggle } from "@/lib/i18n";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Activity,
+  ArrowLeft,
   ArrowRight,
   ArrowUpRight,
   BellRing,
@@ -51,9 +53,11 @@ import {
   PencilRuler,
   Search,
   Settings,
+  SlidersHorizontal,
   Shield,
   Smile,
   Users,
+  UserRound,
   Video,
   VideoOff,
   VolumeX,
@@ -83,6 +87,7 @@ import {
   STATUS_ICON_LABELS,
   STATUS_PRESETS,
   statusIcon,
+  personStatus,
   statusIconSchema,
 } from "@/shared/status";
 import { DeviceSelect } from "./DeviceSelect";
@@ -255,6 +260,14 @@ export default function OfficeApp() {
       socket.current.send(JSON.stringify(command));
   }, []);
   const self = snapshot?.people.find((p) => p.id === user?.id);
+  const selfStatus = self ? personStatus(self) : null;
+  const reportScreenView = useCallback(
+    (room: string, publisher: string | null) => {
+      if (connection === "Connected")
+        send({ type: "screen-view", room, publisher });
+    },
+    [connection, send],
+  );
   const people = snapshot?.people || [];
   const workspace =
     snapshot?.workspace || config?.workspace || DEFAULT_WORKSPACE;
@@ -790,6 +803,9 @@ export default function OfficeApp() {
                 room={media.room}
                 revision={media.revision}
                 speaking={media.speaking}
+                people={people}
+                active={!whiteboard}
+                onScreenView={reportScreenView}
               />
             </div>
           </div>
@@ -877,54 +893,61 @@ export default function OfficeApp() {
                     <span>{filtered.length}</span>
                   </div>
                   <div className="people-list">
-                    {filtered.map((p) => (
-                      <Button
-                        variant="plain"
-                        key={p.id}
-                        className={`person ${selected === p.id ? "person-selected" : ""}`}
-                        data-speaking={media.speaking.includes(p.id)}
-                        data-in-voice={voicePeople.some(
-                          (person) => person.id === p.id,
-                        )}
-                        onClick={() =>
-                          setSelected(selected === p.id ? "" : p.id)
-                        }
-                      >
-                        <div className="avatar-wrap">
-                          <Avatar color={p.avatar} />
-                          <i className={`status-dot ${p.status}`} />
-                        </div>
-                        <div className="person-copy">
-                          <strong>
-                            {p.name}{" "}
-                            {p.id === user.id && <small>{t("(you)")}</small>}
-                          </strong>
-                          <span>
-                            {statusIcon(p.status, p.statusIcon)}{" "}
-                            {p.statusText || t(statusLabel[p.status])}
-                          </span>
-                        </div>
-                        {media.speaking.includes(p.id) ? (
-                          <SpeakingIndicator />
-                        ) : voicePeople.some((person) => person.id === p.id) ? (
-                          <Headphones
-                            size={15}
-                            aria-label={t("In your voice conversation")}
-                            className="in-voice-icon"
-                          />
-                        ) : p.conversation ? (
-                          <Headphones size={15} className="muted" />
-                        ) : (
-                          <span className="person-room">
-                            {p.zone === "floor"
-                              ? t("Commons")
-                              : p.zone === "studio"
-                                ? t("Studio")
-                                : t("Library")}
-                          </span>
-                        )}
-                      </Button>
-                    ))}
+                    {filtered.map((p) => {
+                      const displayStatus = personStatus(p);
+                      return (
+                        <Button
+                          variant="plain"
+                          key={p.id}
+                          className={`person ${selected === p.id ? "person-selected" : ""}`}
+                          data-speaking={media.speaking.includes(p.id)}
+                          data-in-voice={voicePeople.some(
+                            (person) => person.id === p.id,
+                          )}
+                          onClick={() =>
+                            setSelected(selected === p.id ? "" : p.id)
+                          }
+                        >
+                          <div className="avatar-wrap">
+                            <Avatar color={p.avatar} />
+                            <i
+                              className={`status-dot ${displayStatus.status}`}
+                            />
+                          </div>
+                          <div className="person-copy">
+                            <strong>
+                              {p.name}{" "}
+                              {p.id === user.id && <small>{t("(you)")}</small>}
+                            </strong>
+                            <span>
+                              {displayStatus.icon}{" "}
+                              {displayStatus.text || t(displayStatus.label)}
+                            </span>
+                          </div>
+                          {media.speaking.includes(p.id) ? (
+                            <SpeakingIndicator />
+                          ) : voicePeople.some(
+                              (person) => person.id === p.id,
+                            ) ? (
+                            <Headphones
+                              size={15}
+                              aria-label={t("In your voice conversation")}
+                              className="in-voice-icon"
+                            />
+                          ) : p.conversation ? (
+                            <Headphones size={15} className="muted" />
+                          ) : (
+                            <span className="person-room">
+                              {p.zone === "floor"
+                                ? t("Commons")
+                                : p.zone === "studio"
+                                  ? t("Studio")
+                                  : t("Library")}
+                            </span>
+                          )}
+                        </Button>
+                      );
+                    })}
                   </div>
                   {chosen && chosen.id !== user.id && (
                     <div className="person-actions">
@@ -1096,9 +1119,12 @@ export default function OfficeApp() {
                 <strong>{user.name}</strong>
                 <span>
                   <i
-                    className={`status-dot-inline ${self?.status || "available"}`}
+                    className={`status-dot-inline ${selfStatus?.status || "available"}`}
                   />
-                  {t(statusLabel[self?.status || "available"])}
+                  {self?.sharing || self?.whiteboard
+                    ? `${selfStatus?.icon} `
+                    : ""}
+                  {t(selfStatus?.label || statusLabel.available)}
                 </span>
               </div>
               <ChevronDown size={15} />
@@ -1327,8 +1353,9 @@ export default function OfficeApp() {
       >
         {modal && (
           <DialogContent
-            className={`modal ${modal === "settings" ? "max-w-[920px]" : modal === "profile" ? "profile-dialog max-w-[740px]" : ""}`}
+            className={`modal ${modal === "settings" ? "settings-page inset-0 h-dvh max-h-none w-full max-w-none translate-x-0 translate-y-0 overflow-hidden rounded-none border-0 p-0 sm:p-0" : modal === "profile" ? "profile-dialog max-w-[740px]" : ""}`}
             closeLabel={t("Close dialog")}
+            showClose={modal !== "settings"}
           >
             <DialogTitle className="sr-only">
               {modal === "settings"
@@ -1402,6 +1429,8 @@ export default function OfficeApp() {
                 refresh={refresh}
                 notify={notify}
                 media={media}
+                self={self}
+                onClose={() => setModal(null)}
               />
             )}
           </DialogContent>
@@ -1955,6 +1984,8 @@ function Profile({
   );
 }
 function SettingsPanel({
+  self,
+  onClose,
   nameTags,
   changeNameTags,
   mapEffectsEnabled,
@@ -1967,6 +1998,8 @@ function SettingsPanel({
   notify,
   media,
 }: {
+  self?: Person;
+  onClose: () => void;
   nameTags: NameTagPreferences;
   changeNameTags: (value: NameTagPreferences) => void;
   mapEffectsEnabled: boolean;
@@ -1981,10 +2014,74 @@ function SettingsPanel({
 }) {
   const { t } = useI18n();
   const [tab, setTab] = useState<
-      "audio" | "display" | "auth" | "members" | "workspace" | "activity"
+      | "profile"
+      | "audio"
+      | "display"
+      | "auth"
+      | "members"
+      | "workspace"
+      | "activity"
     >(user.role === "owner" ? initialTab : "audio"),
     [users, setUsers] = useState<AdminUser[]>([]),
     [busy, setBusy] = useState(false);
+  const [compact, setCompact] = useState(false);
+  const content = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const query = matchMedia("(max-width: 760px)");
+    const update = () => setCompact(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  const sections = [
+    {
+      value: "profile",
+      label: "Profile",
+      icon: UserRound,
+      description: "Your name, appearance, and status.",
+    },
+    {
+      value: "audio",
+      label: "Devices",
+      icon: Mic,
+      description: "Microphone, speakers, camera, and sharing quality.",
+    },
+    {
+      value: "display",
+      label: "Display",
+      icon: SlidersHorizontal,
+      description: "Make the office feel comfortable on your screen.",
+    },
+    ...(user.role === "owner"
+      ? [
+          {
+            value: "workspace",
+            label: "Workspace",
+            icon: Home,
+            description: "The map, shared features, and file storage.",
+          },
+          {
+            value: "members",
+            label: "Members",
+            icon: Users,
+            description: "Invite teammates and manage their office access.",
+          },
+          {
+            value: "activity",
+            label: "Activity",
+            icon: Activity,
+            description: "Recent events across your workspace.",
+          },
+          {
+            value: "auth",
+            label: "Authentication",
+            icon: Shield,
+            description: "Choose how your team signs in.",
+          },
+        ]
+      : []),
+  ];
+  const selectedSection = sections.find((section) => section.value === tab)!;
   const [memberAction, setMemberAction] = useState<{
     user: AdminUser;
     kind: "delete" | "reset" | "role";
@@ -2020,318 +2117,386 @@ function SettingsPanel({
     }
   }
   return (
-    <Tabs value={tab} onValueChange={(value) => setTab(value as typeof tab)}>
-      <div className="eyebrow">{t("KEEP THINGS FEELING RIGHT")}</div>
-      <h2>{t("Office settings.")}</h2>
-      <TabsList
-        className="settings-tabs justify-start rounded-none bg-transparent p-0"
-        aria-label={t("Office settings")}
-      >
-        {user.role === "owner" && (
-          <TabsTrigger value="workspace">{t("Workspace")}</TabsTrigger>
-        )}
-        <TabsTrigger value="audio">{t("Devices")}</TabsTrigger>
-        <TabsTrigger value="display">{t("Display")}</TabsTrigger>
-        {user.role === "owner" && (
-          <>
-            <TabsTrigger value="members">{t("Members")}</TabsTrigger>
-            <TabsTrigger value="activity">{t("Activity")}</TabsTrigger>
-            <TabsTrigger value="auth">{t("Authentication")}</TabsTrigger>
-          </>
-        )}
-      </TabsList>
-      <TabsContent value={tab} className="mt-0">
-        {tab === "display" && (
-          <div className="display-settings">
-            <NameTagSettings
-              value={nameTags}
-              onChange={changeNameTags}
-              name={user.name}
-            />
-            <div className="workspace-feature-card">
-              <div className="workspace-feature-icon">
-                <Leaf size={25} />
-              </div>
-              <div>
-                <h4 id="map-effects-label">{t("Map effects")}</h4>
-                <p id="map-effects-description">
-                  {t(
-                    "Moving water and falling leaves or petals. Saved for your account on this browser.",
-                  )}
-                </p>
-                <small>
-                  {t(
-                    "Off by default when your device requests reduced motion. You can turn effects on here.",
-                  )}
-                </small>
-              </div>
-              <Switch
-                className="feature-switch"
-                aria-labelledby="map-effects-label"
-                aria-describedby="map-effects-description"
-                checked={mapEffectsEnabled}
-                onCheckedChange={changeMapEffects}
-              />
-            </div>
-          </div>
-        )}
-        {tab === "activity" && user.role === "owner" && <ActivityLog />}
-        {tab === "workspace" && (
-          <WorkspaceSettings
-            workspace={workspace}
-            refresh={refresh}
-            notify={notify}
-          />
-        )}
-        {tab === "audio" && (
+    <Tabs
+      className="settings-root"
+      orientation={compact ? "horizontal" : "vertical"}
+      value={tab}
+      onValueChange={(value) => {
+        setTab(value as typeof tab);
+        content.current?.scrollTo(0, 0);
+      }}
+    >
+      <header className="settings-page-header">
+        <div>
+          <span className="eyebrow">{t("YOUR WORKSPACE")}</span>
+          <h2>{t("Office settings.")}</h2>
+        </div>
+        <Button
+          variant="secondary"
+          aria-label={t("Close dialog")}
+          onClick={onClose}
+        >
+          <ArrowLeft size={17} />
+          {t("Back to office")}
+        </Button>
+      </header>
+      <aside className="settings-sidebar">
+        <div className="settings-account">
+          <Avatar color={user.avatar} />
           <div>
-            <p className="muted">
-              {t(
-                "Choose your microphone and speakers before or during a conversation. Choices are saved for your account on this browser.",
-              )}
-            </p>
-            {!media.microphoneAllowed && (
-              <>
+            <strong>{user.name}</strong>
+            <span>{t(user.role)}</span>
+          </div>
+        </div>
+        <TabsList
+          className="settings-navigation items-stretch justify-start rounded-none bg-transparent p-0"
+          aria-label={t("Office settings")}
+        >
+          {sections.map((section, index) => (
+            <TabsTrigger
+              key={section.value}
+              value={section.value}
+              className={`justify-start rounded-xl px-3 py-3 data-[state=active]:bg-[#e0e9d2] data-[state=active]:text-[#38502e] data-[state=active]:shadow-none ${index === 3 ? "settings-team-section" : ""}`}
+            >
+              <section.icon size={18} />
+              {t(section.label)}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <p className="settings-sidebar-note">
+          {t("Changes to your devices and display are saved automatically.")}
+        </p>
+      </aside>
+      <main ref={content} className="settings-main">
+        <div className="settings-section-heading">
+          <h3>{t(selectedSection.label)}</h3>
+          <p>{t(selectedSection.description)}</p>
+        </div>
+        <TabsContent value={tab} className="settings-section-body mt-0">
+          {tab === "profile" && (
+            <div className="settings-profile">
+              <Profile
+                user={user}
+                self={self}
+                saved={async () => {
+                  await refresh();
+                  notify("Profile updated.");
+                }}
+              />
+              {config.sso && (
                 <Button
                   variant="secondary"
                   className="secondary"
-                  disabled={media.deviceBusy}
-                  onClick={() => void media.enumerate(true)}
+                  onClick={async () => {
+                    try {
+                      const result = await api<{ url: string }>(
+                        "/auth/link-social",
+                        {
+                          provider: config.provider,
+                          callbackURL: location.origin,
+                        },
+                      );
+                      location.assign(result.url);
+                    } catch (e) {
+                      notify((e as Error).message);
+                    }
+                  }}
                 >
-                  {t("Allow microphone access & refresh devices")}
+                  <Shield size={16} />
+                  {t("Link your SSO account")}
                 </Button>
-                <p className="muted">
-                  {t(
-                    "This reveals device names without turning your call microphone on.",
-                  )}
-                </p>
-              </>
-            )}
-            <DeviceSelect media={media} kind="audioinput" />
-            <DeviceSelect media={media} kind="audiooutput" />
-            {!media.outputSupported && (
-              <p className="muted">
-                {t(
-                  "This browser uses your system output. Select your speakers or headphones in your system sound settings.",
-                )}
-              </p>
-            )}
-            {media.outputSupported && media.outputPickerSupported && (
-              <Button
-                variant="secondary"
-                className="secondary"
-                disabled={media.deviceBusy}
-                onClick={() => void media.chooseOutput()}
-              >
-                {t("Choose another speaker…")}
-              </Button>
-            )}
-            <DeviceSelect media={media} kind="videoinput" />
-            <label>
-              {t("Video & screen quality")}
-              <Select
-                label={t("Video & screen quality")}
-                value={media.quality}
-                onChange={media.chooseQuality}
-                options={Object.entries(MEDIA_QUALITY).map(
-                  ([value, profile]) => ({ value, label: t(profile.label) }),
-                )}
+              )}
+            </div>
+          )}
+          {tab === "display" && (
+            <div className="display-settings">
+              <NameTagSettings
+                value={nameTags}
+                onChange={changeNameTags}
+                name={user.name}
               />
-            </label>
-            <p className="muted">
-              {t(
-                "Applies the next time you turn on your camera or start sharing. Your microphone and current call stay connected.",
-              )}
-            </p>
-            <p className="muted">
-              {t(
-                "Maximum uses more bandwidth and processing power. Actual resolution and frame rate depend on your device, browser, shared content, and connection. Choose Balanced if video stutters.",
-              )}
-            </p>
-            {config.sso && (
-              <Button
-                variant="secondary"
-                className="secondary"
-                onClick={async () => {
-                  try {
-                    const result = await api<{ url: string }>(
-                      "/auth/link-social",
-                      {
-                        provider: config.provider,
-                        callbackURL: location.origin,
-                      },
-                    );
-                    location.assign(result.url);
-                  } catch (e) {
-                    notify((e as Error).message);
-                  }
-                }}
-              >
-                <Shield size={16} />
-                {t("Link your SSO account")}
-              </Button>
-            )}
-          </div>
-        )}
-        {tab === "auth" && (
-          <>
-            <p className="muted">
-              {t(
-                "Choose how your team enters the office. Disabled methods also end their existing sessions.",
-              )}
-            </p>
-            {(["password", "sso"] as const).map((method) => (
-              <div className="setting-row" key={method}>
+              <div className="workspace-feature-card">
+                <div className="workspace-feature-icon">
+                  <Leaf size={25} />
+                </div>
                 <div>
-                  <strong>
-                    {method === "password"
-                      ? t("Username & password")
-                      : t("OIDC single sign-on")}
-                  </strong>
-                  <p>
-                    {method === "password"
-                      ? t("Local accounts for your team.")
-                      : config.ssoConfigured
-                        ? t("Your identity provider is configured.")
-                        : t(
-                            "Add your OIDC issuer and client credentials to the server first.",
-                          )}
+                  <h4 id="map-effects-label">{t("Map effects")}</h4>
+                  <p id="map-effects-description">
+                    {t(
+                      "Moving water and falling leaves or petals. Saved for your account on this browser.",
+                    )}
                   </p>
+                  <small>
+                    {t(
+                      "Off by default when your device requests reduced motion. You can turn effects on here.",
+                    )}
+                  </small>
                 </div>
                 <Switch
-                  aria-label={t(
-                    method === "password"
-                      ? "Enable username/password login"
-                      : "Enable OIDC SSO login",
-                  )}
-                  checked={config[method]}
-                  disabled={busy || (method === "sso" && !config.ssoConfigured)}
-                  onCheckedChange={() => void toggle(method)}
+                  className="feature-switch"
+                  aria-labelledby="map-effects-label"
+                  aria-describedby="map-effects-description"
+                  checked={mapEffectsEnabled}
+                  onCheckedChange={changeMapEffects}
                 />
               </div>
-            ))}
-            <div className="settings-note">
-              <Shield size={17} />
-              <p>
+            </div>
+          )}
+          {tab === "activity" && user.role === "owner" && <ActivityLog />}
+          {tab === "workspace" && (
+            <WorkspaceSettings
+              workspace={workspace}
+              refresh={refresh}
+              notify={notify}
+            />
+          )}
+          {tab === "audio" && (
+            <div className="settings-device-cards">
+              <section className="settings-card">
+                <h4>
+                  <Mic size={19} />
+                  {t("Audio")}
+                </h4>
+                <p className="muted">
+                  {t(
+                    "Choose your microphone and speakers before or during a conversation. Choices are saved for your account on this browser.",
+                  )}
+                </p>
+                {!media.microphoneAllowed && (
+                  <>
+                    <Button
+                      variant="secondary"
+                      className="secondary"
+                      disabled={media.deviceBusy}
+                      onClick={() => void media.enumerate(true)}
+                    >
+                      {t("Allow microphone access & refresh devices")}
+                    </Button>
+                    <p className="muted">
+                      {t(
+                        "This reveals device names without turning your call microphone on.",
+                      )}
+                    </p>
+                  </>
+                )}
+                <DeviceSelect media={media} kind="audioinput" />
+                <DeviceSelect media={media} kind="audiooutput" />
+                {!media.outputSupported && (
+                  <p className="muted">
+                    {t(
+                      "This browser uses your system output. Select your speakers or headphones in your system sound settings.",
+                    )}
+                  </p>
+                )}
+                {media.outputSupported && media.outputPickerSupported && (
+                  <Button
+                    variant="secondary"
+                    className="secondary"
+                    disabled={media.deviceBusy}
+                    onClick={() => void media.chooseOutput()}
+                  >
+                    {t("Choose another speaker…")}
+                  </Button>
+                )}
+              </section>
+              <section className="settings-card">
+                <h4>
+                  <Video size={19} />
+                  {t("Camera & sharing")}
+                </h4>
+                <DeviceSelect media={media} kind="videoinput" />
+                <label>
+                  {t("Video & screen quality")}
+                  <Select
+                    label={t("Video & screen quality")}
+                    value={media.quality}
+                    onChange={media.chooseQuality}
+                    options={Object.entries(MEDIA_QUALITY).map(
+                      ([value, profile]) => ({
+                        value,
+                        label: t(profile.label),
+                      }),
+                    )}
+                  />
+                </label>
+                <p className="muted">
+                  {t(
+                    "Applies the next time you turn on your camera or start sharing. Your microphone and current call stay connected.",
+                  )}
+                </p>
+                <details className="settings-quality-help">
+                  <summary>{t("About video quality")}</summary>
+                  <p className="muted">
+                    {t(
+                      "Maximum uses more bandwidth and processing power. Actual resolution and frame rate depend on your device, browser, shared content, and connection. Choose Balanced if video stutters.",
+                    )}
+                  </p>
+                </details>
+              </section>
+            </div>
+          )}
+          {tab === "auth" && (
+            <>
+              <p className="muted">
                 {t(
-                  "Sign in as an owner through SSO before switching passwords off. At least one working owner login stays enabled.",
+                  "Choose how your team enters the office. Disabled methods also end their existing sessions.",
                 )}
               </p>
-            </div>
-          </>
-        )}
-        {tab === "members" && (
-          <>
-            <div className="admin-users">
-              {users.map((u) => (
-                <div key={u.id} data-member-id={u.id}>
-                  <Avatar color="sage" />
-                  <span>
-                    <strong>{u.name}</strong>
-                    <small>
-                      {u.username || t("SSO account")} · {t(u.role)}
-                      {!u.localPassword && u.username
-                        ? ` · ${t("SSO account")}`
-                        : ""}
-                    </small>
-                  </span>
-                  {u.id !== user.id && (
-                    <div className="member-actions">
-                      <Button
-                        variant="link"
-                        className="text-button"
-                        disabled={busy || !u.approved}
-                        onClick={() =>
-                          setMemberAction({ user: u, kind: "role" })
-                        }
-                      >
-                        {t("Change role")}
-                      </Button>
-                      <Button
-                        variant="link"
-                        className="text-button"
-                        disabled={busy}
-                        onClick={async () => {
-                          try {
-                            await api(
-                              `/admin/users/${u.id}`,
-                              { approved: !u.approved },
-                              "PATCH",
-                            );
-                            await loadUsers();
-                          } catch (e) {
-                            notify((e as Error).message);
-                          }
-                        }}
-                      >
-                        {u.approved ? t("Disable") : t("Approve")}
-                      </Button>
-                      {u.localPassword && (
+              {(["password", "sso"] as const).map((method) => (
+                <div className="setting-row" key={method}>
+                  <div>
+                    <strong>
+                      {method === "password"
+                        ? t("Username & password")
+                        : t("OIDC single sign-on")}
+                    </strong>
+                    <p>
+                      {method === "password"
+                        ? t("Local accounts for your team.")
+                        : config.ssoConfigured
+                          ? t("Your identity provider is configured.")
+                          : t(
+                              "Add your OIDC issuer and client credentials to the server first.",
+                            )}
+                    </p>
+                  </div>
+                  <Switch
+                    aria-label={t(
+                      method === "password"
+                        ? "Enable username/password login"
+                        : "Enable OIDC SSO login",
+                    )}
+                    checked={config[method]}
+                    disabled={
+                      busy || (method === "sso" && !config.ssoConfigured)
+                    }
+                    onCheckedChange={() => void toggle(method)}
+                  />
+                </div>
+              ))}
+              <div className="settings-note">
+                <Shield size={17} />
+                <p>
+                  {t(
+                    "Sign in as an owner through SSO before switching passwords off. At least one working owner login stays enabled.",
+                  )}
+                </p>
+              </div>
+            </>
+          )}
+          {tab === "members" && (
+            <>
+              <div className="admin-users">
+                {users.map((u) => (
+                  <div key={u.id} data-member-id={u.id}>
+                    <Avatar color="sage" />
+                    <span>
+                      <strong>{u.name}</strong>
+                      <small>
+                        {u.username || t("SSO account")} · {t(u.role)}
+                        {!u.localPassword && u.username
+                          ? ` · ${t("SSO account")}`
+                          : ""}
+                      </small>
+                    </span>
+                    {u.id !== user.id && (
+                      <div className="member-actions">
                         <Button
                           variant="link"
                           className="text-button"
-                          disabled={busy || !config.password}
+                          disabled={busy || !u.approved}
                           onClick={() =>
-                            setMemberAction({ user: u, kind: "reset" })
+                            setMemberAction({ user: u, kind: "role" })
                           }
                         >
-                          {t("Reset password")}
+                          {t("Change role")}
                         </Button>
-                      )}
-                      {u.role === "member" && (
                         <Button
                           variant="link"
                           className="text-button"
                           disabled={busy}
-                          onClick={() =>
-                            setMemberAction({ user: u, kind: "delete" })
-                          }
+                          onClick={async () => {
+                            try {
+                              await api(
+                                `/admin/users/${u.id}`,
+                                { approved: !u.approved },
+                                "PATCH",
+                              );
+                              await loadUsers();
+                            } catch (e) {
+                              notify((e as Error).message);
+                            }
+                          }}
                         >
-                          {t("Delete member")}
+                          {u.approved ? t("Disable") : t("Approve")}
                         </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-            {memberAction?.kind === "role" && (
-              <MemberRoleForm
-                key={memberAction.user.id}
-                user={memberAction.user}
-                onCancel={() => setMemberAction(null)}
-                saved={async () => {
-                  setMemberAction(null);
-                  await loadUsers();
-                }}
-              />
-            )}
-            {memberAction && memberAction.kind !== "role" && (
-              <MemberActionForm
-                key={`${memberAction.kind}:${memberAction.user.id}`}
-                action={{ kind: memberAction.kind, user: memberAction.user }}
-                onCancel={() => setMemberAction(null)}
-                saved={async () => {
-                  setMemberAction(null);
-                  await loadUsers();
-                }}
-                notify={notify}
-              />
-            )}
-            <details className="add-member">
-              <summary>
-                <Plus size={16} />
-                {t("Add a teammate")}
-              </summary>
-              <CreateMemberForm
-                passwordEnabled={config.password}
-                saved={loadUsers}
-                notify={notify}
-              />
-            </details>
-          </>
-        )}
-      </TabsContent>
+                        {u.localPassword && (
+                          <Button
+                            variant="link"
+                            className="text-button"
+                            disabled={busy || !config.password}
+                            onClick={() =>
+                              setMemberAction({ user: u, kind: "reset" })
+                            }
+                          >
+                            {t("Reset password")}
+                          </Button>
+                        )}
+                        {u.role === "member" && (
+                          <Button
+                            variant="link"
+                            className="text-button"
+                            disabled={busy}
+                            onClick={() =>
+                              setMemberAction({ user: u, kind: "delete" })
+                            }
+                          >
+                            {t("Delete member")}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {memberAction?.kind === "role" && (
+                <MemberRoleForm
+                  key={memberAction.user.id}
+                  user={memberAction.user}
+                  onCancel={() => setMemberAction(null)}
+                  saved={async () => {
+                    setMemberAction(null);
+                    await loadUsers();
+                  }}
+                />
+              )}
+              {memberAction && memberAction.kind !== "role" && (
+                <MemberActionForm
+                  key={`${memberAction.kind}:${memberAction.user.id}`}
+                  action={{ kind: memberAction.kind, user: memberAction.user }}
+                  onCancel={() => setMemberAction(null)}
+                  saved={async () => {
+                    setMemberAction(null);
+                    await loadUsers();
+                  }}
+                  notify={notify}
+                />
+              )}
+              <details className="add-member">
+                <summary>
+                  <Plus size={16} />
+                  {t("Add a teammate")}
+                </summary>
+                <CreateMemberForm
+                  passwordEnabled={config.password}
+                  saved={loadUsers}
+                  notify={notify}
+                />
+              </details>
+            </>
+          )}
+        </TabsContent>
+      </main>
     </Tabs>
   );
 }

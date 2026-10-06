@@ -534,6 +534,7 @@ describe("authentication and authorization", () => {
         (event) => events.get(id)!.push(event),
         () => closed.push(id),
       );
+    expect(office.people().every((person) => person.whiteboard)).toBe(true);
     await expect(
       boards.open(
         "intruder",
@@ -568,6 +569,9 @@ describe("authentication and authorization", () => {
     ).toBe(true);
     expect(events.get("c")!.some((e) => e.type === "scene")).toBe(false);
     boards.remove("b");
+    expect(
+      office.people().find((person) => person.id === "b")?.whiteboard,
+    ).toBe(false);
     events.set("b", []);
     await boards.open(
       "b",
@@ -579,7 +583,13 @@ describe("authentication and authorization", () => {
     expect(
       events.get("b")!.find((e) => e.type === "ready").elements,
     ).toHaveLength(2);
+    expect(
+      office.people().find((person) => person.id === "b")?.whiteboard,
+    ).toBe(true);
     office.go(office.members.get("b")!, "library");
+    expect(
+      office.people().find((person) => person.id === "b")?.whiteboard,
+    ).toBe(false);
     await boards.message("b", {
       type: "change",
       batch: "forbidden",
@@ -597,6 +607,9 @@ describe("authentication and authorization", () => {
     boards.prune();
     expect(closed).toContain("a");
     expect(
+      office.people().find((person) => person.id === "a")?.whiteboard,
+    ).toBe(false);
+    expect(
       (
         await pool.query(
           "SELECT elements FROM office_whiteboards WHERE id=$1",
@@ -611,6 +624,7 @@ describe("authentication and authorization", () => {
     });
     boards.prune();
     expect(closed).toContain("c");
+    expect(office.people().every((person) => !person.whiteboard)).toBe(true);
     await expect(
       boards.open(
         "disabled",
