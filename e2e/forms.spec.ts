@@ -113,6 +113,7 @@ test("forms validate inline, translate errors, retain failed edits and save vali
   await expect(
     page.locator(".app-shell [data-slot='dialog-content']"),
   ).toBeVisible();
+  await profile.getByRole("tab", { name: "Status", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Availability", exact: true })
     .click();

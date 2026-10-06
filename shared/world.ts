@@ -148,6 +148,9 @@ export type Person = {
   status: Availability;
   statusText: string;
   statusIcon?: string;
+  sharing?: boolean;
+  watching?: string;
+  whiteboard?: boolean;
   zone: ZoneId;
   conversation: string;
   room: string;

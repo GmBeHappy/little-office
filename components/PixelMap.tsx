@@ -26,7 +26,7 @@ import {
 import { wildlifeAnimation } from "@/shared/wildlife-animation";
 import { drawCharacter } from "@/shared/avatars";
 import type { Command } from "@/shared/protocol";
-import { STATUS_LABELS, statusIcon } from "@/shared/status";
+import { STATUS_LABELS, personStatus } from "@/shared/status";
 // Farm pickups render as pixel art above the avatar instead of emoji text.
 const FARM_ICON_EMOJIS: Record<
   string,
@@ -1179,18 +1179,20 @@ export default function PixelMap(props: Props) {
           a.wave.y = -66 - height - fishingSpace;
           // Keep temporary reactions beside the name instead of reserving a
           // permanent empty gap between the status bubble and the avatar.
-          a.wave.x = p.status === "available" ? 0 : a.label.width / 2 + 18;
-          const message = p.statusText.trim() || t(STATUS_LABELS[p.status]);
-          const icon = statusIcon(p.status, p.statusIcon);
+          const displayStatus = personStatus(p);
+          a.wave.x =
+            displayStatus.status === "available" ? 0 : a.label.width / 2 + 18;
+          const message = displayStatus.text || t(displayStatus.label);
+          const icon = displayStatus.icon;
           const changed =
-            a.bubble.dataset.status !== p.status ||
+            a.bubble.dataset.status !== displayStatus.status ||
             a.bubbleText.textContent !== message ||
             a.bubbleIcon.textContent !== icon;
           if (changed) {
             // Only animate actual changes, not each presence snapshot or arrival.
             if (
               a.bubble.dataset.status &&
-              p.status !== "available" &&
+              displayStatus.status !== "available" &&
               state.effectsEnabled
             ) {
               for (const animation of a.bubble.getAnimations())
@@ -1212,10 +1214,10 @@ export default function PixelMap(props: Props) {
             a.bubbleText.textContent = message;
           if (a.bubbleIcon.textContent !== icon)
             a.bubbleIcon.textContent = icon;
-          a.bubble.dataset.status = p.status;
+          a.bubble.dataset.status = displayStatus.status;
           a.bubble.setAttribute(
             "aria-label",
-            `${p.name}: ${t(STATUS_LABELS[p.status])}. ${message}`,
+            `${p.name}: ${t(STATUS_LABELS[displayStatus.status])}. ${message}`,
           );
           a.bubble.title = `${p.name}: ${message}`;
           // Anchor to the nameplate's top edge; the screen-space gap below

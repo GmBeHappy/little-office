@@ -76,6 +76,7 @@ export class Whiteboards {
         scope: peer.scope,
         elements: scene?.elements || [],
       });
+      this.office.setWhiteboard(userId, peer.connectionId, peer.scope);
       this.presence(peer.scope);
     } catch (error) {
       this.remove(key);
@@ -100,6 +101,14 @@ export class Whiteboards {
     const peer = this.peers.get(key);
     if (peer) {
       this.peers.delete(key);
+      if (
+        ![...this.peers.values()].some(
+          (other) =>
+            other.userId === peer.userId &&
+            other.connectionId === peer.connectionId,
+        )
+      )
+        this.office.setWhiteboard(peer.userId, peer.connectionId);
       this.presence(peer.scope);
     }
   }

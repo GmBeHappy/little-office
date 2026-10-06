@@ -22,7 +22,9 @@ export function DeviceBar({
   }) => ReactNode;
 }) {
   const { t } = useI18n();
-  const [active, setActive] = useState<DeviceKind | null>(null);
+  const [kind, setKind] = useState<DeviceKind>("audio");
+  const [open, setOpen] = useState(false);
+  const active = open ? kind : null;
   const panelId = useId();
   const bar = useRef<HTMLElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -40,7 +42,8 @@ export function DeviceBar({
     )
       return;
     if (active !== kind) onOpen();
-    setActive(kind);
+    setKind(kind);
+    setOpen(true);
   };
   const scheduleClose = () => {
     cancelClose();
@@ -50,7 +53,7 @@ export function DeviceBar({
         !bar.current?.contains(document.activeElement) &&
         !document.querySelector('[role="listbox"]')
       )
-        setActive(null);
+        setOpen(false);
     }, 180);
   };
   useEffect(
@@ -68,7 +71,7 @@ export function DeviceBar({
         !bar.current?.contains(target) &&
         !target.closest('[role="listbox"]')
       )
-        setActive(null);
+        setOpen(false);
     };
     document.addEventListener("pointerdown", outside);
     return () => document.removeEventListener("pointerdown", outside);
@@ -93,22 +96,20 @@ export function DeviceBar({
               '[data-device-trigger][aria-expanded="true"]',
             )
             ?.focus();
-          setActive(null);
+          setOpen(false);
         }
       }}
     >
-      {active && (
+      <div className="device-bar-expand" inert={!open} aria-hidden={!open}>
         <div
           id={panelId}
           className="device-bar-panel"
           role="group"
-          aria-label={t(
-            active === "audio" ? "Audio devices" : "Camera devices",
-          )}
+          aria-label={t(kind === "audio" ? "Audio devices" : "Camera devices")}
         >
-          {active === "audio" ? audio : camera}
+          {kind === "audio" ? audio : camera}
         </div>
-      )}
+      </div>
       {children({
         active,
         panelId,
@@ -116,7 +117,7 @@ export function DeviceBar({
         toggle: (kind) => {
           if (active === kind) {
             cancelClose();
-            setActive(null);
+            setOpen(false);
           } else show(kind, true);
         },
       })}

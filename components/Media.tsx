@@ -28,6 +28,7 @@ import {
 import { api } from "@/lib/api";
 import { MEDIA_QUALITY, type MediaQuality } from "@/lib/media-quality";
 import { nearby, type Person } from "@/shared/world";
+import { ScreenViewers } from "./ScreenViewers";
 
 type DeviceChoices = Record<MediaDeviceKind, string>;
 const defaultDevices: DeviceChoices = {
@@ -402,17 +403,67 @@ export function useOfficeMedia(
     }
   }
   async function share(enabled: boolean) {
-    if (!current.current) {
+    const target = current.current;
+    if (!target) {
       cancelShare();
       return;
     }
     if (enabled) {
       const tracks = pendingScreen.current;
       pendingScreen.current = [];
+      if (!tracks.length) {
+        preparing.current = false;
+        return;
+      }
       try {
+        const participant = target.localParticipant;
+        const allowed = () => {
+          const permission = participant.permissions;
+          return (
+            permission?.canPublish &&
+            (!permission.canPublishSources.length ||
+              tracks.every((track) =>
+                permission.canPublishSources.includes(
+                  Track.sourceToProto(track.source),
+                ),
+              ))
+          );
+        };
+        // The office acknowledgement can arrive before LiveKit's permission update.
+        if (!allowed())
+          await new Promise<void>((resolve, reject) => {
+            const finish = (error?: Error) => {
+              clearTimeout(timer);
+              target.off(RoomEvent.ParticipantPermissionsChanged, changed);
+              target.off(RoomEvent.Disconnected, disconnected);
+              if (error) reject(error);
+              else resolve();
+            };
+            const changed = () => {
+              if (allowed()) finish();
+            };
+            const disconnected = () =>
+              finish(
+                new Error(
+                  "The conversation changed. Choose your screen again.",
+                ),
+              );
+            const timer = setTimeout(
+              () =>
+                finish(
+                  new Error(
+                    "Could not update screen-sharing permission. Please try again.",
+                  ),
+                ),
+              5000,
+            );
+            target.on(RoomEvent.ParticipantPermissionsChanged, changed);
+            target.on(RoomEvent.Disconnected, disconnected);
+            changed();
+          });
         const profile = MEDIA_QUALITY[pendingScreenQuality.current];
         for (const track of tracks)
-          await current.current.localParticipant.publishTrack(track, {
+          await target.localParticipant.publishTrack(track, {
             simulcast: true,
             screenShareEncoding: {
               maxBitrate: profile.screenBitrate,
@@ -422,7 +473,7 @@ export function useOfficeMedia(
           });
       } catch (e) {
         for (const track of tracks) {
-          await current.current.localParticipant.unpublishTrack(track);
+          await target.localParticipant.unpublishTrack(track);
           track.stop();
         }
         throw e;
@@ -431,7 +482,7 @@ export function useOfficeMedia(
       }
     } else {
       cancelShare();
-      await current.current.localParticipant.setScreenShareEnabled(false);
+      await target.localParticipant.setScreenShareEnabled(false);
     }
     bump((v) => v + 1);
   }
@@ -611,10 +662,16 @@ export function MediaTracks({
   room,
   revision,
   speaking,
+  people,
+  active = true,
+  onScreenView,
 }: {
   room: Room | null;
   revision: number;
   speaking: string[];
+  people: Person[];
+  active?: boolean;
+  onScreenView: (room: string, publisher: string | null) => void;
 }) {
   const { t } = useI18n();
   const [view, setView] = useState<"grid" | "screen" | null>(null);
@@ -623,6 +680,7 @@ export function MediaTracks({
   const [fullscreen, setFullscreen] = useState(false);
   const [chromeHidden, setChromeHidden] = useState(false);
   const [fullscreenError, setFullscreenError] = useState(false);
+  const [pageVisible, setPageVisible] = useState(true);
   const back = useRef<HTMLButtonElement>(null);
   const ownsFullscreen = useRef(false);
   const tracks: {
@@ -655,6 +713,26 @@ export function MediaTracks({
     screens.find((item) => item.pub.trackSid === pinnedScreenId) ||
     screens.find((item) => item.pub.trackSid === screenId) ||
     screens[0];
+  useEffect(() => {
+    const changed = () => setPageVisible(!document.hidden);
+    changed();
+    document.addEventListener("visibilitychange", changed);
+    return () => document.removeEventListener("visibilitychange", changed);
+  }, []);
+  const watchedPublisher =
+    active &&
+    pageVisible &&
+    view === "screen" &&
+    screen &&
+    !screen.local &&
+    people.some((person) => person.id === screen.identity && person.sharing)
+      ? screen.identity
+      : null;
+  useEffect(() => {
+    if (!room) return;
+    onScreenView(room.name, watchedPublisher);
+    return () => onScreenView(room.name, null);
+  }, [room, watchedPublisher, onScreenView]);
   function closeView() {
     setView(null);
     setChromeHidden(false);
@@ -686,7 +764,11 @@ export function MediaTracks({
     const previous = document.activeElement;
     back.current?.focus();
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !document.querySelector('[role="dialog"]'))
+      if (
+        event.key === "Escape" &&
+        !event.defaultPrevented &&
+        !document.querySelector('[role="dialog"]')
+      )
         closeView();
     };
     const changed = () => {
@@ -774,6 +856,14 @@ export function MediaTracks({
           {shared ? t(" · presenting") : ""}
         </span>
         {shared && <TrackStats pub={item.pub} expanded={expandedStats} />}
+        {shared && expandable && (
+          <ScreenViewers
+            people={people}
+            publisher={item.identity}
+            name={item.name}
+            compact
+          />
+        )}
         {expandable && (
           <Button
             variant="plain"
@@ -858,6 +948,13 @@ export function MediaTracks({
                 </span>
               </div>
               <div className="media-view-actions">
+                {view === "screen" && screen && (
+                  <ScreenViewers
+                    people={people}
+                    publisher={screen.identity}
+                    name={screen.name}
+                  />
+                )}
                 {!!cameras.length && (
                   <Button
                     variant="plain"
