@@ -7,10 +7,13 @@ node_modules/
 test-results/
 playwright-report/
 *.tsbuildinfo
+gha-creds-*.json
 .DS_Store
 deploy/generated/
 
 /public/excalidraw/
 
-# Temporary GitHub OIDC credentials
-gha-creds-*.json
+# Apple build products and per-user Xcode state
+apple/**/.build/
+apple/**/xcuserdata/
+apple/**/*.xcuserstate

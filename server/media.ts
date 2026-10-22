@@ -20,11 +20,14 @@ const client = mediaConfigured
 const retired = new Set<string>();
 let work: Promise<void> = Promise.resolve();
 let initialized: Promise<void> | undefined;
+const uuid = "[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}";
+// Match the complete workspace/epoch/generation suffix so namespace prefixes cannot overlap.
+const deploymentRoom = new RegExp(`^${config.mediaNamespace}(?:-${uuid}){3}$`);
 function clearPreviousProcessRooms() {
   if (!initialized)
     initialized = (async () => {
       for (const old of await client!.listRooms())
-        if (old.name.startsWith("office-")) retired.add(old.name);
+        if (deploymentRoom.test(old.name)) retired.add(old.name);
       await flushRetired();
     })().catch((error) => {
       initialized = undefined;
@@ -36,7 +39,7 @@ export function retireRoom(room: string) {
   retired.add(room);
   work = work.then(flushRetired).catch(() => {});
 }
-async function flushRetired() {
+export async function flushRetired() {
   if (!client) return;
   for (const room of retired) {
     try {

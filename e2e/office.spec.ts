@@ -11,7 +11,7 @@ test.skip(
   "Run with bun scripts/e2e.ts to provision isolated test accounts.",
 );
 async function login(page: Page, index: number) {
-  await page.goto("/");
+  await page.goto("/office");
   await page
     .getByLabel("Username", { exact: true })
     .fill(accounts[index].username);

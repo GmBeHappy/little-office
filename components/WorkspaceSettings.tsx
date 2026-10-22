@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspaceApi } from "@/lib/workspace-api";
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { workspaceSchema } from "@/shared/forms";
@@ -25,7 +26,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { whiteboardEnabled } from "@/shared/whiteboard";
-import { api } from "@/lib/api";
+
 import {
   MAPS,
   drawOfficeMap,
@@ -60,14 +61,17 @@ function MapPreview({ map }: { map: OfficeMap }) {
 }
 
 export function WorkspaceSettings({
+  operator = false,
   workspace,
   refresh,
   notify,
 }: {
   workspace: Settings;
+  operator?: boolean;
   refresh: () => Promise<void>;
   notify: (message: string) => void;
 }) {
+  const { api, base } = useWorkspaceApi();
   const { t } = useI18n();
   const [tab, setTab] = useState<"maps" | "features" | "storage">("maps");
   const [featureBusy, setFeatureBusy] = useState(false);
@@ -131,7 +135,9 @@ export function WorkspaceSettings({
           [
             { id: "maps", label: "Maps", icon: Map },
             { id: "features", label: "Features", icon: SlidersHorizontal },
-            { id: "storage", label: "File storage", icon: Cloud },
+            ...(operator
+              ? [{ id: "storage", label: "File storage", icon: Cloud }]
+              : []),
           ] as const
         ).map((item) => (
           <TabsTrigger key={item.id} value={item.id}>

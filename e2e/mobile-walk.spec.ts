@@ -33,7 +33,7 @@ test("touch joystick walks, stops on release/cancel, and distinguishes room taps
         if (command.type === "zone") zones.push(command.zone);
       });
     });
-    await page.goto("/");
+    await page.goto("/office");
     await page
       .getByLabel("Username", { exact: true })
       .fill(accounts[0].username);

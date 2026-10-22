@@ -14,7 +14,7 @@ test("full-page settings keep navigation visible, work on mobile and show only p
       contexts.map((context) => context.newPage()),
     );
     for (const [index, page] of [owner, member].entries()) {
-      await page.goto("/");
+      await page.goto("/office");
       await page
         .getByLabel("Username", { exact: true })
         .fill(accounts[index].username);

@@ -1,4 +1,6 @@
 "use client";
+import { useWorkspaceApi } from "@/lib/workspace-api";
+import { SaaSSignIn } from "./WorkspaceOIDC";
 import { FormProvider, useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -64,7 +66,7 @@ import {
   X,
 } from "lucide-react";
 import { MEDIA_QUALITY } from "@/lib/media-quality";
-import { api, type User, type AppConfig } from "@/lib/api";
+import { APIError, type User, type AppConfig } from "@/lib/api";
 import {
   JUMP_DURATION,
   canNudge,
@@ -121,7 +123,9 @@ type AdminUser = {
 };
 
 export default function OfficeApp() {
+  const { api, base } = useWorkspaceApi();
   const { t } = useI18n();
+  const [accessError, setAccessError] = useState("");
   const [config, setConfig] = useState<AppConfig | null>(null),
     [user, setUser] = useState<User | null>(null),
     [loading, setLoading] = useState(true);
@@ -239,19 +243,23 @@ export default function OfficeApp() {
   }, []);
   const refresh = useCallback(async () => {
     try {
+      setAccessError("");
       setConfig(await api<AppConfig>("/config"));
       try {
-        const me = await api<{ user: User }>("/me");
-        setUser(me.user);
+        const me = await api<{ user: User; operator: boolean }>("/me");
+        setUser({ ...me.user, operator: me.operator });
       } catch {
         setUser(null);
       }
     } catch (e) {
+      if (e instanceof APIError && e.status === 401 && base !== "/api")
+        location.assign("/login");
+      setAccessError((e as Error).message);
       notify((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [notify]);
+  }, [notify, api]);
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -302,7 +310,7 @@ export default function OfficeApp() {
       if (disposed) return;
       setConnection("Connecting");
       const ws = new WebSocket(
-        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/office${takeover ? "?takeover=1" : ""}`,
+        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${base}/office${takeover ? "?takeover=1" : ""}`,
       );
       socket.current = ws;
       ws.onopen = () => {
@@ -458,8 +466,18 @@ export default function OfficeApp() {
   if (loading)
     return (
       <main className="loading-page">
-        <Brand />
+        <a href="/workspaces" aria-label="Switch workspace">
+          <Brand />
+        </a>
         <span>{t("Opening the office…")}</span>
+      </main>
+    );
+  if (accessError)
+    return (
+      <main className="loading-page">
+        <p role="alert">{accessError}</p>
+        <a href="/workspaces">Back to workspaces</a>
+        <Button onClick={() => void refresh()}>Retry</Button>
       </main>
     );
   if (!user)
@@ -498,7 +516,13 @@ export default function OfficeApp() {
       className={`app-shell immersive-office ${sidebarOpen ? "panel-open" : ""}`}
     >
       <header className="topbar">
-        <Brand />
+        <a
+          href="/workspaces"
+          aria-label={t("Switch workspace")}
+          title={t("Switch workspace")}
+        >
+          <Brand />
+        </a>
         <span className="header-divider" />
         <div className="workspace-name">{workspace.name}</div>
         <div
@@ -862,7 +886,7 @@ export default function OfficeApp() {
                 <X size={18} />
               </Button>
             </div>
-            {user.role === "owner" && (
+            {["owner", "admin"].includes(user.role) && (
               <Button
                 variant="plain"
                 className="invite-button"
@@ -1468,6 +1492,7 @@ function Control({
   onClick: () => void;
   speaking?: boolean;
 }) {
+  const { api, base } = useWorkspaceApi();
   const { t } = useI18n();
   return (
     <Button
@@ -1484,6 +1509,7 @@ function Control({
   );
 }
 function Toast({ text, close }: { text: string; close: () => void }) {
+  const { api, base } = useWorkspaceApi();
   const { t } = useI18n();
   return (
     <div className="toast" role="status">
@@ -1506,6 +1532,7 @@ function RoomCards({
   locks: Record<string, boolean>;
   send: (c: Command) => void;
 }) {
+  const { api, base } = useWorkspaceApi();
   const { t } = useI18n();
   return (
     <div className="room-cards">
@@ -1563,7 +1590,7 @@ function RoomCards({
     </div>
   );
 }
-function Login({
+export function Login({
   config,
   refresh,
   notify,
@@ -1572,6 +1599,7 @@ function Login({
   refresh: () => Promise<void>;
   notify: (s: string) => void;
 }) {
+  const { api, base } = useWorkspaceApi();
   const { t } = useI18n();
   const form = useForm({
     resolver: zodResolver(loginSchema),
@@ -1668,7 +1696,7 @@ function Login({
                 try {
                   const r = await api<{ url: string }>("/auth/sign-in/social", {
                     provider: config.provider,
-                    callbackURL: location.origin,
+                    callbackURL: `${location.origin}/login`,
                   });
                   location.assign(r.url);
                 } catch (error) {
@@ -1680,6 +1708,9 @@ function Login({
               {t("Sign in with SSO")}
             </Button>
           </>
+        )}
+        {config && (
+          <SaaSSignIn google={!!config.googleConfigured} notify={notify} />
         )}
         {!config && (
           <p className="error-text">
@@ -1697,7 +1728,8 @@ function Login({
     </main>
   );
 }
-function PasswordChange({ onDone }: { onDone: () => Promise<void> }) {
+export function PasswordChange({ onDone }: { onDone: () => Promise<void> }) {
+  const { api, base } = useWorkspaceApi();
   const { t } = useI18n();
   const form = useForm({
     resolver: zodResolver(passwordChangeSchema),
@@ -1784,6 +1816,7 @@ function Profile({
   self?: Person;
   saved: () => Promise<void>;
 }) {
+  const { api, base } = useWorkspaceApi();
   const { t } = useI18n();
   const [tab, setTab] = useState("profile");
   const form = useForm({
@@ -2012,6 +2045,7 @@ function SettingsPanel({
   notify: (s: string) => void;
   media: ReturnType<typeof useOfficeMedia>;
 }) {
+  const { api, base } = useWorkspaceApi();
   const { t } = useI18n();
   const [tab, setTab] = useState<
       | "profile"
@@ -2021,7 +2055,7 @@ function SettingsPanel({
       | "members"
       | "workspace"
       | "activity"
-    >(user.role === "owner" ? initialTab : "audio"),
+    >(["owner", "admin"].includes(user.role) ? initialTab : "audio"),
     [users, setUsers] = useState<AdminUser[]>([]),
     [busy, setBusy] = useState(false);
   const [compact, setCompact] = useState(false);
@@ -2052,7 +2086,7 @@ function SettingsPanel({
       icon: SlidersHorizontal,
       description: "Make the office feel comfortable on your screen.",
     },
-    ...(user.role === "owner"
+    ...(["owner", "admin"].includes(user.role)
       ? [
           {
             value: "workspace",
@@ -2081,7 +2115,14 @@ function SettingsPanel({
         ]
       : []),
   ];
-  const selectedSection = sections.find((section) => section.value === tab)!;
+  const visibleSections = sections.filter(
+    (section) =>
+      (section.value !== "auth" || (user.operator && base === "/api")) &&
+      (section.value !== "activity" || user.role === "owner"),
+  );
+  const selectedSection = visibleSections.find(
+    (section) => section.value === tab,
+  )!;
   const [memberAction, setMemberAction] = useState<{
     user: AdminUser;
     kind: "delete" | "reset" | "role";
@@ -2094,7 +2135,7 @@ function SettingsPanel({
     }
   }, [notify]);
   useEffect(() => {
-    if (tab === "members" && user.role === "owner") void loadUsers();
+    if (tab === "members" && user.operator && base === "/api") void loadUsers();
     if (tab === "audio") void media.enumerate();
   }, [tab, loadUsers, user.role]);
   async function toggle(method: "password" | "sso") {
@@ -2152,7 +2193,7 @@ function SettingsPanel({
           className="settings-navigation items-stretch justify-start rounded-none bg-transparent p-0"
           aria-label={t("Office settings")}
         >
-          {sections.map((section, index) => (
+          {visibleSections.map((section, index) => (
             <TabsTrigger
               key={section.value}
               value={section.value}
@@ -2193,7 +2234,7 @@ function SettingsPanel({
                         "/auth/link-social",
                         {
                           provider: config.provider,
-                          callbackURL: location.origin,
+                          callbackURL: `${location.origin}/login`,
                         },
                       );
                       location.assign(result.url);
@@ -2246,6 +2287,7 @@ function SettingsPanel({
           {tab === "workspace" && (
             <WorkspaceSettings
               workspace={workspace}
+              operator={user.operator && base === "/api"}
               refresh={refresh}
               notify={notify}
             />
@@ -2384,7 +2426,14 @@ function SettingsPanel({
               </div>
             </>
           )}
-          {tab === "members" && (
+          {tab === "members" && !(user.operator && base === "/api") && (
+            <a
+              href={`/workspaces?workspace=${base.split("/")[3] || "00000000-0000-4000-8000-000000000001"}`}
+            >
+              Manage workspace members and invitations
+            </a>
+          )}
+          {tab === "members" && user.operator && base === "/api" && (
             <>
               <div className="admin-users">
                 {users.map((u) => (
@@ -2502,6 +2551,7 @@ function SettingsPanel({
 }
 
 function MapLoading() {
+  const { api, base } = useWorkspaceApi();
   const { t } = useI18n();
   return (
     <div className="map-loading">

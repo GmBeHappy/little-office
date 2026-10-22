@@ -27,7 +27,7 @@ for (const map of [
       });
     });
     await page.setViewportSize({ width: 1600, height: 1000 });
-    await page.goto("/");
+    await page.goto("/office");
     await page
       .getByLabel("Username", { exact: true })
       .fill(accounts[0].username);

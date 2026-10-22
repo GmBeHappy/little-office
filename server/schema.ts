@@ -10,7 +10,10 @@ import {
   index,
   check,
   foreignKey,
+  uuid,
+  primaryKey,
 } from "drizzle-orm/pg-core";
+import { DEFAULT_WORKSPACE_ID, type WorkspaceRole } from "../shared/workspaces";
 import type { BoardElement } from "../shared/whiteboard";
 import type { WorkspaceSettings } from "../shared/maps";
 
@@ -36,6 +39,7 @@ export const users = pgTable("user", {
   statusText: text("statusText").notNull(),
   statusIcon: text("statusIcon").notNull().default(""),
   mustChangePassword: boolean("mustChangePassword").notNull(),
+  disabled: boolean("disabled").notNull().default(false),
 });
 export const sessions = pgTable(
   "session",
@@ -120,7 +124,7 @@ export const officeSettings = pgTable(
   },
   (table) => [check("office_settings_id_check", sql`${table.id} = 1`)],
 );
-export const workspaces = pgTable(
+export const legacyWorkspaceSettings = pgTable(
   "workspace_settings",
   {
     id: integer("id").primaryKey(),
@@ -141,8 +145,100 @@ export const workspaces = pgTable(
   },
   (table) => [check("workspace_settings_id_check", sql`${table.id} = 1`)],
 );
+export const workspaces = pgTable("workspaces", {
+  id: uuid("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  createdBy: text("created_by").references(() => users.id),
+  mapId: text("map_id")
+    .$type<WorkspaceSettings["mapId"]>()
+    .notNull()
+    .default("nature-small"),
+  revision: integer("revision").notNull().default(1),
+  features: jsonb("features")
+    .$type<NonNullable<WorkspaceSettings["features"]>>()
+    .notNull()
+    .default({ whiteboard: true, wildlife: true, activities: true }),
+  dailyMap: jsonb("daily_map")
+    .$type<NonNullable<WorkspaceSettings["dailyMap"]>>()
+    .notNull()
+    .default({ enabled: false, date: "" }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+export const workspaceOidc = pgTable("workspace_oidc", {
+  workspaceId: uuid("workspace_id")
+    .primaryKey()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  providerId: text("provider_id").notNull().unique(),
+  issuer: text("issuer").notNull(),
+  clientId: text("client_id").notNull(),
+  clientSecret: text("client_secret").notNull(),
+  domain: text("domain").notNull(),
+  verificationToken: text("verification_token").notNull(),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  enabled: boolean("enabled").notNull().default(false),
+  revision: integer("revision").notNull().default(1),
+});
+
+export const memberships = pgTable(
+  "workspace_memberships",
+  {
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").$type<WorkspaceRole>().notNull().default("member"),
+    approved: boolean("approved").notNull().default(true),
+    availability: text("availability").notNull().default("available"),
+    statusText: text("status_text").notNull().default(""),
+    statusIcon: text("status_icon").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.userId] }),
+    index("workspace_memberships_user").on(t.userId),
+    check(
+      "workspace_member_role",
+      sql`${t.role} IN ('owner','admin','member')`,
+    ),
+  ],
+);
+export const invitations = pgTable(
+  "workspace_invitations",
+  {
+    id: uuid("id").primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    role: text("role").$type<"admin" | "member">().notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("workspace_invitations_workspace").on(t.workspaceId),
+    check("workspace_invitation_role", sql`${t.role} IN ('admin','member')`),
+  ],
+);
 export const whiteboardScenes = pgTable("office_whiteboards", {
   id: text("id").primaryKey(),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .default(DEFAULT_WORKSPACE_ID)
+    .references(() => workspaces.id),
   elements: jsonb("elements").$type<BoardElement[]>().notNull().default([]),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
@@ -150,6 +246,10 @@ export const whiteboardScenes = pgTable("office_whiteboards", {
 });
 export const officeFiles = pgTable("office_files", {
   id: text("id").primaryKey(),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .default(DEFAULT_WORKSPACE_ID)
+    .references(() => workspaces.id),
   boardId: text("board_id").notNull(),
   objectKey: text("object_key").notNull().unique("office_files_object_key_key"),
   name: text("name").notNull(),
@@ -162,6 +262,10 @@ export const officeFiles = pgTable("office_files", {
 export const officeAudit = pgTable(
   "office_audit",
   {
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .default(DEFAULT_WORKSPACE_ID)
+      .references(() => workspaces.id),
     id: bigint("id", { mode: "bigint" })
       .primaryKey()
       .generatedAlwaysAsIdentity(),
@@ -181,3 +285,12 @@ export const officeAudit = pgTable(
     index("office_audit_action_id").on(table.action, table.id.desc()),
   ],
 );
+
+export const nativeHandoffs = pgTable("native_handoffs", {
+  codeHash: text("code_hash").primaryKey(),
+  sessionId: text("session_id")
+    .notNull()
+    .references(() => sessions.id, { onDelete: "cascade" }),
+  challenge: text("challenge").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});

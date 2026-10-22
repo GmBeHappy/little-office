@@ -1,0 +1,22 @@
+name: Validate workspace backend and web
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run db:check
+      - run: bun run typecheck
+      - run: bun test tests
+        env:
+          LIVEKIT_URL: ""
+          OIDC_ISSUER: ""
+      - run: bun run build

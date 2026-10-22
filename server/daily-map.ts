@@ -1,3 +1,4 @@
+import { DEFAULT_WORKSPACE_ID } from "../shared/workspaces";
 import { randomInt } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { MAPS } from "../shared/maps";
@@ -15,8 +16,12 @@ export function mapDay(now = new Date()) {
 
 // A persisted day and optimistic revision prevent repeat rolls across restarts
 // and keep an owner's concurrent settings save from being overwritten.
-export async function rotateDailyMap(now = new Date(), canRotate = () => true) {
-  const current = await workspaceSettings();
+export async function rotateDailyMap(
+  now = new Date(),
+  canRotate = () => true,
+  workspaceId = DEFAULT_WORKSPACE_ID,
+) {
+  const current = await workspaceSettings(workspaceId);
   const date = mapDay(now);
   if (
     !current.dailyMap.enabled ||
@@ -35,7 +40,12 @@ export async function rotateDailyMap(now = new Date(), canRotate = () => true) {
       dailyMap: { enabled: true, date },
       revision: sql`${workspaces.revision}+1`,
     })
-    .where(and(eq(workspaces.id, 1), eq(workspaces.revision, current.revision)))
+    .where(
+      and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.revision, current.revision),
+      ),
+    )
     .returning({
       name: workspaces.name,
       mapId: workspaces.mapId,

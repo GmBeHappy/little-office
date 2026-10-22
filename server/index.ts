@@ -3,12 +3,9 @@ import {
   or,
   eq,
   ne,
-  lt,
   gt,
-  desc,
   exists,
   notExists,
-  inArray,
   sql,
   DrizzleQueryError,
 } from "drizzle-orm";
@@ -17,60 +14,34 @@ import {
   users,
   sessions,
   officeSettings,
-  workspaces,
-  officeFiles,
   officeAudit,
 } from "./schema";
 import { Elysia, t } from "elysia";
-import { auth, sessionFor, type AuthSession } from "./auth";
+import { auth, googleAuth, authForWorkspace, sessionFor } from "./auth";
+import { connectionFor } from "./workspace-oidc";
 import { config, oidcConfigured, oidcProvider } from "./config";
-import { db, settings, workspaceSettings } from "./db";
-import { Office } from "./office";
-import { mediaConfigured, retireRoom, setPresenter, tokenFor } from "./media";
-import { Command } from "../shared/protocol";
-import { AVATAR_PATTERN } from "../shared/appearance";
-import { Whiteboards } from "./whiteboard";
-import {
-  storage,
-  storageConfigured,
-  storageInfo,
-  checkStorage,
-} from "./storage";
-import {
-  BOARD_MESSAGE_BYTES,
-  boardScope,
-  whiteboardEnabled,
-} from "../shared/whiteboard";
-import { ACTIVITY_ACTIONS } from "../shared/activity";
-import { memberRoleSchema } from "../shared/forms";
-import { MAPS } from "../shared/maps";
-import { STATUS_ICONS } from "../shared/status";
-import { rotateDailyMap, mapDay } from "./daily-map";
+import { db, settings } from "./db";
 
-export const office = new Office(retireRoom, setPresenter, (event) => {
-  void db
-    .insert(officeAudit)
-    .values({ ...event, createdAt: new Date(event.createdAt) })
-    .catch(() => console.error("Could not persist office activity."));
-});
-await rotateDailyMap();
-office.configureWorkspace(await workspaceSettings());
-export const whiteboards = new Whiteboards(office);
-function requireSession(s: AuthSession | null, owner = false) {
-  if (!s) throw new Error("Please sign in.");
-  if (!s.user.approved) throw new Error("Your account is awaiting approval.");
-  if (s.user.mustChangePassword)
-    throw new Error(
-      "Change your temporary password before entering the office.",
-    );
-  if (owner && s.user.role !== "owner")
-    throw new Error("Owner access required.");
-  return s;
-}
-function recent(s: AuthSession) {
-  if (Date.now() - new Date(s.session.createdAt).getTime() > 600000)
-    throw new Error("Sign in again before changing authentication settings.");
-}
+import { storageInfo, checkStorage } from "./storage";
+
+import { memberRoleSchema } from "../shared/forms";
+
+import { googleConfigured } from "./config";
+import { memberships } from "./schema";
+import { DEFAULT_WORKSPACE_ID } from "../shared/workspaces";
+import { requireSession, recent } from "./session-guards";
+import { Problem, requireOperator } from "./workspace-access";
+import {
+  defaultRuntime,
+  revokeSession,
+  revokeUser,
+  startRuntimeTimers,
+} from "./workspace-runtime";
+import { officeRoutes } from "./office-api";
+import { nativeApi } from "./native-api";
+import { workspaceApi } from "./workspace-api";
+import { workspaceOidcApi } from "./workspace-oidc-api";
+export const { office, whiteboards } = defaultRuntime;
 function isAuthPath(path: string) {
   return (
     [
@@ -96,7 +67,18 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
     }
   })
   .onError(({ error, set, code }) => {
-    set.status = code === "VALIDATION" ? 400 : 400;
+    if (error instanceof Problem) {
+      set.status = error.status;
+      return { error: error.message };
+    }
+    if (
+      error instanceof DrizzleQueryError &&
+      (error.cause as { code?: string })?.code === "23505"
+    ) {
+      set.status = 409;
+      return { error: "That record already exists." };
+    }
+    set.status = code === "NOT_FOUND" ? 404 : 400;
     return {
       error:
         code === "VALIDATION"
@@ -112,15 +94,6 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
     await db.execute(sql`SELECT 1`);
     return { ok: true };
   })
-  .get("/api/config", async () => ({
-    ...(await settings()),
-    workspace: office.workspace,
-    ssoConfigured: oidcConfigured,
-    provider: oidcProvider,
-    mediaConfigured,
-    storageConfigured,
-    officeName: "Little Office",
-  }))
   .derive(async ({ request }) => ({
     identity: await sessionFor(request.headers),
   }))
@@ -131,7 +104,41 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       return { error: "Not found." };
     }
     const policy = await settings();
-    const sso = path.includes("social") || path.startsWith("/callback/");
+    const socialBody =
+      path.includes("social") && request.method === "POST"
+        ? await request.clone().json()
+        : null;
+    const google =
+      path === "/callback/google" || socialBody?.provider === "google";
+    const providerId = path.startsWith("/callback/")
+      ? path.slice("/callback/".length)
+      : socialBody?.provider;
+    const workspaceProvider =
+      typeof providerId === "string" && /^ws-[a-f0-9-]{36}$/.test(providerId);
+    const connection = workspaceProvider
+      ? await connectionFor(providerId)
+      : undefined;
+    if (workspaceProvider && (!connection?.enabled || !connection.verifiedAt))
+      throw new Problem(403, "Workspace SSO is unavailable.");
+    if ((workspaceProvider || google) && socialBody?.idToken)
+      throw new Problem(400, "Use the browser sign-in redirect.");
+    if (
+      identity?.workspaceId &&
+      !["/sign-out", "/get-session", "/sign-in/social"].includes(path) &&
+      !path.startsWith("/callback/")
+    )
+      throw new Problem(
+        403,
+        "Sign in with your personal account to manage account security.",
+      );
+    const sso =
+      !google &&
+      !workspaceProvider &&
+      (path.includes("social") || path.startsWith("/callback/"));
+    if (google && !googleConfigured) {
+      set.status = 403;
+      return { error: "Google sign-in is not configured." };
+    }
     if (
       (sso && (!policy.sso || !oidcConfigured)) ||
       (path === "/sign-in/username" && !policy.password)
@@ -140,7 +147,9 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       return { error: "This login method is disabled." };
     }
     if (path === "/link-social") {
-      recent(requireSession(identity));
+      if (!identity || identity.workspaceId || identity.user.mustChangePassword)
+        throw new Problem(403, "Sign in with your personal account first.");
+      recent(identity);
     }
     if (
       path === "/change-password" &&
@@ -149,162 +158,27 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       set.status = 403;
       return { error: "Password login is unavailable for this session." };
     }
-    const response = await auth.handler(request);
+    const response = await (
+      connection
+        ? await authForWorkspace(connection)
+        : google
+          ? googleAuth
+          : auth
+    ).handler(request);
     if (path === "/change-password" && response.ok && identity)
       await db
         .update(users)
         .set({ mustChangePassword: false })
         .where(eq(users.id, identity.user.id));
-    if (path === "/sign-out" && identity)
-      office.revokeSession(identity.session.id);
+    if (path === "/sign-out" && identity) revokeSession(identity.session.id);
     return response;
   })
-  .get("/api/me", ({ identity, set }) => {
-    if (!identity) {
-      set.status = 401;
-      return { error: "Not signed in." };
-    }
-    return { user: identity.user, method: identity.session.method };
-  })
-  .patch(
-    "/api/profile",
-    async ({ identity, body }) => {
-      const s = requireSession(identity);
-      await db
-        .update(users)
-        .set({
-          name: body.name,
-          avatar: body.avatar,
-          ...(body.status !== undefined
-            ? {
-                availability: body.status,
-                statusText: body.statusText ?? "",
-                statusIcon: body.statusIcon ?? "",
-              }
-            : {}),
-        })
-        .where(eq(users.id, s.user.id));
-      const member = office.members.get(s.user.id);
-      if (member) {
-        member.name = body.name;
-        member.avatar = body.avatar as import("../shared/appearance").AvatarId;
-        if (body.status !== undefined)
-          office.handle(s.user.id, {
-            type: "status",
-            status: body.status,
-            text: body.statusText ?? "",
-            icon: body.statusIcon ?? "",
-          });
-        office.broadcast();
-      }
-      return { ok: true };
-    },
-    {
-      body: t.Object({
-        name: t.String({ minLength: 1, maxLength: 40 }),
-        avatar: t.String({ pattern: AVATAR_PATTERN, maxLength: 32 }),
-        status: t.Optional(
-          t.Union([
-            t.Literal("available"),
-            t.Literal("busy"),
-            t.Literal("dnd"),
-            t.Literal("away"),
-          ]),
-        ),
-        statusText: t.Optional(t.String({ maxLength: 80 })),
-        statusIcon: t.Optional(
-          t.Union(STATUS_ICONS.map((icon) => t.Literal(icon))),
-        ),
-      }),
-    },
-  )
-  .patch(
-    "/api/admin/workspace",
-    async ({ identity, body }) => {
-      requireSession(identity, true);
-      const name = body.name.trim();
-      if (!name) throw new Error("Enter a workspace name.");
-      const result = await db
-        .update(workspaces)
-        .set({
-          name,
-          mapId: body.mapId,
-          ...(body.dailyMapEnabled === undefined
-            ? {}
-            : { dailyMap: { enabled: body.dailyMapEnabled, date: mapDay() } }),
-          revision: sql`${workspaces.revision}+1`,
-        })
-        .where(
-          and(eq(workspaces.id, 1), eq(workspaces.revision, body.revision)),
-        )
-        .returning({
-          name: workspaces.name,
-          mapId: workspaces.mapId,
-          revision: workspaces.revision,
-          features: workspaces.features,
-          dailyMap: workspaces.dailyMap,
-        });
-      if (!result.length)
-        throw new Error(
-          "Workspace settings changed. Close and reopen settings before saving again.",
-        );
-      office.configureWorkspace(result[0]);
-      return { workspace: office.workspace };
-    },
-    {
-      body: t.Object({
-        name: t.String({ minLength: 1, maxLength: 60 }),
-        mapId: t.Union(MAPS.map((map) => t.Literal(map.id))),
-        dailyMapEnabled: t.Optional(t.Boolean()),
-        revision: t.Integer({ minimum: 0 }),
-      }),
-    },
-  )
-  .patch(
-    "/api/admin/features",
-    async ({ identity, body }) => {
-      requireSession(identity, true);
-      const result = await db
-        .update(workspaces)
-        .set({
-          features: sql`${workspaces.features} || ${JSON.stringify(body.features)}::jsonb`,
-          revision: sql`${workspaces.revision}+1`,
-        })
-        .where(
-          and(eq(workspaces.id, 1), eq(workspaces.revision, body.revision)),
-        )
-        .returning({
-          name: workspaces.name,
-          mapId: workspaces.mapId,
-          revision: workspaces.revision,
-          features: workspaces.features,
-          dailyMap: workspaces.dailyMap,
-        });
-      if (!result.length)
-        throw new Error(
-          "Workspace settings changed. Close and reopen settings before saving again.",
-        );
-      office.configureWorkspace(result[0]);
-      whiteboards.prune();
-      return { workspace: office.workspace };
-    },
-    {
-      body: t.Object({
-        features: t.Object({
-          whiteboard: t.Boolean(),
-          wildlife: t.Optional(t.Boolean()),
-          activities: t.Optional(t.Boolean()),
-        }),
-        revision: t.Integer({ minimum: 0 }),
-      }),
-    },
-  )
   .get("/api/admin/storage", ({ identity }) => {
-    requireSession(identity, true);
+    requireOperator(requireSession(identity, true));
     return storageInfo();
   })
   .post("/api/admin/storage/check", async ({ identity }) => {
-    requireSession(identity, true);
+    requireOperator(requireSession(identity, true));
     try {
       return await checkStorage();
     } catch {
@@ -313,164 +187,10 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       );
     }
   })
-  .get("/api/whiteboard/files", async ({ identity }) => {
-    const session = requireSession(identity);
-    const member = office.members.get(session.user.id);
-    if (
-      !member ||
-      member.sessionId !== session.session.id ||
-      !whiteboardEnabled(office.workspace)
-    )
-      throw new Error("Whiteboard access ended.");
-    return db
-      .select({
-        id: officeFiles.id,
-        name: officeFiles.name,
-        size: officeFiles.size,
-        createdAt: officeFiles.createdAt,
-      })
-      .from(officeFiles)
-      .where(
-        eq(officeFiles.boardId, boardScope(office.workspace.mapId, member)),
-      )
-      .orderBy(desc(officeFiles.createdAt))
-      .limit(20);
-  })
-  .post(
-    "/api/whiteboard/files",
-    async ({ identity, request }) => {
-      const session = requireSession(identity);
-      const member = office.members.get(session.user.id);
-      if (
-        !member ||
-        member.sessionId !== session.session.id ||
-        !whiteboardEnabled(office.workspace)
-      )
-        throw new Error("Whiteboard access ended.");
-      if (!storage) throw new Error("External S3 storage is not configured.");
-      const scope = boardScope(office.workspace.mapId, member);
-      const cooldown = `storage:${member.id}`;
-      if (Date.now() < (office.cooldowns.get(cooldown) || 0))
-        throw new Error(
-          "Please wait a few seconds before saving another file.",
-        );
-      office.cooldowns.set(cooldown, Date.now() + 5000);
-      const bytes = new Uint8Array(await request.arrayBuffer());
-      if (
-        request.headers.get("content-type") !== "image/png" ||
-        bytes.length > 5_000_000 ||
-        ![137, 80, 78, 71, 13, 10, 26, 10].every(
-          (value, index) => bytes[index] === value,
-        )
-      )
-        throw new Error("Upload a PNG snapshot smaller than 5 MB.");
-      const id = crypto.randomUUID();
-      const key = `whiteboards/${new Bun.CryptoHasher("sha256").update(scope).digest("hex")}/${id}.png`;
-      const name = `whiteboard-${scope.replaceAll(":", "-")}-${Date.now()}.png`;
-      try {
-        await storage.write(key, bytes, { type: "image/png" });
-        const current = office.members.get(member.id);
-        if (
-          !current ||
-          current.sessionId !== session.session.id ||
-          boardScope(office.workspace.mapId, current) !== scope ||
-          !whiteboardEnabled(office.workspace)
-        )
-          throw new Error("Whiteboard access ended.");
-        await db.insert(officeFiles).values({
-          id,
-          boardId: scope,
-          objectKey: key,
-          name,
-          size: bytes.length,
-          createdBy: member.id,
-        });
-      } catch (error) {
-        await storage.delete(key).catch(() => {});
-        throw error;
-      }
-      return { id, name, url: `/api/whiteboard/files/${id}` };
-    },
-    { parse: "none" },
-  )
-  .get(
-    "/api/whiteboard/files/:id",
-    async ({ identity, params, redirect }) => {
-      const session = requireSession(identity);
-      const member = office.members.get(session.user.id);
-      if (
-        !storage ||
-        !member ||
-        member.sessionId !== session.session.id ||
-        !whiteboardEnabled(office.workspace)
-      )
-        throw new Error("Whiteboard access ended.");
-      const result = await db
-        .select({ objectKey: officeFiles.objectKey, name: officeFiles.name })
-        .from(officeFiles)
-        .where(
-          and(
-            eq(officeFiles.id, params.id),
-            eq(officeFiles.boardId, boardScope(office.workspace.mapId, member)),
-          ),
-        );
-      if (!result.length)
-        throw new Error("File not found in your current area.");
-      const file = result[0];
-      return redirect(
-        storage.presign(file.objectKey, {
-          expiresIn: 60,
-          contentDisposition: `attachment; filename="${file.name}"`,
-        }),
-      );
-    },
-    { params: t.Object({ id: t.String({ format: "uuid" }) }) },
-  )
-  .get("/api/admin/activity", async ({ identity, query, set }) => {
-    requireSession(identity, true);
-    set.headers["cache-control"] = "no-store";
-    const before = query.before;
-    if (
-      before &&
-      (!/^[1-9][0-9]{0,18}$/.test(before) ||
-        BigInt(before) > 9223372036854775807n)
-    )
-      throw new Error("Invalid activity cursor.");
-    const action = query.action;
-    if (action && !Object.hasOwn(ACTIVITY_ACTIONS, action))
-      throw new Error("Invalid activity filter.");
-    const result = await db
-      .select({
-        id: officeAudit.id,
-        actor: officeAudit.actor,
-        actorName: sql<string>`coalesce(${officeAudit.actorName},${users.name},${officeAudit.actor})`,
-        action: officeAudit.action,
-        targetName: officeAudit.targetName,
-        details: officeAudit.details,
-        createdAt: officeAudit.createdAt,
-      })
-      .from(officeAudit)
-      .leftJoin(users, eq(users.id, officeAudit.actor))
-      .where(
-        and(
-          before ? lt(officeAudit.id, BigInt(before)) : undefined,
-          action ? eq(officeAudit.action, action) : undefined,
-        ),
-      )
-      .orderBy(desc(officeAudit.id))
-      .limit(51);
-    const entries = result
-      .slice(0, 50)
-      .map((row) => ({ ...row, id: row.id.toString() }));
-    return {
-      entries,
-      nextCursor: result.length > 50 ? entries.at(-1)!.id : null,
-    };
-  })
   .patch(
     "/api/admin/users/:id/role",
     async ({ identity, params, body }) => {
-      const s = requireSession(identity, true);
+      const s = requireOperator(requireSession(identity, true));
       recent(s);
       const { role } = memberRoleSchema.parse(body);
       if (params.id === s.user.id)
@@ -514,6 +234,15 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
           });
         }
       });
+      await db
+        .update(memberships)
+        .set({ role })
+        .where(
+          and(
+            eq(memberships.workspaceId, DEFAULT_WORKSPACE_ID),
+            eq(memberships.userId, params.id),
+          ),
+        );
       const member = office.members.get(params.id);
       if (member) {
         member.role = role;
@@ -528,7 +257,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
     },
   )
   .get("/api/admin/users", async ({ identity }) => {
-    requireSession(identity, true);
+    requireOperator(requireSession(identity, true));
     return db
       .select({
         id: users.id,
@@ -565,7 +294,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
   .post(
     "/api/admin/users",
     async ({ identity, body }) => {
-      const s = requireSession(identity, true);
+      const s = requireOperator(requireSession(identity, true));
       recent(s);
       if (!(await settings()).password)
         throw new Error(
@@ -583,6 +312,15 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
         .update(users)
         .set({ approved: true, mustChangePassword: true })
         .where(eq(users.id, result.user.id));
+      await db
+        .update(memberships)
+        .set({ approved: true })
+        .where(
+          and(
+            eq(memberships.workspaceId, DEFAULT_WORKSPACE_ID),
+            eq(memberships.userId, result.user.id),
+          ),
+        );
       await db.insert(officeAudit).values({
         actor: s.user.id,
         action: `Created local member ${result.user.id}`,
@@ -600,7 +338,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
   .patch(
     "/api/admin/users/:id",
     async ({ identity, params, body }) => {
-      const s = requireSession(identity, true);
+      const s = requireOperator(requireSession(identity, true));
       if (params.id === s.user.id)
         throw new Error("You cannot disable your own account.");
       await db.transaction(async (tx) => {
@@ -622,18 +360,27 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
         if (!actor) throw new Error("Owner access required.");
         await tx
           .update(users)
-          .set({ approved: body.approved })
+          .set({ approved: body.approved, disabled: !body.approved })
           .where(eq(users.id, params.id));
         if (!body.approved)
           await tx.delete(sessions).where(eq(sessions.userId, params.id));
       });
-      if (!body.approved) office.remove(params.id);
+      await db
+        .update(memberships)
+        .set({ approved: body.approved })
+        .where(
+          and(
+            eq(memberships.workspaceId, DEFAULT_WORKSPACE_ID),
+            eq(memberships.userId, params.id),
+          ),
+        );
+      if (!body.approved) revokeUser(params.id);
       return { ok: true };
     },
     { body: t.Object({ approved: t.Boolean() }) },
   )
   .delete("/api/admin/users/:id", async ({ identity, params }) => {
-    const s = requireSession(identity, true);
+    const s = requireOperator(requireSession(identity, true));
     recent(s);
     await db.transaction(async (tx) => {
       const removed = await tx
@@ -652,13 +399,13 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
         .insert(officeAudit)
         .values({ actor: s.user.id, action: `Deleted member ${params.id}` });
     });
-    office.remove(params.id);
+    revokeUser(params.id);
     return { ok: true };
   })
   .post(
     "/api/admin/reset-password",
     async ({ identity, body }) => {
-      const s = requireSession(identity, true);
+      const s = requireOperator(requireSession(identity, true));
       recent(s);
       if (!(await settings()).password)
         throw new Error("Password login is disabled.");
@@ -703,7 +450,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
           action: `Reset local password for ${body.userId}`,
         });
       });
-      office.remove(body.userId);
+      revokeUser(body.userId);
       return { ok: true };
     },
     {
@@ -716,7 +463,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
   .patch(
     "/api/admin/auth",
     async ({ identity, body }) => {
-      const s = requireSession(identity, true);
+      const s = requireOperator(requireSession(identity, true));
       recent(s);
       const removed = await db.transaction(async (tx) => {
         await tx
@@ -790,228 +537,22 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
         });
         return removed;
       });
-      for (const row of removed) office.revokeSession(row.id);
+      for (const row of removed) revokeSession(row.id);
       return settings();
     },
     { body: t.Object({ password: t.Boolean(), sso: t.Boolean() }) },
   )
-  .post("/api/media/token", async ({ identity, request }) => {
-    const s = requireSession(identity);
-    const m = office.members.get(s.user.id);
-    if (!m || m.sessionId !== s.session.id || !m.room)
-      throw new Error("Join a conversation first.");
-    const room = m.room;
-    const result = await tokenFor(
-      room,
-      m.id,
-      m.name,
-      office.presenters[m.conversation]?.includes(m.id) || false,
-    );
-    const current = office.members.get(m.id);
-    if (
-      !current ||
-      current.room !== room ||
-      !(await sessionFor(request.headers))
-    )
-      throw new Error("Conversation changed. Try again.");
-    return result;
-  })
-  .ws("/api/whiteboard", {
-    beforeHandle({ request, identity, set }) {
-      if (request.headers.get("origin") !== config.origin) {
-        set.status = 403;
-        return "Untrusted origin";
-      }
-      const session = requireSession(identity);
-      if (
-        office.members.get(session.user.id)?.sessionId !== session.session.id
-      ) {
-        set.status = 403;
-        return "Join the office first";
-      }
-    },
-    maxPayloadLength: BOARD_MESSAGE_BYTES,
-    idleTimeout: 60,
-    async open(ws) {
-      try {
-        const s = requireSession(ws.data.identity);
-        await whiteboards.open(
-          ws.id,
-          s.user.id,
-          s.session.id,
-          (event) => {
-            ws.send(event);
-          },
-          () => ws.close(1008, "Whiteboard access ended"),
-        );
-      } catch {
-        ws.send({ type: "error", message: "Unable to open this whiteboard." });
-        ws.close(1008);
-      }
-    },
-    async message(ws, raw) {
-      try {
-        await whiteboards.message(ws.id, raw);
-      } catch (error) {
-        ws.send({
-          type: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Unable to save whiteboard.",
-        });
-      }
-    },
-    close(ws) {
-      whiteboards.remove(ws.id);
-    },
-  })
-  .ws("/api/office", {
-    query: t.Object({ takeover: t.Optional(t.Literal("1")) }),
-    beforeHandle({ request, identity, set }) {
-      if (request.headers.get("origin") !== config.origin) {
-        set.status = 403;
-        return "Untrusted origin";
-      }
-      requireSession(identity);
-    },
-    maxPayloadLength: 2048,
-    open(ws) {
-      try {
-        const s = requireSession(ws.data.identity);
-        if (office.members.has(s.user.id) && ws.data.query.takeover !== "1") {
-          ws.close(4001, "Office opened elsewhere");
-          return;
-        }
-        office.add(
-          s.user,
-          s.session.id,
-          new Date(s.session.expiresAt).getTime(),
-          (event) => {
-            ws.send(event);
-          },
-          (code, reason) => ws.close(code, reason),
-          ws.id,
-        );
-        whiteboards.prune();
-      } catch (error) {
-        ws.send({
-          type: "error",
-          message:
-            error instanceof DrizzleQueryError
-              ? "Database request failed."
-              : (error as Error).message,
-        });
-        ws.close();
-      }
-    },
-    message(ws, raw) {
-      const s = ws.data.identity;
-      if (!s) return;
-      const member = office.members.get(s.user.id);
-      if (!member || member.connectionId !== ws.id) return;
-      const result = Command.safeParse(raw);
-      if (!result.success) {
-        ws.send({ type: "error", message: "Invalid office message." });
-        return;
-      }
-      const count = ws.data as typeof ws.data & {
-        rate?: { count: number; at: number };
-      };
-      if (!count.rate || Date.now() - count.rate.at > 1000)
-        count.rate = { count: 0, at: Date.now() };
-      if (++count.rate.count > 40) {
-        ws.close();
-        return;
-      }
-      try {
-        office.handle(s.user.id, result.data);
-        if (result.data.type === "status")
-          void db
-            .update(users)
-            .set({
-              availability: result.data.status,
-              statusText: result.data.text,
-              ...(result.data.icon !== undefined
-                ? { statusIcon: result.data.icon }
-                : {}),
-            })
-            .where(eq(users.id, s.user.id))
-            .catch(() => {});
-      } catch (error) {
-        ws.send({
-          type: "error",
-          message:
-            error instanceof DrizzleQueryError
-              ? "Database request failed."
-              : (error as Error).message,
-        });
-      }
-    },
-    close(ws) {
-      const s = ws.data.identity;
-      if (s && office.members.get(s.user.id)?.connectionId === ws.id)
-        office.remove(s.user.id);
-    },
-  });
+  .use(nativeApi)
+  .use(workspaceOidcApi)
+  .use(workspaceApi)
+  .use(officeRoutes(false))
+  .use(officeRoutes(true));
 
 if (import.meta.main) {
   app.listen({
     port: config.port,
     hostname: process.env.API_HOST || "127.0.0.1",
   });
-  setInterval(() => office.tick(0.05), 50);
-  let rotating = false;
-  setInterval(async () => {
-    if (rotating || office.members.size) return;
-    rotating = true;
-    try {
-      // Recheck occupancy after the database read before persisting a change.
-      const next = await rotateDailyMap(
-        new Date(),
-        () => office.members.size === 0,
-      );
-      if (next) office.configureWorkspace(next);
-    } catch (error) {
-      console.error("Daily map rotation failed; will retry.", error);
-    } finally {
-      rotating = false;
-    }
-  }, 60_000);
-  setInterval(() => whiteboards.prune(), 1000);
-  setInterval(() => {
-    if (office.dirty) office.broadcast();
-  }, 100);
-  // Recheck database sessions to enforce expiry, logout, and policy changes on open sockets.
-  setInterval(async () => {
-    try {
-      const ids = [...office.members.values()].map((m) => m.sessionId);
-      if (!ids.length) return;
-      const valid = await db
-        .select({ id: sessions.id })
-        .from(sessions)
-        .innerJoin(users, eq(users.id, sessions.userId))
-        .innerJoin(officeSettings, eq(officeSettings.id, 1))
-        .where(
-          and(
-            inArray(sessions.id, ids),
-            gt(sessions.expiresAt, sql`now()`),
-            eq(users.approved, true),
-            or(
-              and(
-                eq(sessions.method, "password"),
-                eq(officeSettings.password, true),
-              ),
-              and(eq(sessions.method, "sso"), eq(officeSettings.sso, true)),
-            ),
-          ),
-        );
-      const keep = new Set(valid.map((r) => r.id));
-      for (const m of [...office.members.values()])
-        if (!keep.has(m.sessionId)) office.remove(m.id);
-    } catch {
-      for (const m of [...office.members.values()]) office.remove(m.id);
-    }
-  }, 5000);
+  startRuntimeTimers();
   console.log(`Office API listening on ${config.port}`);
 }

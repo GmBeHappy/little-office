@@ -22,7 +22,7 @@ test("clicking a meeting room on the map teleports inside and Space still jumps"
       if (message.type === "jump" && message.from === accounts[0].id) jumps++;
     });
   });
-  await page.goto("/");
+  await page.goto("/office");
   await page.getByLabel("Username", { exact: true }).fill(accounts[0].username);
   await page.getByLabel("Password", { exact: true }).fill(accounts[0].password);
   await page.getByRole("button", { name: "Enter the office" }).click();
