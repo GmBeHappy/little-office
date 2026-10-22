@@ -6,20 +6,24 @@ The native project is `apple/LittleOffice.xcodeproj`, with the shared `LittleOff
 
 ## Xcode Cloud workflow
 
-Configure this in Xcode / App Store Connect after the project is available in the connected GitHub repository. Xcode Cloud workflows are service configuration; committing a GitHub Actions YAML file does not create an Xcode Cloud workflow.
+The following workflow was saved in Xcode Cloud on 22 October 2026. Xcode Cloud workflows are service configuration; committing a GitHub Actions YAML file does not create an Xcode Cloud workflow.
 
 | Setting | Value |
 | --- | --- |
 | Repository | `GmBeHappy/little-office` |
 | Project | `apple/LittleOffice.xcodeproj` |
 | Scheme | `LittleOffice` |
-| Name | `TestFlight — main` |
-| Start conditions | Branch changes on `main`, plus manual builds on `main` |
-| File conditions | `apple/**`, `public/sounds/nudge.wav` |
-| Environment | Latest stable Xcode 26 or newer; macOS 26 or newer |
-| Action 1 | Archive iOS, Release, TestFlight distribution |
-| Action 2 | Archive macOS, Release, TestFlight distribution |
-| Post-action | TestFlight internal distribution to the selected internal tester group |
+| Name | `TestFlight — Apple` |
+| Start conditions | Branch changes and manual builds on `codex/apple-testflight` |
+| File conditions | Any changed file on that branch |
+| Environment | Latest Release Xcode and macOS |
+| Action 1 | Archive iOS, `LittleOffice`, TestFlight (Internal Testing Only) |
+| Action 2 | Archive macOS, `LittleOffice`, Any Mac, TestFlight (Internal Testing Only) |
+| Post-action | None; no tester group or invitation configured |
+
+Cloud product ID: `9c715c8b-ca92-4a6d-8573-5039deb50e71`. Workflow ID: `314BF266-1A13-40EC-A3FE-911592BE456E`. Build 1 was started manually from the visibly selected `codex/apple-testflight` branch at 17:13 Bangkok time on 22 October 2026. Xcode confirmed commit `18231f2`, Xcode 27.1, macOS 27.0.1, and both archive actions **Running / waiting for available environment**. This is not yet a completed TestFlight upload.
+
+After merging the Apple source into `main`, change both branch conditions to `main` and optionally limit changed files to `apple/**` and `public/sounds/nudge.wav`. Add a TestFlight internal tester group only when the intended recipients are selected.
 
 Use the first workflow setup in **Xcode → Product → Xcode Cloud → Create Workflow**, then adjust the archive actions and start conditions. Select the existing App Store Connect record and enable access only to this repository if GitHub authorization is needed. The account holder must resolve outstanding Apple agreements. Do not start a paid plan or accept agreements implicitly.
 
