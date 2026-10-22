@@ -11,3 +11,6 @@ playwright-report/
 deploy/generated/
 
 /public/excalidraw/
+
+# Temporary GitHub OIDC credentials
+gha-creds-*.json

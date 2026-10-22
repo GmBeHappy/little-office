@@ -1,0 +1,133 @@
+name: Android
+on:
+  pull_request:
+    paths: ['android/**', 'apple/LittleOfficeKit/Tests/LittleOfficeKitTests/Fixtures/**', '.github/workflows/android.yml']
+  push:
+    branches: [main]
+    paths: ['android/**', 'apple/LittleOfficeKit/Tests/LittleOfficeKitTests/Fixtures/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+    inputs:
+      distribute:
+        description: Upload a signed APK to Firebase (main branch only)
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: android
+      - name: Test and build with fastlane
+        run: bundle exec fastlane android verify
+        working-directory: android
+        env:
+          FASTLANE_SKIP_UPDATE_CHECK: '1'
+          FASTLANE_OPT_OUT_USAGE: '1'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: little-office-android-checks
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/bundle/release/*.aab
+            android/app/build/reports/
+          retention-days: 7
+
+  firebase:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.distribute)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: firebase
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      FASTLANE_SKIP_UPDATE_CHECK: '1'
+      FASTLANE_OPT_OUT_USAGE: '1'
+      FIREBASE_ANDROID_APP_ID: ${{ vars.FIREBASE_ANDROID_APP_ID }}
+      FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+      GOOGLE_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
+      GOOGLE_SERVICE_ACCOUNT: ${{ vars.GOOGLE_SERVICE_ACCOUNT }}
+      FIREBASE_GROUPS: ${{ vars.FIREBASE_GROUPS }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Firebase configuration
+        shell: bash
+        run: |
+          for name in FIREBASE_ANDROID_APP_ID FIREBASE_PROJECT_ID GOOGLE_WORKLOAD_IDENTITY_PROVIDER GOOGLE_SERVICE_ACCOUNT; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Set $name in the firebase GitHub environment. See android/fastlane/SETUP.md."
+              exit 1
+            fi
+          done
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: android
+      - name: Build signed APK with fastlane
+        working-directory: android
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing signing secret $name in the firebase GitHub environment."
+              exit 1
+            fi
+          done
+          umask 077
+          export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/little-office-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_FILE"
+          export ANDROID_VERSION_CODE=$((GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
+          bundle exec fastlane android release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: little-office-android-signed
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/mapping/release/mapping.txt
+          retention-days: 7
+          if-no-files-found: error
+      # Authenticate after building: the GitHub OIDC assertion is short-lived.
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.FIREBASE_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GOOGLE_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+      - name: Upload APK to Firebase App Distribution
+        working-directory: android
+        env:
+          RELEASE_NOTES: 'Little Office Android · ${{ github.sha }} · build ${{ github.run_number }}.${{ github.run_attempt }}'
+        run: bundle exec fastlane android distribute
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/little-office-release.jks"
