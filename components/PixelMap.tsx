@@ -9,9 +9,17 @@ import { drawFishing, fishingPhase } from "@/shared/fishing";
 import { drawMapEffects, type MapEffect } from "@/shared/map-effects";
 import {
   farmAnimalWalkable,
+  farmTarget,
+  type FarmTarget,
+  drawFarmEgg,
+  drawFarmCrop,
+  drawFarmHen,
+  drawFarmAnimal,
+  drawFarmIcon,
+  FARM_ICON_EMOJIS,
+  FARM_RULES,
   FARM_ANIMALS,
   FARM_EGG_SPOTS,
-  FARM_GROWTH,
   FARM_HENS,
   FARM_HEN_YARD,
   FARM_PLOTS,
@@ -23,26 +31,10 @@ import {
   habitatStyle,
   type HabitatState,
 } from "@/shared/habitats";
-import { wildlifeAnimation } from "@/shared/wildlife-animation";
 import { drawCharacter } from "@/shared/avatars";
 import type { Command } from "@/shared/protocol";
 import { STATUS_LABELS, personStatus } from "@/shared/status";
-// Farm pickups render as pixel art above the avatar instead of emoji text.
-const FARM_ICON_EMOJIS: Record<
-  string,
-  "egg" | "sprout" | "wheat" | "fish" | "puff"
-> = {
-  "🥚": "egg",
-  "🌱": "sprout",
-  "🌾": "wheat",
-  "🐟": "fish",
-  "💨": "puff",
-};
-type FarmTarget = {
-  kind: "egg" | "plant" | "harvest";
-  x: number;
-  y: number;
-};
+
 type Props = {
   habitat?: HabitatState;
   wildlifeEnabled: boolean;
@@ -226,31 +218,7 @@ export default function PixelMap(props: Props) {
           (p) => p.id === live.current.self,
         );
         if (!self) return null;
-        let best: FarmTarget | null = null;
-        let bestD = Infinity;
-        const consider = (
-          kind: FarmTarget["kind"],
-          x: number,
-          y: number,
-          max: number,
-        ) => {
-          const d = Math.hypot(self.x - x, self.y - y);
-          if (d < max && d < bestD) {
-            bestD = d;
-            best = { kind, x, y };
-          }
-        };
-        for (const [spot, until] of farm.eggs)
-          if (until > time) {
-            const [x, y] = FARM_EGG_SPOTS[spot];
-            consider("egg", x, y, 48);
-          }
-        for (const [index, planted] of farm.plots.entries()) {
-          const [x, y] = FARM_PLOTS[index];
-          if (!planted) consider("plant", x, y, 54);
-          else if (time - planted >= FARM_GROWTH) consider("harvest", x, y, 54);
-        }
-        return best;
+        return farmTarget(self, farm.eggs, farm.plots, time);
       }
       interactFarm(time: number) {
         const farm = this.farm;
@@ -271,7 +239,10 @@ export default function PixelMap(props: Props) {
             }
           }
           farm.caught.eggs++;
-          farm.nextEgg = Math.min(farm.nextEgg, time + 6000);
+          farm.nextEgg = Math.min(
+            farm.nextEgg,
+            time + FARM_RULES.eggPickupDelayMs,
+          );
           celebrate("🥚");
         } else if (target.kind === "plant" || target.kind === "harvest") {
           const index = FARM_PLOTS.findIndex(
@@ -297,46 +268,24 @@ export default function PixelMap(props: Props) {
         y: number,
         alpha: number,
       ) {
-        const r = (ox: number, oy: number, w: number, h: number, c: number) => {
-          g.fillStyle(c, alpha);
-          g.fillRect(x + ox, y + oy, w, h);
-        };
-        if (kind === "egg") {
-          r(-5, -4, 10, 8, 0xf7f3e2);
-          r(-3, -8, 6, 5, 0xf7f3e2);
-          r(-4, 2, 8, 2, 0xe3d9c6);
-          r(-3, -7, 4, 3, 0xffffff);
-        } else if (kind === "sprout") {
-          r(-1, -6, 3, 10, 0x4c7957);
-          r(-6, -7, 5, 4, 0x69985f);
-          r(3, -9, 5, 4, 0x8bb16f);
-        } else if (kind === "wheat") {
-          for (const dx of [-6, -1, 4]) {
-            r(dx, -4, 2, 8, 0xc9a35b);
-            r(dx - 1, -9, 4, 5, 0xe8c56a);
-          }
-        } else if (kind === "fish") {
-          r(-6, -4, 12, 8, 0x5f9ec0);
-          r(-9, -2, 4, 4, 0x4f8db0);
-          r(3, -6, 3, 3, 0x4f8db0);
-          r(2, -2, 2, 2, 0xf7f3e2);
-        } else {
-          r(-7, -5, 4, 4, 0xd9d2c0);
-          r(0, -8, 5, 4, 0xd9d2c0);
-          r(-2, -1, 5, 4, 0xd9d2c0);
-        }
+        drawFarmIcon(kind, x, y, alpha, (x, y, w, h, c, a) => {
+          g.fillStyle(c, a).fillRect(x, y, w, h);
+        });
       }
       updateFarm(time: number, delta: number) {
         const farm = this.farm!;
-        const step = Math.min(delta, 50);
+        const step = Math.min(delta, FARM_RULES.maxStepMs);
         // Hens lay a few eggs at a time; uncollected ones fade away.
-        if (farm.eggs.size < 3 && time > farm.nextEgg) {
+        if (farm.eggs.size < FARM_RULES.maxEggs && time > farm.nextEgg) {
           const free = FARM_EGG_SPOTS.map((_, i) => i).filter(
             (i) => !farm.eggs.has(i),
           );
           const spot = free[Math.floor(Math.random() * free.length)];
-          farm.eggs.set(spot, time + 45000);
-          farm.nextEgg = time + 9000 + Math.random() * 9000;
+          farm.eggs.set(spot, time + FARM_RULES.eggLifetimeMs);
+          farm.nextEgg =
+            time +
+            FARM_RULES.eggIntervalMs +
+            Math.random() * FARM_RULES.eggIntervalJitterMs;
         }
         for (const [spot, until] of farm.eggs)
           if (until < time) farm.eggs.delete(spot);
@@ -355,43 +304,13 @@ export default function PixelMap(props: Props) {
         };
         for (const [spot] of farm.eggs) {
           const [x, y] = FARM_EGG_SPOTS[spot];
-          r(x - 6, y + 3, 12, 3, 0x3e5233, 0.15);
-          r(x - 5, y - 3, 10, 7, 0xf7f3e2);
-          r(x - 3, y - 7, 6, 4, 0xf7f3e2);
-          r(x - 4, y + 1, 8, 3, 0xe3d9c6);
-          r(x - 3, y - 6, 4, 3, 0xffffff);
+          drawFarmEgg(x, y, r);
         }
         for (const [index, planted] of farm.plots.entries()) {
           if (!planted) continue;
           const [x, y] = FARM_PLOTS[index];
           const age = time - planted;
-          if (age < FARM_GROWTH * 0.25) {
-            // Freshly sown: turned soil with a scatter of seeds.
-            r(x - 8, y - 1, 16, 5, 0x6b4526);
-            r(x - 5, y, 3, 2, 0xe8c56a);
-            r(x + 2, y + 1, 3, 2, 0xe8c56a);
-            r(x - 1, y - 3, 2, 2, 0xd9b45f);
-          } else if (age < FARM_GROWTH * 0.55) {
-            // A sprout pushes up two leaves.
-            r(x - 1, y - 9, 3, 9, 0x4c7957);
-            r(x - 6, y - 10, 5, 4, 0x69985f);
-            r(x + 3, y - 12, 5, 4, 0x8bb16f);
-          } else if (age < FARM_GROWTH) {
-            // Green wheat grows tall.
-            for (const dx of [-7, -2, 3]) {
-              r(x + dx, y - 15, 3, 15, 0x7aa050);
-              r(x + dx - 2, y - 17, 7, 4, 0x8bb16f);
-            }
-          } else {
-            // Ripe wheat: golden heads heavy over a tied bundle.
-            for (const dx of [-8, -2, 4]) {
-              r(x + dx, y - 17, 3, 17, 0xc9a35b);
-              r(x + dx - 2, y - 24, 7, 9, 0xe8c56a);
-              r(x + dx - 1, y - 23, 2, 2, 0xf2d98c);
-              r(x + dx + 2, y - 21, 2, 2, 0xf2d98c);
-            }
-            r(x - 6, y - 6, 14, 3, 0xb98f57);
-          }
+          drawFarmCrop(x, y, age, r);
         }
         // Hens wander the pen, peck at the ground, and scatter from people.
         const self = live.current.people.find(
@@ -402,19 +321,25 @@ export default function PixelMap(props: Props) {
           const playerDist = self
             ? Math.hypot(self.x - hen.x, self.y - hen.y)
             : Infinity;
-          if (hen.mode !== "walk" && playerDist < 40) {
+          if (hen.mode !== "walk" && playerDist < FARM_RULES.henScatterRadius) {
             hen.tx = Math.max(
               yard.x,
               Math.min(
                 yard.x + yard.w,
-                hen.x + (hen.x - (self?.x ?? hen.x) >= 0 ? 60 : -60),
+                hen.x +
+                  (hen.x - (self?.x ?? hen.x) >= 0
+                    ? FARM_RULES.henScatterX
+                    : -FARM_RULES.henScatterX),
               ),
             );
             hen.ty = Math.max(
               yard.y,
               Math.min(
                 yard.y + yard.h,
-                hen.y + (hen.y - (self?.y ?? hen.y) >= 0 ? 45 : -45),
+                hen.y +
+                  (hen.y - (self?.y ?? hen.y) >= 0
+                    ? FARM_RULES.henScatterY
+                    : -FARM_RULES.henScatterY),
               ),
             );
             hen.mode = "walk";
@@ -424,7 +349,9 @@ export default function PixelMap(props: Props) {
             const dx = hen.tx - hen.x,
               dy = hen.ty - hen.y;
             const dist = Math.hypot(dx, dy);
-            const speed = (hen.fast ? 60 : 24) * (step / 1000);
+            const speed =
+              (hen.fast ? FARM_RULES.henFastSpeed : FARM_RULES.henSpeed) *
+              (step / 1000);
             if (dist <= speed) {
               hen.x = hen.tx;
               hen.y = hen.ty;
@@ -443,39 +370,7 @@ export default function PixelMap(props: Props) {
             hen.ty = yard.y + Math.random() * yard.h;
             hen.mode = "walk";
           }
-          const frame = Math.floor(hen.walkTime / 120) % 2;
-          const bob =
-            hen.mode === "walk"
-              ? frame % 2
-                ? -1
-                : 0
-              : Math.sin(time / 400 + hen.x) > 0.6
-                ? -1
-                : 0;
-          const peck =
-            hen.mode === "peck"
-              ? Math.floor((time - hen.since) / 160) % 2
-                ? 6
-                : 0
-              : 0;
-          const mirrored = hen.direction === "left";
-          const p = (ox: number, oy: number, w: number, h: number, c: number) =>
-            r(hen.x + (mirrored ? -ox - w : ox), hen.y + oy + bob, w, h, c);
-          r(hen.x - 8, hen.y + 8, 16, 3, 0x3e5233, 0.15);
-          p(-9, -7, 18, 11, hen.body);
-          p(-13, -10, 5, 6, hen.wing);
-          p(-3, -3, 8, 6, hen.wing);
-          if (hen.mode === "walk") {
-            p(-4, 4, 2, 5 - (frame ? 2 : 0), 0xe8a23c);
-            p(2, 4, 2, 5 - (frame ? 0 : 2), 0xe8a23c);
-          } else {
-            p(-4, 4, 2, 5, 0xe8a23c);
-            p(2, 4, 2, 5, 0xe8a23c);
-          }
-          p(6, -13 + peck, 8, 8, hen.body);
-          p(8, -16 + peck, 4, 4, 0xd75b4a);
-          p(13, -10 + peck, 4, 3, 0xe8a23c);
-          p(11, -11 + peck, 2, 2, 0x3e5233);
+          drawFarmHen(hen, time, r);
         }
         // Cows and sheep graze anywhere their hooves can carry them.
         for (const animal of live.current.wildlifeEnabled ? farm.animals : []) {
@@ -483,7 +378,11 @@ export default function PixelMap(props: Props) {
             const dx = animal.tx - animal.x,
               dy = animal.ty - animal.y;
             const dist = Math.hypot(dx, dy);
-            const speed = (animal.kind === "cow" ? 11 : 14) * (step / 1000);
+            const speed =
+              (animal.kind === "cow"
+                ? FARM_RULES.cowSpeed
+                : FARM_RULES.sheepSpeed) *
+              (step / 1000);
             const nx = animal.x + (dx / dist) * speed,
               ny = animal.y + (dy / dist) * speed;
             if (dist <= speed) {
@@ -513,52 +412,7 @@ export default function PixelMap(props: Props) {
             }
             animal.mode = "walk";
           }
-          const { frame, bob, graze } = wildlifeAnimation(
-            animal.mode,
-            animal.walkTime,
-            time - animal.since,
-          );
-          const p = (ox: number, oy: number, w: number, h: number, c: number) =>
-            r(
-              animal.x + (animal.direction === "left" ? -ox - w : ox),
-              animal.y + oy + bob,
-              w,
-              h,
-              c,
-            );
-          if (animal.kind === "cow") {
-            r(animal.x - 17, animal.y + 13, 34, 4, 0x3e5233, 0.15);
-            p(-16, -12, 32, 17, 0xf2ead2);
-            p(-11, -9, 8, 8, 0x4a4038);
-            p(5, -4, 9, 8, 0x4a4038);
-            if (animal.mode === "walk") {
-              p(-13, 5, 4, 8 - (frame ? 2 : 0), 0x4a4038);
-              p(9, 5, 4, 8 - (frame ? 0 : 2), 0x4a4038);
-            } else {
-              p(-13, 5, 4, 8, 0x4a4038);
-              p(9, 5, 4, 8, 0x4a4038);
-            }
-            p(13, -17 + graze, 11, 11, 0xf2ead2);
-            p(13, -20 + graze, 4, 4, 0xd9c8a4);
-            p(21, -10 + graze, 4, 4, 0xe8a8a0);
-            p(16, -15 + graze, 2, 2, 0x3e5233);
-          } else {
-            r(animal.x - 13, animal.y + 11, 26, 4, 0x3e5233, 0.15);
-            p(-12, -10, 24, 15, 0xf5f2e8);
-            p(-14, -7, 4, 7, 0xf5f2e8);
-            p(8, -12, 5, 5, 0xf5f2e8);
-            if (animal.mode === "walk") {
-              p(-9, 5, 3, 7 - (frame ? 2 : 0), 0x4a4a52);
-              p(5, 5, 3, 7 - (frame ? 0 : 2), 0x4a4a52);
-            } else {
-              p(-9, 5, 3, 7, 0x4a4a52);
-              p(5, 5, 3, 7, 0x4a4a52);
-            }
-            p(11, -13 + graze, 9, 9, 0x4a4a52);
-            p(9, -15 + graze, 4, 3, 0x4a4a52);
-            p(17, -9 + graze, 3, 2, 0x4a4a52);
-            p(14, -11 + graze, 2, 2, 0xf5f2e8);
-          }
+          drawFarmAnimal(animal, time, r);
         }
         const prompt = this.farmPrompt!;
         const target = this.farmTarget(time);
@@ -609,7 +463,7 @@ export default function PixelMap(props: Props) {
         if (getMap(props.mapId).theme === "farm") {
           this.farm = {
             eggs: new Map(),
-            nextEgg: 4000,
+            nextEgg: FARM_RULES.firstEggMs,
             plots: FARM_PLOTS.map(() => 0),
             hens: FARM_HENS.map(([x, y], i) => ({
               x,
@@ -1272,7 +1126,9 @@ export default function PixelMap(props: Props) {
               r(29 + bar * 5, -20 - height - h, 3, h, 0xffffff);
             }
           }
-          a.walkTime = p.moving ? a.walkTime + Math.min(delta, 50) : 0;
+          a.walkTime = p.moving
+            ? a.walkTime + Math.min(delta, FARM_RULES.maxStepMs)
+            : 0;
           const frame = Math.floor(a.walkTime / 110) % 4;
           const stride = airborne ? 3 : [0, 4, 0, -4][frame];
           const bob = airborne ? 0 : frame % 2 ? -1 : 0;
