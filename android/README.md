@@ -2,7 +2,7 @@
 
 Native Kotlin + Jetpack Compose client, in the same repository as the web and Apple apps. Android 8.0 (API 26) minimum; compile/target SDK 36. The dashboard, workspace settings, map, avatars and controls are native. Only the shared Excalidraw whiteboard uses a WebView.
 
-**Developer-only beta:** this client requires the SaaS/native backend, including `/native/authorize`, `/api/native/exchange`, `/api/account`, `/api/workspaces`, `/api/saas/config` and the workspace office socket. That backend is not yet on `main` and is outside [Android PR #8](https://github.com/GmBeHappy/little-office/pull/8). Use a compatible development/test server; installing or distributing this APK does not make the current main-branch web server compatible. General testing against the main deployment must wait until the shared backend is integrated and deployed.
+**Developer-only beta:** this client requires the SaaS/native backend, including `/native/authorize`, `/api/native/exchange`, `/api/account`, `/api/workspaces`, `/api/saas/config` and the workspace office socket. That backend was merged into `main` in [backend PR #9](https://github.com/GmBeHappy/little-office/pull/9), and this branch includes it. Production deployment and migrations are still pending. Use a compatible development/test server; installing or distributing this APK does not upgrade a running server. General testing against the main deployment must wait until the shared backend is deployed, migrated and verified.
 
 ## Build and run
 
@@ -42,7 +42,7 @@ Release bundle: `./gradlew :app:bundleRelease` → `app/build/outputs/bundle/rel
 
 `CredentialStore` encrypts both sessions and pending PKCE verifiers using Android Keystore AES-GCM, authenticating each storage slot with additional data. Backup and device-transfer rules exclude app data. The login callback validates its scheme/host/path, unique parameters and constant-time state before exchanging the single-use code. No password is stored by the app.
 
-The backend remains the authority for workspace membership, OIDC domain verification/auto-join, invitations, room grants and movement. Android does not introduce a separate auth service or database. The native contract document belongs to the pending shared-backend integration; it is intentionally absent from this Android-only PR, so there is no standalone contract-file link here.
+The backend remains the authority for workspace membership, OIDC domain verification/auto-join, invitations, room grants and movement. Android does not introduce a separate auth service or database. See the [shared native contract](../docs/native-contract.md) for authentication, workspace endpoints and drawing manifests.
 
 ## Checks
 

@@ -2,9 +2,9 @@
 
 The Android workflow builds with fastlane, then uploads a **signed release APK** to Firebase App Distribution on Android-related pushes to `main`. Manual runs have a `distribute` switch (default on); uploads still require `main`. Pull requests only test/build, with no signing or Google credentials. Nothing publishes to Google Play.
 
-**Developer-only beta:** this client requires the SaaS/native backend, including `/native/authorize`, `/api/native/exchange`, `/api/account`, `/api/workspaces`, `/api/saas/config` and the workspace office socket. That backend is not yet on `main` and is outside [Android PR #8](https://github.com/GmBeHappy/little-office/pull/8). Use a compatible development/test server; installing or distributing this APK does not make the current main-branch web server compatible. General testing against the main deployment must wait until the shared backend is integrated and deployed.
+**Developer-only beta:** this client requires the SaaS/native backend, including `/native/authorize`, `/api/native/exchange`, `/api/account`, `/api/workspaces`, `/api/saas/config` and the workspace office socket. That backend was merged into `main` in [backend PR #9](https://github.com/GmBeHappy/little-office/pull/9), and this branch includes it. Production deployment and migrations are still pending. Use a compatible development/test server; installing or distributing this APK does not upgrade a running server. General testing against the main deployment must wait until the shared backend is deployed, migrated and verified.
 
-The automatic Firebase release notes identify builds as developer beta and require a compatible SaaS/native backend. Remove that qualification only after the backend is merged, deployed and tested with the app.
+The automatic Firebase release notes identify builds as developer beta and require a compatible SaaS/native backend. Keep that qualification until the backend is deployed, migrated and tested with the app.
 
 ## Registered Firebase app
 
