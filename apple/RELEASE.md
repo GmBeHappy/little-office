@@ -21,7 +21,7 @@ The following workflow was saved in Xcode Cloud on 22 October 2026. Xcode Cloud 
 | Action 2 | Archive macOS, `LittleOffice`, Any Mac, TestFlight (Internal Testing Only) |
 | Post-action | None; no tester group or invitation configured |
 
-Cloud product ID: `9c715c8b-ca92-4a6d-8573-5039deb50e71`. Workflow ID: `314BF266-1A13-40EC-A3FE-911592BE456E`. Build 1 was started manually from the visibly selected `codex/apple-testflight` branch at 17:13 Bangkok time on 22 October 2026. Xcode confirmed commit `18231f2`, Xcode 27.1, macOS 27.0.1, and both archive actions **Running / waiting for available environment**. This is not yet a completed TestFlight upload.
+Cloud product ID: `9c715c8b-ca92-4a6d-8573-5039deb50e71`. Workflow ID: `314BF266-1A13-40EC-A3FE-911592BE456E`. Build 1 started manually from `codex/apple-testflight` at 17:13 Bangkok time on 22 October 2026 and **completed successfully** in five minutes. Xcode confirmed commit `18231f2`, Xcode 27.1, and macOS 27.0.1. iOS completed with one presentation-anchor deprecation warning; macOS completed without issues. The iOS archive, exports, artifact upload, and App Store Connect preparation succeeded. App Store Connect processing and installable TestFlight availability still require separate verification.
 
 After merging the Apple source into `main`, change both branch conditions to `main` and optionally limit changed files to `apple/**` and `public/sounds/nudge.wav`. Add a TestFlight internal tester group only when the intended recipients are selected.
 
@@ -35,7 +35,7 @@ Xcode Cloud assigns increasing build numbers automatically; no custom counter sc
 
 The isolated Apple release branch is `codex/apple-testflight`, based on `origin/main`. Use a manual build of this branch for the first TestFlight build. The automatic `main` trigger can build the app after the reviewed Apple source is merged there. Review and publish the entire `apple/` directory except ignored `.build`/per-user files; `public/sounds/nudge.wav` is already tracked on `main`. Do not accidentally include pending backend/auth/Android changes in an Apple-only publication. A review branch can validate the archive manually before merging into the configured `main` trigger.
 
-This build expects the workspace/native APIs described in `../docs/native-contract.md` on its chosen server. A successful native build does not deploy those server routes. The app defaults to loopback for development; testers on physical devices must enter an available HTTPS server with the corresponding backend version.
+This build expects the workspace/native APIs described in `../docs/native-contract.md` on its chosen server. Backend PR #9 is merged into `main` at `1ebdf3838f6f957914cb010908a986d6c6a8390b`; deployment and database migrations are still pending. A successful native build does not deploy those server routes. The app defaults to loopback for development; testers on physical devices must enter an available HTTPS server with the corresponding backend version.
 
 ## Validation and beta availability
 
