@@ -8,7 +8,7 @@ Use the existing `bun install`, database startup and `bun run db:migrate` workfl
 
 `bun run user:create <username> <name> --owner` prints the new user's ID. Platform account/password/login-policy/storage administration additionally requires that ID in `OFFICE_OPERATOR_IDS` (comma separated), followed by an API restart. Workspace ownership does not grant platform privileges. The compatibility `/office` settings expose platform administration only to allowlisted operators; scoped office pages direct member management to their workspace dashboard.
 
-Optional `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` enable Google in the same Better Auth database. Configure the provider callback as `${APP_URL}/api/auth/callback/google`. Existing OIDC configuration stays supported. No OAuth application, credentials, or public service was provisioned automatically.
+Optional `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` enable Google in the same Better Auth database. Configure the provider callback as `${APP_URL}/api/auth/callback/google`. Existing OIDC configuration stays supported. Google OAuth credentials must be configured separately; do not put provider secrets in native clients.
 
 Use a stable, unique `OFFICE_MEDIA_NAMESPACE` for each deployment sharing LiveKit. All new room names include it and the workspace UUID; startup cleanup only targets that deployment namespace. During the first upgrade, drain the old process and its old `office-*` rooms explicitly before starting the new version. Never bulk-delete another deployment's rooms.
 
@@ -44,11 +44,15 @@ SELECT w.id,w.name FROM workspaces w WHERE NOT EXISTS (
 );
 ```
 
-## What still gates a release
+## Production rollout and remaining acceptance
 
-Local tests use isolated PGlite databases and fake test accounts. They do not migrate development/production data. LiveKit failure tests use a local protocol stub; browser switching tests run with media disabled. Real provider OAuth, private S3 integration, web↔Mac↔iPhone calls, actual screen capture, device interruptions, signing, and beta distribution remain release acceptance work. Native client release status is tracked with each client.
+The SaaS/workspace backend was deployed on **2026-10-23** from main commit `cea4bd99acc833d2167156bae49c2ac5b4c39fb5`. The account portal is [app.littleoffice.app](https://app.littleoffice.app); existing office data now belongs to workspace **GMTECH**, slug `gmtech`, at [gmtech.littleoffice.app](https://gmtech.littleoffice.app). Its original UUID `00000000-0000-4000-8000-000000000001` is unchanged. The previous office hostname redirects to this workspace.
 
-The native builds are development clients, not full web-feature parity. Apple and Android release setup is tracked separately in their release documentation. The SaaS/native backend changes have not been migrated or deployed to production; native clients require a compatible server.
+The cutover preserved 8 users and their 8 memberships (including 1 pending membership), 3 whiteboards, 2 file references and 1,928 audit events. Final backups were retained both on the server and locally. Live browser acceptance verified legacy Authentik SSO, the GMTECH office's Connected state and a joined LiveKit room. The portal and workspace served valid HTTPS; unknown tenant certificate requests were denied, mismatched SNI/Host returned 421, public internal endpoints and cross-workspace routes returned 404, and unauthenticated protected routes returned 401.
+
+Native parity implementation and validation remain in progress. The newer additive scene animation manifest is a separate change and must be deployed before native clients can use it. Google OAuth, individual workspace OIDC providers, private S3 integration, web↔Mac↔iPhone↔Android calls, screen capture and device interruptions still need acceptance with real clients. Signing and beta distribution status is tracked in each client's release documentation; the successful browser/LiveKit check does not establish complete native feature parity.
+
+Local tests use isolated PGlite databases and fake accounts; they do not migrate development or production data. LiveKit failure tests use a local protocol stub.
 
 ## Google and workspace OIDC
 
@@ -80,6 +84,6 @@ Native apps can use the canonical portal to select all their workspaces. If conf
 
 For Caddy on-demand certificates, `GET http://127.0.0.1:3001/internal/tls-allow?domain=<hostname>` permits only an existing, non-reserved workspace hostname. Unknown names return 403; a database failure returns 503. This endpoint is loopback-only at the ingress/network boundary, with an additional exact loopback Host check. The canonical portal and RTC/TURN names use explicitly configured certificates. The API's exact loopback `GET /api/health` remains available for container healthchecks and checks the database.
 
-For the GMTECH cutover, rename only the existing default workspace's slug to `gmtech` after backing up and verifying the database. Preserve UUID `00000000-0000-4000-8000-000000000001`, workspace name/map/features, memberships, account hashes, whiteboards, S3 keys and audit records. Stop the old API before switching traffic; redirect its previous public hostname to the GMTECH workspace rather than running two writers. No new schema migration is needed for subdomain routing itself.
+The completed GMTECH cutover changed the existing default workspace's slug to `gmtech` and display name to `GMTECH`, after backup and verification. Its UUID, map/features, memberships, account hashes, whiteboards, S3 keys and audit records were preserved. The old API was stopped before switching traffic, and its previous public hostname redirects to the GMTECH workspace. Subdomain routing itself required no new schema migration.
 
 Validation: `bun test tests` covers authentication, tenant API/socket isolation, grants, cookie scope, native handoff and deployment configuration. After `next build`, run `bun tests/fixtures/workspace-routing-smoke.ts` to exercise the compiled Next server's tenant root rewrite and portal redirects against a temporary hostname lookup service. `skipProxyUrlNormalize` preserves the ingress server URL so a loopback rewrite does not become an external request to a normalized hostname.
