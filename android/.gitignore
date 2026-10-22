@@ -1,0 +1,15 @@
+.gradle/
+.kotlin/
+.idea/
+local.properties
+**/build/
+*.jks
+*.keystore
+
+app/src/androidTest/assets/credentials.json
+.bundle/
+vendor/bundle/
+fastlane/report.xml
+fastlane/README.md
+gha-creds-*.json
+.signing/

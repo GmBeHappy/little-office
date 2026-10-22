@@ -1,0 +1,46 @@
+{
+  "workspace": {
+    "name": "Team workspace",
+    "mapId": "nature-small",
+    "revision": 0
+  },
+  "habitat": {
+    "revision": 0,
+    "step": 0,
+    "updatedAt": 0,
+    "animal": -1,
+    "affectionUntil": 0
+  },
+  "type": "snapshot",
+  "epoch": "fixture-epoch",
+  "self": "fixture-user",
+  "people": [
+    {
+      "id": "fixture-user",
+      "name": "Fixture",
+      "avatar": "sage",
+      "x": 740,
+      "y": 350,
+      "direction": "down",
+      "moving": false,
+      "pose": "stand",
+      "microphone": false,
+      "status": "available",
+      "statusText": "",
+      "statusIcon": "",
+      "sharing": false,
+      "whiteboard": false,
+      "zone": "floor",
+      "conversation": "floor",
+      "room": "office-584a2285-0ca7-4fb8-b6f6-57a4efe3b6c1-229c1ecf-975a-4384-984e-5a0f29b63e17",
+      "seq": 0
+    }
+  ],
+  "presenters": {},
+  "locks": {
+    "studio": false,
+    "library": false
+  },
+  "protocolVersion": 1,
+  "workspaceId": "00000000-0000-4000-8000-000000000001"
+}
