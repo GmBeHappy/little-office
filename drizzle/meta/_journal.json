@@ -22,6 +22,27 @@
       "when": 1789629932850,
       "tag": "0002_status_bubbles",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791562885196,
+      "tag": "0003_workspaces",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791563579438,
+      "tag": "0004_native_handoff",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792660266895,
+      "tag": "0005_workspace_oidc",
+      "breakpoints": true
     }
   ]
 }

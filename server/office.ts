@@ -40,7 +40,7 @@ type Member = Person & {
 };
 export class Office {
   habitat = emptyHabitat();
-  workspace: WorkspaceSettings = { ...DEFAULT_WORKSPACE };
+  workspace: WorkspaceSettings = { ...DEFAULT_WORKSPACE, revision: 0 };
   blocks = mapBlocks(getMap(DEFAULT_WORKSPACE.mapId));
   zones = mapZones(getMap(DEFAULT_WORKSPACE.mapId));
   configureWorkspace(next: WorkspaceSettings) {
@@ -103,6 +103,7 @@ export class Office {
       present: boolean,
     ) => Promise<void> = async () => {},
     private record: (event: ActivityEvent) => void = () => {},
+    private roomPrefix = "office",
   ) {}
   log(member: Member, action: ActivityEvent["action"], target?: Member) {
     this.record({
@@ -164,7 +165,7 @@ export class Office {
     if (!group) return "";
     if (!this.generations.has(group))
       this.generations.set(group, crypto.randomUUID());
-    return `office-${this.epoch}-${this.generations.get(group)}`;
+    return `${this.roomPrefix}-${this.epoch}-${this.generations.get(group)}`;
   }
   private spawnPosition(occupied: { x: number; y: number }[]) {
     // Search outward through connected, walkable commons so arrivals cannot

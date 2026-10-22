@@ -1,13 +1,15 @@
 "use client";
+import { useWorkspaceApi } from "@/lib/workspace-api";
 import { useEffect, useRef, useState } from "react";
 import { History, RefreshCw } from "lucide-react";
-import { api } from "@/lib/api";
+
 import { useI18n } from "@/lib/i18n";
 import { ACTIVITY_ACTIONS, type ActivityPage } from "@/shared/activity";
 import { getMap } from "@/shared/maps";
 import { Button } from "./ui/button";
 import { Select } from "./Select";
 export function ActivityLog() {
+  const { api, base } = useWorkspaceApi();
   const { t, locale } = useI18n();
   const [filter, setFilter] = useState("");
   const [page, setPage] = useState<ActivityPage>({

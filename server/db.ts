@@ -1,3 +1,4 @@
+import { DEFAULT_WORKSPACE_ID } from "../shared/workspaces";
 import { Pool } from "pg";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -32,7 +33,7 @@ export async function settings(): Promise<AuthSettings> {
     .where(eq(schema.officeSettings.id, 1));
   return row;
 }
-export async function workspaceSettings() {
+export async function workspaceSettings(workspaceId = DEFAULT_WORKSPACE_ID) {
   const [row] = await db
     .select({
       name: schema.workspaces.name,
@@ -42,6 +43,6 @@ export async function workspaceSettings() {
       dailyMap: schema.workspaces.dailyMap,
     })
     .from(schema.workspaces)
-    .where(eq(schema.workspaces.id, 1));
+    .where(eq(schema.workspaces.id, workspaceId));
   return row;
 }

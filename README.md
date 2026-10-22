@@ -1,5 +1,7 @@
 # Little Office
 
+This repository now includes **multi-workspace SaaS** and the backend APIs for native clients. See [workspace upgrade instructions](docs/workspace-rollout.md) and the [shared native API contract](docs/native-contract.md). The original single-office entry remains available at `/office`; new teams use `/workspaces`.
+
 A pixel-art office built with **Next.js, Elysia on Bun, Drizzle ORM, PostgreSQL, Phaser, Better Auth, and LiveKit**. The interface uses **Tailwind CSS 4 + shadcn/ui**, with **React Hook Form + Zod** for forms.
 
 Walk with WASD/arrows and press Space to jump (or click the Space control on the map). Nearby voice joins automatically; turn your microphone on to talk to people in range. The navbar shows your current location. A compact, horizontally scrolling strip shows nearby teammates with avatars, names, and speaking activity. Join the Studio or Library for a meeting, share your screen, wave, summon a teammate with their consent, or start an accepted direct call. Microphone and camera start off.
@@ -48,7 +50,7 @@ bun user:create owner "Your name" --owner
 bun dev
 ```
 
-The user command asks for a password without echoing it. Open **http://localhost:3000**, sign in, and create members in **Settings → Members**. Temporary passwords created through the UI must be changed on first login. There are no default app accounts or public signup endpoints.
+The user command asks for a password without echoing it and prints the account ID. Add that ID to `OFFICE_OPERATOR_IDS` before starting the API if this account should manage platform accounts. Open **http://localhost:3000/login** and sign in; `/workspaces` manages workspaces and invitations, while allowlisted operators can create accounts in `/office` → **Settings → Members**. Temporary passwords must be changed on first login. Google and workspace OIDC can provision accounts when configured; there is no public password signup.
 
 The development LiveKit key `devkey` / secret `secret` is only for localhost. Use random credentials for production.
 
@@ -403,4 +405,4 @@ aws --endpoint-url https://s3.example.com --region garage s3api put-bucket-cors 
 aws --endpoint-url https://s3.example.com --region garage s3api get-bucket-cors --bucket little-office
 ```
 
-Check any existing bucket rules before replacing them. Uploaded snapshots and connection checks use only the configured bucket. Runtime feature flags are stored in `workspace_settings.features`; add an explicit validated flag, UI control and server access check when introducing another feature.
+Check any existing bucket rules before replacing them. Uploaded snapshots and connection checks use only the configured bucket. Runtime feature flags are stored in `workspaces.features`; add an explicit validated flag, UI control and server access check when introducing another feature.

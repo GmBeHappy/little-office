@@ -36,7 +36,7 @@ test("a temporarily unavailable device remains selected after reconnect and relo
       },
     });
   });
-  await page.goto("/");
+  await page.goto("/office");
   await page.getByLabel("Username", { exact: true }).fill(accounts[0].username);
   await page.getByLabel("Password", { exact: true }).fill(accounts[0].password);
   await page.getByRole("button", { name: "Enter the office" }).click();
@@ -130,7 +130,7 @@ test("long device menus stay inside their dialog and scroll to the final option"
       ),
     ];
   });
-  await page.goto("/");
+  await page.goto("/office");
   await page.getByLabel("Username", { exact: true }).fill(accounts[0].username);
   await page.getByLabel("Password", { exact: true }).fill(accounts[0].password);
   await page.getByRole("button", { name: "Enter the office" }).click();
@@ -233,7 +233,7 @@ test("permission buttons track grants and revocation independently", async ({
       return stream;
     };
   });
-  await page.goto("/");
+  await page.goto("/office");
   await page.getByLabel("Username", { exact: true }).fill(accounts[0].username);
   await page.getByLabel("Password", { exact: true }).fill(accounts[0].password);
   await page.getByRole("button", { name: "Enter the office" }).click();
@@ -285,7 +285,7 @@ test("browsers without capture permission queries infer grants from named device
       throw new TypeError("Unsupported permission name");
     };
   });
-  await page.goto("/");
+  await page.goto("/office");
   await page.getByLabel("Username", { exact: true }).fill(accounts[0].username);
   await page.getByLabel("Password", { exact: true }).fill(accounts[0].password);
   await page.getByRole("button", { name: "Enter the office" }).click();

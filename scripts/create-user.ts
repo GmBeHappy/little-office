@@ -1,6 +1,7 @@
+import { DEFAULT_WORKSPACE_ID } from "../shared/workspaces";
 import { auth } from "../server/auth";
-import { eq } from "drizzle-orm";
-import { users } from "../server/schema";
+import { and, eq } from "drizzle-orm";
+import { users, memberships } from "../server/schema";
 import { db, pool } from "../server/db";
 import { createInterface } from "node:readline/promises";
 const username = process.argv[2];
@@ -31,5 +32,21 @@ await db
     role: process.argv.includes("--owner") ? "owner" : "member",
   })
   .where(eq(users.id, result.user.id));
-console.log(`Created ${username}.`);
+await db
+  .update(memberships)
+  .set({
+    approved: true,
+    role: process.argv.includes("--owner") ? "owner" : "member",
+  })
+  .where(
+    and(
+      eq(memberships.workspaceId, DEFAULT_WORKSPACE_ID),
+      eq(memberships.userId, result.user.id),
+    ),
+  );
+console.log(`Created ${username} (user ID: ${result.user.id}).`);
+if (process.argv.includes("--owner"))
+  console.log(
+    "For platform administration, add this user ID to OFFICE_OPERATOR_IDS and restart the API.",
+  );
 await pool.end();

@@ -10,7 +10,7 @@ test("map effects follow reduced motion by default and allow a saved override", 
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 1120, height: 720 });
-  await page.goto("/");
+  await page.goto("/office");
   await page.getByLabel("Username", { exact: true }).fill(accounts[1].username);
   await page.getByLabel("Password", { exact: true }).fill(accounts[1].password);
   await page.getByRole("button", { name: "Enter the office" }).click();

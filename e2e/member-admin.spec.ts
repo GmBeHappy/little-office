@@ -29,7 +29,7 @@ test("owner resets and deletes a member, and Thai physical keys move only on the
         });
     });
     for (const [i, page] of [owner, member].entries()) {
-      await page.goto("/");
+      await page.goto("/office");
       await page
         .getByLabel("Username", { exact: true })
         .fill(accounts[i].username);

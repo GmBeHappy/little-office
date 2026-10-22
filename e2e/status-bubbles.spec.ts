@@ -5,7 +5,7 @@ const accounts = JSON.parse(process.env.E2E_ACCOUNTS || "[]");
 test.skip(accounts.length !== 2, "Run through scripts/e2e.ts.");
 
 async function login(page: Page, index: number) {
-  await page.goto("/");
+  await page.goto("/office");
   await page
     .getByLabel("Username", { exact: true })
     .fill(accounts[index].username);

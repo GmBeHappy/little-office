@@ -47,7 +47,7 @@ test("speaking indicators follow live microphone activity and clear on mute or l
       };
     });
     for (let i = 0; i < pages.length; i++) {
-      await pages[i].goto("/");
+      await pages[i].goto("/office");
       await pages[i]
         .getByLabel("Username", { exact: true })
         .fill(accounts[i].username);

@@ -8,7 +8,7 @@ test("forms validate inline, translate errors, retain failed edits and save vali
   page.on("request", (request) => {
     if (request.method() !== "GET") writes.push(request.url());
   });
-  await page.goto("/");
+  await page.goto("/office");
   await page.screenshot({ path: "/private/tmp/ui-login.png" });
   await page
     .getByRole("button", { name: "Enter the office", exact: true })

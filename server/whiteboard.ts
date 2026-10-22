@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { whiteboardScenes } from "./schema";
 import type { Office } from "./office";
 import { db } from "./db";
@@ -10,6 +10,7 @@ import {
   mergeBoard,
   whiteboardEnabled,
 } from "../shared/whiteboard";
+import { DEFAULT_WORKSPACE_ID } from "../shared/workspaces";
 type Peer = {
   userId: string;
   sessionId: string;
@@ -23,7 +24,21 @@ type Peer = {
 };
 export class Whiteboards {
   peers = new Map<string, Peer>();
-  constructor(private office: Office) {}
+  constructor(
+    private office: Office,
+    readonly workspaceId = DEFAULT_WORKSPACE_ID,
+  ) {}
+  private sceneId(scope: string) {
+    return this.workspaceId === DEFAULT_WORKSPACE_ID
+      ? scope
+      : `${this.workspaceId}:${scope}`;
+  }
+  private sceneWhere(scope: string) {
+    return and(
+      eq(whiteboardScenes.workspaceId, this.workspaceId),
+      eq(whiteboardScenes.id, this.sceneId(scope)),
+    );
+  }
   allowed(peer: Peer) {
     const member = this.office.members.get(peer.userId);
     return (
@@ -66,7 +81,7 @@ export class Whiteboards {
       const [scene] = await db
         .select({ elements: whiteboardScenes.elements })
         .from(whiteboardScenes)
-        .where(eq(whiteboardScenes.id, peer.scope));
+        .where(this.sceneWhere(peer.scope));
       if (!this.allowed(peer) || this.peers.get(key) !== peer) {
         close();
         return;
@@ -152,12 +167,15 @@ export class Whiteboards {
       const elements = await db.transaction(async (tx) => {
         await tx
           .insert(whiteboardScenes)
-          .values({ id: peer.scope })
+          .values({
+            id: this.sceneId(peer.scope),
+            workspaceId: this.workspaceId,
+          })
           .onConflictDoNothing();
         const [scene] = await tx
           .select({ elements: whiteboardScenes.elements })
           .from(whiteboardScenes)
-          .where(eq(whiteboardScenes.id, peer.scope))
+          .where(this.sceneWhere(peer.scope))
           .for("update");
         if (!this.allowed(peer)) throw new Error("Whiteboard access ended.");
         const elements = mergeBoard(scene.elements, message.elements);
@@ -171,7 +189,7 @@ export class Whiteboards {
         await tx
           .update(whiteboardScenes)
           .set({ elements, updatedAt: sql`now()` })
-          .where(eq(whiteboardScenes.id, peer.scope));
+          .where(this.sceneWhere(peer.scope));
         return elements;
       });
       // Acknowledgement only follows a durable database commit.

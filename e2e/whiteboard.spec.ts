@@ -5,7 +5,7 @@ test.skip(
   "Run through scripts/e2e.ts with isolated accounts.",
 );
 async function login(page: Page, index: number) {
-  await page.goto("/");
+  await page.goto("/office");
   await page
     .getByLabel("Username", { exact: true })
     .fill(accounts[index].username);

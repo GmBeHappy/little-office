@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspaceApi } from "@/lib/workspace-api";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
@@ -25,7 +26,7 @@ import {
   type LocalTrack,
   type TrackPublication,
 } from "livekit-client";
-import { api } from "@/lib/api";
+
 import { MEDIA_QUALITY, type MediaQuality } from "@/lib/media-quality";
 import { nearby, type Person } from "@/shared/world";
 import { ScreenViewers } from "./ScreenViewers";
@@ -48,6 +49,7 @@ export function useOfficeMedia(
   notify: (s: string) => void,
   userId?: string,
 ) {
+  const { api } = useWorkspaceApi();
   const [room, setRoom] = useState<Room | null>(null);
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -644,6 +646,7 @@ export function useOfficeMedia(
   };
 }
 export function SpeakingIndicator() {
+  const { api, base } = useWorkspaceApi();
   const { t } = useI18n();
   return (
     <span
@@ -673,6 +676,7 @@ export function MediaTracks({
   active?: boolean;
   onScreenView: (room: string, publisher: string | null) => void;
 }) {
+  const { api, base } = useWorkspaceApi();
   const { t } = useI18n();
   const [view, setView] = useState<"grid" | "screen" | null>(null);
   const [screenId, setScreenId] = useState("");
@@ -1088,6 +1092,7 @@ function TrackStats({
   pub: TrackPublication;
   expanded?: boolean;
 }) {
+  const { api, base } = useWorkspaceApi();
   const { t } = useI18n();
   const [stats, setStats] = useState({
     width: 0,
