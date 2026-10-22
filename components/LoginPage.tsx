@@ -13,6 +13,18 @@ export default function LoginPage() {
       const { user }: { user: User } = await response.json();
       if (user.mustChangePassword) setChangePassword(true);
       else {
+        const workspace = sessionStorage.getItem("workspace-return");
+        if (workspace?.startsWith("/workspace-connect?")) {
+          sessionStorage.removeItem("workspace-return");
+          location.assign(workspace);
+          return;
+        }
+        const profile = sessionStorage.getItem("profile-return");
+        if (profile?.startsWith("/profile?workspace=")) {
+          sessionStorage.removeItem("profile-return");
+          location.assign(profile);
+          return;
+        }
         const pending = sessionStorage.getItem("native-return");
         if (pending?.startsWith("/native/authorize?")) {
           sessionStorage.removeItem("native-return");

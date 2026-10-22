@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { workspaceSlug } from "../workspace-domains";
 import { MAPS } from "../maps";
 export const workspaceForm = z.object({
   name: z.string().trim().min(2).max(60),
@@ -11,7 +12,8 @@ export const workspaceForm = z.object({
     .regex(
       /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
       "Use lowercase letters, numbers and single hyphens.",
-    ),
+    )
+    .refine(workspaceSlug, "Choose an available workspace address."),
   mapId: z
     .enum(MAPS.map((map) => map.id))
     .refine(

@@ -8,6 +8,7 @@ function required(name: string) {
 }
 export const config = {
   origin: process.env.APP_URL || "http://localhost:3000",
+  workspaceDomain: process.env.WORKSPACE_BASE_DOMAIN || "",
   port: Number(process.env.API_PORT || 3001),
   database: required("DATABASE_URL"),
   secret: required("BETTER_AUTH_SECRET"),
@@ -37,3 +38,15 @@ export const googleConfigured = !!(config.googleId && config.googleSecret);
 if (!/^[a-zA-Z0-9_-]{1,80}$/.test(config.mediaNamespace))
   throw new Error("Invalid OFFICE_MEDIA_NAMESPACE.");
 export const oidcProvider = `oidc-${Bun.hash(config.issuer).toString(16)}`;
+
+if (
+  config.workspaceDomain &&
+  (!/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/.test(
+    config.workspaceDomain,
+  ) ||
+    new URL(config.origin).hostname !== `app.${config.workspaceDomain}` ||
+    !config.origin.startsWith("https://"))
+)
+  throw new Error(
+    "WORKSPACE_BASE_DOMAIN requires APP_URL=https://app.<base-domain>.",
+  );

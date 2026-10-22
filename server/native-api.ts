@@ -1,3 +1,9 @@
+import {
+  hostFor,
+  workspaceForHost,
+  signWorkspaceSession,
+  workspaceCookie,
+} from "./workspace-domains";
 import { Elysia, type AnyElysia } from "elysia";
 import { and, eq, gt, lt } from "drizzle-orm";
 import { createHash, createHmac, randomBytes } from "node:crypto";
@@ -37,18 +43,16 @@ export const nativeApi: AnyElysia = new Elysia({ name: "native-auth" })
       await tx
         .delete(nativeHandoffs)
         .where(eq(nativeHandoffs.sessionId, identity.session.id));
-      await tx
-        .insert(nativeHandoffs)
-        .values({
-          codeHash: digest(code),
-          sessionId: identity.session.id,
-          challenge: input.challenge,
-          expiresAt: new Date(Date.now() + 60000),
-        });
+      await tx.insert(nativeHandoffs).values({
+        codeHash: digest(code),
+        sessionId: identity.session.id,
+        challenge: input.challenge,
+        expiresAt: new Date(Date.now() + 60000),
+      });
     });
     return { url: `littleoffice://auth?code=${code}&state=${input.state}` };
   })
-  .post("/api/native/exchange", async ({ body }) => {
+  .post("/api/native/exchange", async ({ body, request }) => {
     const input = z
       .object({
         code: challenge,
@@ -87,9 +91,26 @@ export const nativeApi: AnyElysia = new Elysia({ name: "native-auth" })
     const token = `${session.token}.${signature}`;
     if (!(await sessionFor(new Headers({ authorization: `Bearer ${token}` }))))
       throw new Problem(401, "Sign in again.");
+    const workspace = config.workspaceDomain
+      ? await workspaceForHost(hostFor(request))
+      : null;
+    if (
+      workspace &&
+      !(await sessionFor(
+        new Headers({
+          host: hostFor(request),
+          authorization: `Bearer ${token}`,
+        }),
+      ))
+    )
+      throw new Problem(403, "Workspace access required.");
     return {
-      token,
+      token: workspace
+        ? signWorkspaceSession(session.id, workspace.id, session.expiresAt)
+        : token,
       expiresAt: session.expiresAt,
-      cookieName: (await auth.$context).authCookies.sessionToken.name,
+      cookieName: workspace
+        ? workspaceCookie
+        : (await auth.$context).authCookies.sessionToken.name,
     };
   });

@@ -1,3 +1,4 @@
+import { sameRequestOrigin } from "./workspace-domains";
 import { MAPS } from "../shared/maps";
 import { Elysia, type AnyElysia } from "elysia";
 import { and, eq, gt, isNull, sql, count, desc } from "drizzle-orm";
@@ -64,7 +65,7 @@ export const workspaceApi: AnyElysia = new Elysia({
   .onRequest(({ request, set }) => {
     if (
       !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
-      request.headers.get("origin") !== config.origin
+      !sameRequestOrigin(request)
     ) {
       set.status = 403;
       return { error: "Untrusted request origin." };
@@ -101,6 +102,8 @@ export const workspaceApi: AnyElysia = new Elysia({
   .get("/api/saas/config", () => ({
     googleConfigured,
     officeReady: true,
+    portalOrigin: config.origin,
+    workspaceBaseDomain: config.workspaceDomain || null,
     maps: MAPS.filter((m) => m.size === "small").map(({ id, name }) => ({
       id,
       name,

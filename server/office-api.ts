@@ -1,3 +1,8 @@
+import {
+  sameRequestOrigin,
+  workspaceForHost,
+  hostFor,
+} from "./workspace-domains";
 import { and, eq, lt, desc, sql, DrizzleQueryError } from "drizzle-orm";
 import { users, workspaces, officeFiles, officeAudit } from "./schema";
 import { Elysia, t, type AnyElysia } from "elysia";
@@ -78,7 +83,7 @@ export function officeRoutes(scoped: boolean): AnyElysia {
         storageConfigured,
       };
     })
-    .get("/me", async ({ identity, set, workspaceId }) => {
+    .get("/me", async ({ identity, set, workspaceId, request }) => {
       if (!identity) {
         set.status = 401;
         return { error: "Not signed in." };
@@ -103,11 +108,21 @@ export function officeRoutes(scoped: boolean): AnyElysia {
           }
         : identity.user;
       return {
-        user,
+        user: {
+          ...user,
+          ...(config.workspaceDomain &&
+          (await workspaceForHost(hostFor(request)))
+            ? {
+                profileURL: `${config.origin}/profile?workspace=${workspaceId}`,
+              }
+            : {}),
+        },
         method: identity.session.method,
-        operator: !!process.env.OFFICE_OPERATOR_IDS?.split(",")
-          .map((id) => id.trim())
-          .includes(identity.user.id),
+        operator:
+          !identity.workspaceId &&
+          !!process.env.OFFICE_OPERATOR_IDS?.split(",")
+            .map((id) => id.trim())
+            .includes(identity.user.id),
       };
     })
     .patch(
@@ -505,7 +520,7 @@ export function officeRoutes(scoped: boolean): AnyElysia {
         identity,
         set,
       }) {
-        if (request.headers.get("origin") !== config.origin) {
+        if (!sameRequestOrigin(request)) {
           set.status = 403;
           return "Untrusted origin";
         }
@@ -580,7 +595,7 @@ export function officeRoutes(scoped: boolean): AnyElysia {
         identity,
         set,
       }) {
-        if (request.headers.get("origin") !== config.origin) {
+        if (!sameRequestOrigin(request)) {
           set.status = 403;
           return "Untrusted origin";
         }

@@ -1,3 +1,4 @@
+import { sameRequestOrigin } from "./workspace-domains";
 import { Elysia } from "elysia";
 import { and, eq, sql } from "drizzle-orm";
 import { Resolver } from "node:dns/promises";
@@ -87,10 +88,7 @@ async function revoke(tx: Transaction, connection: WorkspaceOIDC) {
 export const workspaceOidcApi = new Elysia({ name: "workspace-oidc" })
   .onRequest(({ request, set }) => {
     set.headers["cache-control"] = "no-store";
-    if (
-      request.method !== "GET" &&
-      request.headers.get("origin") !== config.origin
-    )
+    if (request.method !== "GET" && !sameRequestOrigin(request))
       throw new Problem(403, "Untrusted request origin.");
   })
   .get("/api/saas/sso/:slug", async ({ params }) => {

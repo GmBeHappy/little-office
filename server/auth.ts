@@ -1,3 +1,4 @@
+import { workspaceForHost, workspaceSessionHeaders } from "./workspace-domains";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import {
@@ -53,6 +54,14 @@ export const auth = betterAuth({
       }
     : {},
   advanced: {
+    // __Host- cookies prevent sibling subdomains from planting a parent-domain session cookie.
+    ...(config.workspaceDomain
+      ? {
+          useSecureCookies: false,
+          cookiePrefix: "__Host-little-office",
+          defaultCookieAttributes: { secure: true },
+        }
+      : {}),
     ipAddress: {
       ipAddressHeaders: ["x-forwarded-for"],
       trustedProxies: ["127.0.0.1", "::1"],
@@ -241,10 +250,10 @@ async function createWorkspaceAuth(connection: WorkspaceOIDC) {
       // OAuth state is bound to both the provider and the exact configuration revision.
       cookies: {
         state: {
-          name: `better-auth.${connection.providerId}.${connection.revision}.state`,
+          name: `${config.workspaceDomain ? "__Host-" : ""}better-auth.${connection.providerId}.${connection.revision}.state`,
         },
         oauth_state: {
-          name: `better-auth.${connection.providerId}.${connection.revision}.oauth_state`,
+          name: `${config.workspaceDomain ? "__Host-" : ""}better-auth.${connection.providerId}.${connection.revision}.oauth_state`,
         },
       },
     },
@@ -334,7 +343,15 @@ export async function authForWorkspace(connection: WorkspaceOIDC) {
 }
 
 export async function sessionFor(headers: Headers) {
-  const session = await auth.api.getSession({ headers });
+  const tenant =
+    config.workspaceDomain && headers.get("host")
+      ? await workspaceForHost(headers.get("host")!)
+      : null;
+  const sessionHeaders = tenant
+    ? await workspaceSessionHeaders(headers, tenant.id)
+    : headers;
+  if (!sessionHeaders) return null;
+  const session = await auth.api.getSession({ headers: sessionHeaders });
   if (!session) return null;
   const { users } = await import("./schema");
   const { eq } = await import("drizzle-orm");
@@ -363,6 +380,7 @@ export async function sessionFor(headers: Headers) {
         ),
       );
     if (!member?.approved) return null;
+    if (tenant && tenant.id !== connection.workspaceId) return null;
     return { ...session, workspaceId: connection.workspaceId };
   }
   const policy = await settings();
@@ -374,6 +392,18 @@ export async function sessionFor(headers: Headers) {
         : policy.password)
   )
     return null;
-  return { ...session, workspaceId: null };
+  if (tenant) {
+    const [member] = await db
+      .select()
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.workspaceId, tenant.id),
+          eq(memberships.userId, session.user.id),
+        ),
+      );
+    if (!member?.approved) return null;
+  }
+  return { ...session, workspaceId: tenant?.id || null };
 }
 export type AuthSession = NonNullable<Awaited<ReturnType<typeof sessionFor>>>;
