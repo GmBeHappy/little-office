@@ -33,6 +33,7 @@ export type User = {
   name: string;
   username?: string;
   operator?: boolean;
+  profileURL?: string;
   role: string;
   approved: boolean;
   avatar: string;

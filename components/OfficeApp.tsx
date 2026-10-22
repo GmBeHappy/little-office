@@ -261,6 +261,13 @@ export default function OfficeApp() {
     }
   }, [notify, api]);
   useEffect(() => {
+    const focused = () => {
+      void refresh();
+    };
+    window.addEventListener("focus", focused);
+    return () => window.removeEventListener("focus", focused);
+  }, [refresh]);
+  useEffect(() => {
     void refresh();
   }, [refresh]);
   const send = useCallback((command: Command) => {
@@ -1807,7 +1814,7 @@ export function PasswordChange({ onDone }: { onDone: () => Promise<void> }) {
     </main>
   );
 }
-function Profile({
+export function Profile({
   user,
   self,
   saved,
@@ -1818,7 +1825,7 @@ function Profile({
 }) {
   const { api, base } = useWorkspaceApi();
   const { t } = useI18n();
-  const [tab, setTab] = useState("profile");
+  const [tab, setTab] = useState(user.profileURL ? "status" : "profile");
   const form = useForm({
     resolver: zodResolver(profileSchema),
     defaultValues: {
@@ -1832,6 +1839,10 @@ function Profile({
       ),
     },
   });
+  useEffect(() => {
+    form.setValue("name", user.name);
+    form.setValue("avatar", user.avatar);
+  }, [user.name, user.avatar, form]);
   return (
     <FormProvider {...form}>
       <form
@@ -1858,11 +1869,23 @@ function Profile({
           <div className="eyebrow">{t("A LITTLE BIT OF YOU")}</div>
           <h2>{t("Your office self.")}</h2>
         </header>
+        {user.profileURL && (
+          <p>
+            Your name and avatar are shared across workspaces.{" "}
+            <a href={user.profileURL} target="_blank" rel="noopener noreferrer">
+              Edit your account profile ↗
+            </a>
+          </p>
+        )}
         <Tabs value={tab} onValueChange={setTab} className="profile-tabs">
           <TabsList aria-label={t("Profile sections")}>
-            <TabsTrigger value="profile">{t("Profile")}</TabsTrigger>
+            {!user.profileURL && (
+              <TabsTrigger value="profile">{t("Profile")}</TabsTrigger>
+            )}
             <TabsTrigger value="status">{t("Status")}</TabsTrigger>
-            <TabsTrigger value="appearance">{t("Appearance")}</TabsTrigger>
+            {!user.profileURL && (
+              <TabsTrigger value="appearance">{t("Appearance")}</TabsTrigger>
+            )}
           </TabsList>
           <div className="profile-scroll">
             <TabsContent value="profile" className="profile-section">

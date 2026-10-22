@@ -80,6 +80,7 @@ export default function WorkspaceDashboard() {
   const [user, setUser] = useState<Person | null>(null),
     [ready, setReady] = useState(false),
     [google, setGoogle] = useState(false),
+    [workspaceDomain, setWorkspaceDomain] = useState<string | null>(null),
     [items, setItems] = useState<Workspace[]>([]),
     [detail, setDetail] = useState<Detail | null>(null),
     [error, setError] = useState(""),
@@ -125,8 +126,12 @@ export default function WorkspaceDashboard() {
     setInvite(sessionStorage.getItem("cloud-invite") || "");
     void (async () => {
       try {
-        const config = await api<{ googleConfigured: boolean }>("/saas/config");
+        const config = await api<{
+          googleConfigured: boolean;
+          workspaceBaseDomain?: string | null;
+        }>("/saas/config");
         setGoogle(config.googleConfigured);
+        setWorkspaceDomain(config.workspaceBaseDomain || null);
         const response = await fetch("/api/account");
         if (response.ok) {
           setUser(await response.json());
@@ -369,7 +374,14 @@ export default function WorkspaceDashboard() {
                 /{detail.slug} · {detail.role} ·{" "}
                 {maps.find((m) => m.value === detail.mapId)?.label}
               </p>
-              <Link className={styles.primary} href={`/w/${detail.id}/office`}>
+              <Link
+                className={styles.primary}
+                href={
+                  workspaceDomain
+                    ? `https://${detail.slug}.${workspaceDomain}/`
+                    : `/w/${detail.id}/office`
+                }
+              >
                 Enter office →
               </Link>
               <h3>People</h3>

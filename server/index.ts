@@ -1,3 +1,11 @@
+import { workspaceDomainApi } from "./workspace-domain-api";
+import {
+  hostFor,
+  sameRequestOrigin,
+  tenantPathAllowed,
+  workspaceCookie,
+  workspaceForHost,
+} from "./workspace-domains";
 import {
   and,
   or,
@@ -57,10 +65,43 @@ function isAuthPath(path: string) {
 }
 
 export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
-  .onRequest(({ request, set }) => {
+  .onRequest(async ({ request, set }) => {
+    const path = new URL(request.url).pathname;
+    if (
+      path === "/api/health" &&
+      request.method === "GET" &&
+      hostFor(request) === `127.0.0.1:${config.port}`
+    ) {
+      await db.execute(sql`SELECT 1`);
+      return { ok: true };
+    }
+    if (path === "/internal/tls-allow") {
+      if (
+        hostFor(request) !== `127.0.0.1:${config.port}` ||
+        request.method !== "GET"
+      )
+        return new Response(null, { status: 403 });
+      try {
+        const workspace = await workspaceForHost(
+          new URL(request.url).searchParams.get("domain") || "",
+        );
+        return new Response(null, { status: workspace ? 200 : 403 });
+      } catch (error) {
+        return new Response(null, {
+          status: error instanceof Problem ? 403 : 503,
+        });
+      }
+    }
+    if (config.workspaceDomain) {
+      const workspace = await workspaceForHost(hostFor(request));
+      if (workspace && !tenantPathAllowed(path, workspace.id))
+        throw new Problem(404, "Workspace route not found.");
+      // Elysia/Bun normally supplies Host; keep in-process requests equally constrained.
+      request.headers.set("host", hostFor(request));
+    }
     if (
       !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
-      request.headers.get("origin") !== config.origin
+      !sameRequestOrigin(request)
     ) {
       set.status = 403;
       return { error: "Untrusted request origin." };
@@ -99,6 +140,18 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
   }))
   .all("/api/auth/*", async ({ request, identity, set }) => {
     const path = new URL(request.url).pathname.slice("/api/auth".length);
+    const tenant = config.workspaceDomain
+      ? await workspaceForHost(hostFor(request))
+      : null;
+    if (tenant && path === "/sign-out") {
+      if (identity) {
+        await db.delete(sessions).where(eq(sessions.id, identity.session.id));
+        revokeSession(identity.session.id);
+      }
+      set.headers["set-cookie"] =
+        `${workspaceCookie}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+      return { success: true };
+    }
     if (!isAuthPath(path)) {
       set.status = 404;
       return { error: "Not found." };
@@ -542,6 +595,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
     },
     { body: t.Object({ password: t.Boolean(), sso: t.Boolean() }) },
   )
+  .use(workspaceDomainApi)
   .use(nativeApi)
   .use(workspaceOidcApi)
   .use(workspaceApi)
