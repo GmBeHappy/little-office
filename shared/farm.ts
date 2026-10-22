@@ -1,3 +1,4 @@
+import { wildlifeAnimation } from "./wildlife-animation";
 import { waterRipple, type MapEffectSink } from "./map-effects";
 import { ZONES, walkable } from "./world";
 
@@ -357,4 +358,260 @@ export function farmAnimalWalkable(x: number, y: number) {
   return [-22, 0, 22].every((dx) =>
     [-8, 0, 8].every((dy) => walkable(x + dx, y + dy, FARM_BLOCKS)),
   );
+}
+
+export const FARM_RULES = {
+  growthMs: FARM_GROWTH,
+  cropStages: [0.25, 0.55, 1],
+  eggLifetimeMs: 45000,
+  eggRadius: 48,
+  cropRadius: 54,
+  maxEggs: 3,
+  firstEggMs: 4000,
+  eggIntervalMs: 9000,
+  eggIntervalJitterMs: 9000,
+  eggPickupDelayMs: 6000,
+  maxStepMs: 50,
+  henSpeed: 24,
+  henFastSpeed: 60,
+  cowSpeed: 11,
+  sheepSpeed: 14,
+  henScatterRadius: 40,
+  henScatterX: 60,
+  henScatterY: 45,
+};
+export type FarmRect = (
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: number,
+  alpha?: number,
+) => void;
+export type FarmHen = {
+  x: number;
+  y: number;
+  direction: "left" | "right";
+  mode: "walk" | "idle" | "peck";
+  walkTime: number;
+  since: number;
+  body: number;
+  wing: number;
+};
+export type FarmAnimal = {
+  kind: "cow" | "sheep";
+  x: number;
+  y: number;
+  direction: "left" | "right";
+  mode: "walk" | "idle" | "graze";
+  walkTime: number;
+  since: number;
+};
+export type FarmTarget = {
+  kind: "egg" | "plant" | "harvest";
+  x: number;
+  y: number;
+};
+export function farmTarget(
+  person: { x: number; y: number },
+  eggs: Iterable<[number, number]>,
+  plots: readonly number[],
+  time: number,
+): FarmTarget | null {
+  let best: FarmTarget | null = null,
+    distance = Infinity;
+  const consider = (
+    kind: FarmTarget["kind"],
+    x: number,
+    y: number,
+    radius: number,
+  ) => {
+    const d = Math.hypot(person.x - x, person.y - y);
+    if (d < radius && d < distance) {
+      distance = d;
+      best = { kind, x, y };
+    }
+  };
+  for (const [spot, until] of eggs)
+    if (until > time) {
+      const [x, y] = FARM_EGG_SPOTS[spot];
+      consider("egg", x, y, FARM_RULES.eggRadius);
+    }
+  for (const [index, planted] of plots.entries()) {
+    const [x, y] = FARM_PLOTS[index];
+    if (!planted) consider("plant", x, y, FARM_RULES.cropRadius);
+    else if (time - planted >= FARM_GROWTH)
+      consider("harvest", x, y, FARM_RULES.cropRadius);
+  }
+  return best;
+}
+
+export function drawFarmEgg(x: number, y: number, r: FarmRect) {
+  r(x - 6, y + 3, 12, 3, 0x3e5233, 0.15);
+  r(x - 5, y - 3, 10, 7, 0xf7f3e2);
+  r(x - 3, y - 7, 6, 4, 0xf7f3e2);
+  r(x - 4, y + 1, 8, 3, 0xe3d9c6);
+  r(x - 3, y - 6, 4, 3, 0xffffff);
+}
+
+export function drawFarmCrop(x: number, y: number, age: number, r: FarmRect) {
+  if (age < FARM_GROWTH * 0.25) {
+    // Freshly sown: turned soil with a scatter of seeds.
+    r(x - 8, y - 1, 16, 5, 0x6b4526);
+    r(x - 5, y, 3, 2, 0xe8c56a);
+    r(x + 2, y + 1, 3, 2, 0xe8c56a);
+    r(x - 1, y - 3, 2, 2, 0xd9b45f);
+  } else if (age < FARM_GROWTH * 0.55) {
+    // A sprout pushes up two leaves.
+    r(x - 1, y - 9, 3, 9, 0x4c7957);
+    r(x - 6, y - 10, 5, 4, 0x69985f);
+    r(x + 3, y - 12, 5, 4, 0x8bb16f);
+  } else if (age < FARM_GROWTH) {
+    // Green wheat grows tall.
+    for (const dx of [-7, -2, 3]) {
+      r(x + dx, y - 15, 3, 15, 0x7aa050);
+      r(x + dx - 2, y - 17, 7, 4, 0x8bb16f);
+    }
+  } else {
+    // Ripe wheat: golden heads heavy over a tied bundle.
+    for (const dx of [-8, -2, 4]) {
+      r(x + dx, y - 17, 3, 17, 0xc9a35b);
+      r(x + dx - 2, y - 24, 7, 9, 0xe8c56a);
+      r(x + dx - 1, y - 23, 2, 2, 0xf2d98c);
+      r(x + dx + 2, y - 21, 2, 2, 0xf2d98c);
+    }
+    r(x - 6, y - 6, 14, 3, 0xb98f57);
+  }
+}
+
+export function drawFarmHen(hen: FarmHen, time: number, r: FarmRect) {
+  const frame = Math.floor(hen.walkTime / 120) % 2;
+  const bob =
+    hen.mode === "walk"
+      ? frame % 2
+        ? -1
+        : 0
+      : Math.sin(time / 400 + hen.x) > 0.6
+        ? -1
+        : 0;
+  const peck =
+    hen.mode === "peck"
+      ? Math.floor((time - hen.since) / 160) % 2
+        ? 6
+        : 0
+      : 0;
+  const mirrored = hen.direction === "left";
+  const p = (ox: number, oy: number, w: number, h: number, c: number) =>
+    r(hen.x + (mirrored ? -ox - w : ox), hen.y + oy + bob, w, h, c);
+  r(hen.x - 8, hen.y + 8, 16, 3, 0x3e5233, 0.15);
+  p(-9, -7, 18, 11, hen.body);
+  p(-13, -10, 5, 6, hen.wing);
+  p(-3, -3, 8, 6, hen.wing);
+  if (hen.mode === "walk") {
+    p(-4, 4, 2, 5 - (frame ? 2 : 0), 0xe8a23c);
+    p(2, 4, 2, 5 - (frame ? 0 : 2), 0xe8a23c);
+  } else {
+    p(-4, 4, 2, 5, 0xe8a23c);
+    p(2, 4, 2, 5, 0xe8a23c);
+  }
+  p(6, -13 + peck, 8, 8, hen.body);
+  p(8, -16 + peck, 4, 4, 0xd75b4a);
+  p(13, -10 + peck, 4, 3, 0xe8a23c);
+  p(11, -11 + peck, 2, 2, 0x3e5233);
+}
+
+export function drawFarmAnimal(animal: FarmAnimal, time: number, r: FarmRect) {
+  const { frame, bob, graze } = wildlifeAnimation(
+    animal.mode,
+    animal.walkTime,
+    time - animal.since,
+  );
+  const p = (ox: number, oy: number, w: number, h: number, c: number) =>
+    r(
+      animal.x + (animal.direction === "left" ? -ox - w : ox),
+      animal.y + oy + bob,
+      w,
+      h,
+      c,
+    );
+  if (animal.kind === "cow") {
+    r(animal.x - 17, animal.y + 13, 34, 4, 0x3e5233, 0.15);
+    p(-16, -12, 32, 17, 0xf2ead2);
+    p(-11, -9, 8, 8, 0x4a4038);
+    p(5, -4, 9, 8, 0x4a4038);
+    if (animal.mode === "walk") {
+      p(-13, 5, 4, 8 - (frame ? 2 : 0), 0x4a4038);
+      p(9, 5, 4, 8 - (frame ? 0 : 2), 0x4a4038);
+    } else {
+      p(-13, 5, 4, 8, 0x4a4038);
+      p(9, 5, 4, 8, 0x4a4038);
+    }
+    p(13, -17 + graze, 11, 11, 0xf2ead2);
+    p(13, -20 + graze, 4, 4, 0xd9c8a4);
+    p(21, -10 + graze, 4, 4, 0xe8a8a0);
+    p(16, -15 + graze, 2, 2, 0x3e5233);
+  } else {
+    r(animal.x - 13, animal.y + 11, 26, 4, 0x3e5233, 0.15);
+    p(-12, -10, 24, 15, 0xf5f2e8);
+    p(-14, -7, 4, 7, 0xf5f2e8);
+    p(8, -12, 5, 5, 0xf5f2e8);
+    if (animal.mode === "walk") {
+      p(-9, 5, 3, 7 - (frame ? 2 : 0), 0x4a4a52);
+      p(5, 5, 3, 7 - (frame ? 0 : 2), 0x4a4a52);
+    } else {
+      p(-9, 5, 3, 7, 0x4a4a52);
+      p(5, 5, 3, 7, 0x4a4a52);
+    }
+    p(11, -13 + graze, 9, 9, 0x4a4a52);
+    p(9, -15 + graze, 4, 3, 0x4a4a52);
+    p(17, -9 + graze, 3, 2, 0x4a4a52);
+    p(14, -11 + graze, 2, 2, 0xf5f2e8);
+  }
+}
+
+// Farm pickups render as pixel art above the avatar instead of emoji text.
+export const FARM_ICON_EMOJIS: Record<
+  string,
+  "egg" | "sprout" | "wheat" | "fish" | "puff"
+> = {
+  "🥚": "egg",
+  "🌱": "sprout",
+  "🌾": "wheat",
+  "🐟": "fish",
+  "💨": "puff",
+};
+
+export function drawFarmIcon(
+  kind: "egg" | "sprout" | "wheat" | "fish" | "puff",
+  x: number,
+  y: number,
+  alpha: number,
+  rect: FarmRect,
+) {
+  const r = (ox: number, oy: number, w: number, h: number, c: number) =>
+    rect(x + ox, y + oy, w, h, c, alpha);
+  if (kind === "egg") {
+    r(-5, -4, 10, 8, 0xf7f3e2);
+    r(-3, -8, 6, 5, 0xf7f3e2);
+    r(-4, 2, 8, 2, 0xe3d9c6);
+    r(-3, -7, 4, 3, 0xffffff);
+  } else if (kind === "sprout") {
+    r(-1, -6, 3, 10, 0x4c7957);
+    r(-6, -7, 5, 4, 0x69985f);
+    r(3, -9, 5, 4, 0x8bb16f);
+  } else if (kind === "wheat") {
+    for (const dx of [-6, -1, 4]) {
+      r(dx, -4, 2, 8, 0xc9a35b);
+      r(dx - 1, -9, 4, 5, 0xe8c56a);
+    }
+  } else if (kind === "fish") {
+    r(-6, -4, 12, 8, 0x5f9ec0);
+    r(-9, -2, 4, 4, 0x4f8db0);
+    r(3, -6, 3, 3, 0x4f8db0);
+    r(2, -2, 2, 2, 0xf7f3e2);
+  } else {
+    r(-7, -5, 4, 4, 0xd9d2c0);
+    r(0, -8, 5, 4, 0xd9d2c0);
+    r(-2, -1, 5, 4, 0xd9d2c0);
+  }
 }

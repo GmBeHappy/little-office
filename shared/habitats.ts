@@ -1,3 +1,4 @@
+import { drawRectMotion, type RectMotion, type PixelRect } from "./map-effects";
 import { drawWildlife } from "./wildlife-art";
 import { wildlifeAnimation, type WildlifeMode } from "./wildlife-animation";
 import { getMap, mapBlocks, mapZones, mapWater } from "./maps";
@@ -153,7 +154,7 @@ export function habitatLayout(mapId: string) {
 // Deterministic routes keep rendering and server interaction checks in agreement.
 // A short grid search finds a dry route; every segment is checked between nodes.
 const routes = new Map<string, { x: number; y: number }[]>();
-function animalRoute(mapId: string, index: number) {
+export function animalRoute(mapId: string, index: number) {
   const key = `${mapId}:${index}`;
   const cached = routes.get(key);
   if (cached) return cached;
@@ -348,6 +349,77 @@ export function habitatTarget(
 }
 
 type Rect = (x: number, y: number, w: number, h: number, color: number) => void;
+export function drawHabitatStation(
+  mapId: string,
+  step: number,
+  now: number,
+  still: boolean,
+  rect: Rect,
+  motion?: (motion: RectMotion) => void,
+) {
+  const style = habitatStyle(mapId),
+    x = 0,
+    y = 0;
+  const moving = (
+    axis: "x" | "y",
+    amplitude: number,
+    periodMs: number,
+    roundOffset: boolean,
+    draw: (rect: Rect) => void,
+  ) => {
+    const rectangles: PixelRect[] = [];
+    draw((x, y, w, h, color) => rectangles.push({ x, y, w, h, color }));
+    const value = { rectangles, axis, amplitude, periodMs, roundOffset };
+    if (motion) motion(value);
+    else drawRectMotion(value, now, still, rect);
+  };
+  rect(x - 19, y - 7, 38, 22, 0x8e7c5c);
+  rect(x - 17, y - 5, 34, 5, 0xd9c49b);
+  for (let i = 0; i < 3; i++) {
+    const px = x - 13 + i * 10;
+    rect(px, y + 19, 7, 3, i < step ? 0xe9d89c : 0x7c9175);
+    if (i < step) {
+      if (
+        ["nature", "temple", "farm", "mangrove"].includes(mapId.split("-")[0])
+      ) {
+        rect(px + 2, y - 12, 3, 10, 0x77956a);
+        rect(px - 1, y - 16, 9, 6, style.color);
+      } else if (style.animal === "robot") {
+        rect(px, y - 10 - i * 4, 5, 5, 0xcee6d9);
+      } else if (style.animal === "crab") {
+        rect(px, y - 10 - i * 3, 8, 10 + i * 3, 0xe7d0a5);
+      } else {
+        rect(px, y - 12, 7, 9, 0xeee2be);
+        rect(px + 7, y - 10, 2, 4, 0xeee2be);
+      }
+    }
+  }
+  if (style.animal === "robot") {
+    rect(x - 2, y - 15, 4, 14, 0x9bacaf);
+    rect(x - 13, y - 23, 25, 9, 0xb7cfd1);
+    rect(x + 10, y - 25, 5, 13, 0x648d98);
+  }
+  if (mapId.startsWith("lakeside") && step) {
+    moving("x", 4, 3000 * Math.PI, false, (rect) => {
+      for (let i = 0; i < step; i++) {
+        rect(x - 15 + i * 12, y - 12, 12, 3, 0xf0e6cc);
+        rect(x - 12 + i * 12, y - 9, 7, 3, 0xd6ceb5);
+        rect(x - 10 + i * 12, y - 19, 2, 7, 0xf0e6cc);
+      }
+    });
+  }
+  if (mapId.startsWith("camping") && step) {
+    rect(x - 11, y - 7, 22, 4, 0x977355);
+    rect(x - 7, y - 15, 14, 10, 0xd99b66);
+    moving("y", 2, 500 * Math.PI, true, (rect) =>
+      rect(x - 3, y - 22, 6, 15, 0xf1d298),
+    );
+  }
+  if (step === 3) {
+    rect(x - 3, y - 27, 6, 6, 0xf0dc9c);
+    rect(x - 6, y - 24, 12, 2, 0xf0dc9c);
+  }
+}
 export function drawHabitat(
   mapId: string,
   state: HabitatState,
@@ -362,55 +434,9 @@ export function drawHabitat(
   if (activities && points[0]) {
     const { x, y } = points[0];
     const step = now - state.updatedAt < 60000 ? state.step : 0;
-    rect(x - 19, y - 7, 38, 22, 0x8e7c5c);
-    rect(x - 17, y - 5, 34, 5, 0xd9c49b);
-    for (let i = 0; i < 3; i++) {
-      const px = x - 13 + i * 10;
-      rect(px, y + 19, 7, 3, i < step ? 0xe9d89c : 0x7c9175);
-      if (i < step) {
-        if (
-          ["nature", "temple", "farm", "mangrove"].includes(mapId.split("-")[0])
-        ) {
-          rect(px + 2, y - 12, 3, 10, 0x77956a);
-          rect(px - 1, y - 16, 9, 6, style.color);
-        } else if (style.animal === "robot") {
-          rect(px, y - 10 - i * 4, 5, 5, 0xcee6d9);
-        } else if (style.animal === "crab") {
-          rect(px, y - 10 - i * 3, 8, 10 + i * 3, 0xe7d0a5);
-        } else {
-          rect(px, y - 12, 7, 9, 0xeee2be);
-          rect(px + 7, y - 10, 2, 4, 0xeee2be);
-        }
-      }
-    }
-    if (style.animal === "robot") {
-      rect(x - 2, y - 15, 4, 14, 0x9bacaf);
-      rect(x - 13, y - 23, 25, 9, 0xb7cfd1);
-      rect(x + 10, y - 25, 5, 13, 0x648d98);
-    }
-    if (mapId.startsWith("lakeside") && step) {
-      const drift = still ? 0 : Math.sin(now / 1500) * 4;
-      for (let i = 0; i < step; i++) {
-        rect(x - 15 + i * 12 + drift, y - 12, 12, 3, 0xf0e6cc);
-        rect(x - 12 + i * 12 + drift, y - 9, 7, 3, 0xd6ceb5);
-        rect(x - 10 + i * 12 + drift, y - 19, 2, 7, 0xf0e6cc);
-      }
-    }
-    if (mapId.startsWith("camping") && step) {
-      rect(x - 11, y - 7, 22, 4, 0x977355);
-      rect(x - 7, y - 15, 14, 10, 0xd99b66);
-      rect(
-        x - 3,
-        y - 22 + (still ? 0 : Math.round(Math.sin(now / 250) * 2)),
-        6,
-        15,
-        0xf1d298,
-      );
-    }
-    if (step === 3) {
-      rect(x - 3, y - 27, 6, 6, 0xf0dc9c);
-      rect(x - 6, y - 24, 12, 2, 0xf0dc9c);
-    }
+    drawHabitatStation(mapId, step, now, still, (dx, dy, w, h, c) =>
+      rect(x + dx, y + dy, w, h, c),
+    );
   }
   if (!wildlife) return;
   for (let i = 0; i < points.length - 1; i++) {

@@ -78,3 +78,39 @@ export function drawMapEffects(
     }
   }
 }
+
+export type PixelRect = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  color: number;
+  alpha?: number;
+};
+export type RectMotion = {
+  rectangles: PixelRect[];
+  axis: "x" | "y";
+  amplitude: number;
+  periodMs: number;
+  roundOffset: boolean;
+};
+export function drawRectMotion(
+  motion: RectMotion,
+  time: number,
+  still: boolean,
+  rect: Pixel,
+) {
+  let offset = still
+    ? 0
+    : Math.sin((time * 2 * Math.PI) / motion.periodMs) * motion.amplitude;
+  if (motion.roundOffset) offset = Math.round(offset);
+  for (const p of motion.rectangles)
+    rect(
+      p.x + (motion.axis === "x" ? offset : 0),
+      p.y + (motion.axis === "y" ? offset : 0),
+      p.w,
+      p.h,
+      p.color,
+      p.alpha,
+    );
+}

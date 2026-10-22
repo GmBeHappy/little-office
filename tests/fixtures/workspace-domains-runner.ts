@@ -86,6 +86,16 @@ try {
       }),
     );
   }
+  const { MAPS } = await import("../../shared/maps");
+  const catalog = await (await req(portal, "/api/saas/config")).json();
+  assert.deepEqual(
+    catalog.allMaps,
+    MAPS.map(({ id, name, size, theme }) => ({ id, name, size, theme })),
+  );
+  assert.deepEqual(
+    catalog.maps.map((m: { id: string }) => m.id),
+    MAPS.filter((m) => m.size === "small").map((m) => m.id),
+  );
   const login = await req(portal, "/api/auth/sign-in/username", {
     username: "domain_test",
     password,

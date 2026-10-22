@@ -108,6 +108,12 @@ export const workspaceApi: AnyElysia = new Elysia({
       id,
       name,
     })),
+    allMaps: MAPS.map(({ id, name, size, theme }) => ({
+      id,
+      name,
+      size,
+      theme,
+    })),
     maxOwnedWorkspaces: 5,
     maxMembers: 50,
   }))
