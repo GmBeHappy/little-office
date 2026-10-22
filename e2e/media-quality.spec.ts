@@ -82,7 +82,7 @@ test("quality targets reach capture and real RTP encoders, persist, and leave vo
       };
     });
     for (const [i, page] of [a, b].entries()) {
-      await page.goto("/");
+      await page.goto("/office");
       await page
         .getByLabel("Username", { exact: true })
         .fill(accounts[i].username);

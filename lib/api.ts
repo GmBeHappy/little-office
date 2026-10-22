@@ -1,9 +1,18 @@
+export class APIError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+  }
+}
 export async function api<T = Record<string, unknown>>(
   path: string,
   body?: unknown,
   method?: string,
+  base = "/api",
 ): Promise<T> {
-  const response = await fetch(`/api${path}`, {
+  const response = await fetch(`${base}${path}`, {
     method: method || (body ? "POST" : "GET"),
     credentials: "same-origin",
     headers: body ? { "Content-Type": "application/json" } : undefined,
@@ -11,7 +20,11 @@ export async function api<T = Record<string, unknown>>(
   });
   const data = await response.json().catch(() => null);
   const fallback = "Something went wrong. Please try again.";
-  if (!response.ok) throw new Error(data?.error || data?.message || fallback);
+  if (!response.ok)
+    throw new APIError(
+      data?.error || data?.message || fallback,
+      response.status,
+    );
   if (data === null) throw new Error(fallback);
   return data;
 }
@@ -19,6 +32,7 @@ export type User = {
   id: string;
   name: string;
   username?: string;
+  operator?: boolean;
   role: string;
   approved: boolean;
   avatar: string;
@@ -32,6 +46,7 @@ export type AppConfig = {
   password: boolean;
   sso: boolean;
   ssoConfigured: boolean;
+  googleConfigured?: boolean;
   provider: string;
   mediaConfigured: boolean;
   storageConfigured: boolean;

@@ -14,7 +14,7 @@ test("whiteboard activity reaches other users and restores saved status after cl
       contexts.map((c) => c.newPage()),
     );
     for (const [index, page] of [owner, observer].entries()) {
-      await page.goto("/");
+      await page.goto("/office");
       await page
         .getByLabel("Username", { exact: true })
         .fill(accounts[index].username);

@@ -6,7 +6,7 @@ test("name tag display preferences update and survive reload", async ({
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/");
+  await page.goto("/office");
   await page.getByLabel("Username", { exact: true }).fill(accounts[0].username);
   await page.getByLabel("Password", { exact: true }).fill(accounts[0].password);
   await page

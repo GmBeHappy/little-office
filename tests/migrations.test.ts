@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { eq } from "drizzle-orm";
 import { fileURLToPath } from "node:url";
+import { DEFAULT_WORKSPACE_ID } from "../shared/workspaces";
 import * as schema from "../server/schema";
 import { rectangle } from "./whiteboard-fixture";
 import { readMigrationFiles } from "drizzle-orm/migrator";
@@ -70,7 +71,7 @@ for (const previous of ["upstream-main", "early-status-bubbles"] as const) {
             "SELECT count(*)::integer AS count FROM drizzle.__drizzle_migrations",
           )
         ).rows[0].count,
-      ).toBe(previous === "upstream-main" ? 3 : 4);
+      ).toBe(previous === "upstream-main" ? 6 : 7);
     } finally {
       await pg.close();
     }
@@ -85,14 +86,15 @@ test("Drizzle creates a fresh database and applies the adoption baseline only on
     await db
       .update(schema.workspaces)
       .set({ name: "Keep my workspace", revision: 9 })
-      .where(eq(schema.workspaces.id, 1));
+      .where(eq(schema.workspaces.id, DEFAULT_WORKSPACE_ID));
     await migrate(db, { migrationsFolder });
     expect(await db.select().from(schema.officeSettings)).toEqual([
       { id: 1, password: true, sso: false, version: 1 },
     ]);
-    expect(await db.select().from(schema.workspaces)).toEqual([
+    expect(await db.select().from(schema.workspaces)).toMatchObject([
       {
-        id: 1,
+        id: DEFAULT_WORKSPACE_ID,
+        slug: "default",
         dailyMap: { enabled: false, date: "" },
         name: "Keep my workspace",
         mapId: "nature-small",
@@ -103,7 +105,7 @@ test("Drizzle creates a fresh database and applies the adoption baseline only on
     const rows = await pg.query(
       "SELECT count(*)::integer AS count FROM drizzle.__drizzle_migrations",
     );
-    expect(rows.rows).toEqual([{ count: 3 }]);
+    expect(rows.rows).toEqual([{ count: 6 }]);
     // A fresh install retains the same database-enforced unique keys and delete cascades.
     const constraints = await pg.query<{ name: string }>(
       `SELECT conname AS name FROM pg_constraint WHERE conname IN ('user_username_key','session_token_key','account_userId_fkey','session_userId_fkey') ORDER BY conname`,

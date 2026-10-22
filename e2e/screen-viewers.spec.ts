@@ -43,7 +43,7 @@ test("sharing shows only large-view watchers and updates on screen switches, hid
         },
         { id: accounts[index].id },
       );
-      await page.goto("/");
+      await page.goto("/office");
       await page
         .getByLabel("Username", { exact: true })
         .fill(accounts[index].username);

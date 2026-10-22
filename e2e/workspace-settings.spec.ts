@@ -7,7 +7,7 @@ test.skip(
 test("workspace tabs expose owner feature controls and external storage without credentials", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/office");
   await page.getByLabel("Username", { exact: true }).fill(accounts[0].username);
   await page.getByLabel("Password", { exact: true }).fill(accounts[0].password);
   await page.getByRole("button", { name: "Enter the office" }).click();

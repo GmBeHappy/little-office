@@ -59,7 +59,7 @@ test("two people draw continuous strokes simultaneously without crashing or losi
           void route.close({ code, reason });
         });
       });
-      await page.goto("/");
+      await page.goto("/office");
       await page
         .getByLabel("Username", { exact: true })
         .fill(accounts[i].username);

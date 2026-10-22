@@ -13,7 +13,7 @@ test("Thai and English cover login, office and settings, persist, and switch wit
       if (JSON.parse(String(payload)).type === "jump") jumps++;
     });
   });
-  await page.goto("/");
+  await page.goto("/office");
   await page
     .getByRole("button", { name: "เปลี่ยนเป็นภาษาไทย", exact: true })
     .click();

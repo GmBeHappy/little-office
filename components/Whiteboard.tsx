@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspaceApi } from "@/lib/workspace-api";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -24,7 +25,7 @@ import {
   PencilRuler,
   CloudUpload,
 } from "lucide-react";
-import { api } from "@/lib/api";
+
 import { useI18n } from "@/lib/i18n";
 import {
   BoardElement,
@@ -64,6 +65,7 @@ export default function Whiteboard({
   storageConfigured,
   onClose,
 }: Props) {
+  const { api, base } = useWorkspaceApi();
   const { t, locale } = useI18n();
   const [editor, setEditor] = useState<ExcalidrawImperativeAPI | null>(null);
   const [status, setStatus] = useState("Connecting whiteboard…");
@@ -133,7 +135,7 @@ export default function Whiteboard({
       if (disposed) return;
       setStatus("Connecting whiteboard…");
       const ws = new WebSocket(
-        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/whiteboard`,
+        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${base}/whiteboard`,
       );
       socket.current = ws;
       let ready = false;
@@ -282,7 +284,7 @@ export default function Whiteboard({
       });
       if (blob.size > 5_000_000)
         throw new Error("Upload a PNG snapshot smaller than 5 MB.");
-      const response = await fetch("/api/whiteboard/files", {
+      const response = await fetch(`${base}/whiteboard/files`, {
         method: "POST",
         headers: { "Content-Type": "image/png" },
         body: blob,
@@ -400,7 +402,7 @@ export default function Whiteboard({
             archives.map((file) => (
               <a
                 key={file.id}
-                href={`/api/whiteboard/files/${file.id}`}
+                href={`${base}/whiteboard/files/${file.id}`}
                 target="_blank"
                 rel="noreferrer"
               >

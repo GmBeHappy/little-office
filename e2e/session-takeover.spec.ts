@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 const accounts = JSON.parse(process.env.E2E_ACCOUNTS || "[]");
 test.skip(accounts.length !== 2, "Run through scripts/e2e.ts.");
 async function login(page: Page) {
-  await page.goto("/");
+  await page.goto("/office");
   await page.getByLabel("Username", { exact: true }).fill(accounts[0].username);
   await page.getByLabel("Password", { exact: true }).fill(accounts[0].password);
   await page.getByRole("button", { name: "Enter the office" }).click();
@@ -35,7 +35,7 @@ test("new tabs and device sessions replace the old office without reconnect loop
     );
     const before = oldSockets;
     const b = await first.newPage();
-    await b.goto("/"); // Same cookie, different WebSocket.
+    await b.goto("/office"); // Same cookie, different WebSocket.
     await expect(b.locator(".controlbar")).toHaveAttribute(
       "data-media-connected",
       "true",

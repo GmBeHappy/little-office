@@ -8,3 +8,10 @@ test-results
 playwright-report
 deploy/generated
 *.tsbuildinfo
+
+# Native Android sources, builds and private signing backup are never web inputs.
+android/
+# Temporary CI credentials and signing keys at any depth.
+**/gha-creds-*.json
+**/*.jks
+**/*.keystore

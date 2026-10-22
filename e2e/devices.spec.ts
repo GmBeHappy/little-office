@@ -9,7 +9,7 @@ test.skip(
   "Run with bun scripts/e2e.ts to provision isolated test accounts.",
 );
 async function login(page: Page, index: number) {
-  await page.goto("/");
+  await page.goto("/office");
   await page
     .getByLabel("Username", { exact: true })
     .fill(accounts[index].username);
@@ -39,13 +39,15 @@ test("muting releases microphone capture and unmuting reacquires it", async ({
     };
   });
   const liveMicrophones = () =>
-    page.evaluate(() =>
-      (
-        window as unknown as {
-          capturedMicrophoneTracks: MediaStreamTrack[];
-        }
-      ).capturedMicrophoneTracks.filter((track) => track.readyState === "live")
-        .length,
+    page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            capturedMicrophoneTracks: MediaStreamTrack[];
+          }
+        ).capturedMicrophoneTracks.filter(
+          (track) => track.readyState === "live",
+        ).length,
     );
   await login(page, 0);
   const controls = page.locator(".controlbar");

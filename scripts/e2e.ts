@@ -1,6 +1,7 @@
+import { DEFAULT_WORKSPACE_ID } from "../shared/workspaces";
 import { auth } from "../server/auth";
-import { eq } from "drizzle-orm";
-import { users, officeFiles } from "../server/schema";
+import { and, eq } from "drizzle-orm";
+import { users, memberships, officeFiles } from "../server/schema";
 import { db, pool } from "../server/db";
 const accounts = [];
 try {
@@ -14,6 +15,15 @@ try {
       .update(users)
       .set({ approved: true, role: name === "Robin" ? "owner" : "member" })
       .where(eq(users.id, result.user.id));
+    await db
+      .update(memberships)
+      .set({ approved: true, role: name === "Robin" ? "owner" : "member" })
+      .where(
+        and(
+          eq(memberships.workspaceId, DEFAULT_WORKSPACE_ID),
+          eq(memberships.userId, result.user.id),
+        ),
+      );
     accounts.push({ username, password, id: result.user.id, name });
   }
   const run = Bun.spawn(

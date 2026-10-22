@@ -19,6 +19,11 @@ export const config = {
   issuer: process.env.OIDC_ISSUER || "",
   clientId: process.env.OIDC_CLIENT_ID || "",
   clientSecret: process.env.OIDC_CLIENT_SECRET || "",
+  googleId: process.env.GOOGLE_CLIENT_ID || "",
+  googleSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+  mediaNamespace:
+    process.env.OFFICE_MEDIA_NAMESPACE ||
+    `office-${Bun.hash(process.env.APP_URL || "http://localhost:3000").toString(16)}`,
 };
 if (config.secret.length < 32)
   throw new Error("BETTER_AUTH_SECRET must be at least 32 characters.");
@@ -28,4 +33,7 @@ if (
 )
   throw new Error("Production APP_URL must use HTTPS.");
 export const oidcConfigured = !!(config.issuer && config.clientId);
+export const googleConfigured = !!(config.googleId && config.googleSecret);
+if (!/^[a-zA-Z0-9_-]{1,80}$/.test(config.mediaNamespace))
+  throw new Error("Invalid OFFICE_MEDIA_NAMESPACE.");
 export const oidcProvider = `oidc-${Bun.hash(config.issuer).toString(16)}`;

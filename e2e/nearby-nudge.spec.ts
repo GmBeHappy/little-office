@@ -31,7 +31,7 @@ test("nudge notifications stay outside an open device dialog", async ({
         });
       });
     for (const [index, page] of [a, b].entries()) {
-      await page.goto("/");
+      await page.goto("/office");
       await page
         .getByLabel("Username", { exact: true })
         .fill(accounts[index].username);
@@ -115,7 +115,7 @@ test("automatic nearby voice shows participants and Z nudges with a chime withou
         };
       });
     for (const [i, page] of [a, b].entries()) {
-      await page.goto("/");
+      await page.goto("/office");
       await page
         .getByLabel("Username", { exact: true })
         .fill(accounts[i].username);

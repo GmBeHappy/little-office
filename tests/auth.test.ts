@@ -54,6 +54,11 @@ beforeAll(async () => {
   process.env.APP_URL = "http://localhost:3000";
   process.env.OFFICE_S3_ACCESS_KEY_ID = "";
   process.env.OFFICE_S3_SECRET_ACCESS_KEY = "";
+  process.env.LIVEKIT_URL = "";
+  process.env.LIVEKIT_API_KEY = "";
+  process.env.LIVEKIT_API_SECRET = "";
+  process.env.GOOGLE_CLIENT_ID = "";
+  process.env.GOOGLE_CLIENT_SECRET = "";
   process.env.OIDC_ISSUER = "";
   process.env.OIDC_CLIENT_ID = "";
   const database = await import("../server/db");
@@ -65,6 +70,7 @@ beforeAll(async () => {
   const legacyAuth = betterAuth({
     ...auth.options,
     database: pool,
+    databaseHooks: { session: auth.options.databaseHooks!.session },
     user: { ...auth.options.user, additionalFields: legacyFields },
   });
   for (const username of ["owner_test", "member_test"]) {
@@ -99,6 +105,9 @@ beforeAll(async () => {
     )
   ).rows[0].password;
   await database.migrateDatabase();
+  process.env.OFFICE_OPERATOR_IDS = (
+    await pool.query('SELECT id FROM "user" WHERE username=' + "'owner_test'")
+  ).rows[0].id;
   app = (await import("../server/index")).app;
 }, 20000);
 afterAll(async () => {
@@ -367,7 +376,7 @@ describe("authentication and authorization", () => {
         .status,
     ).toBe(400);
   });
-  test("workspace settings require an owner, validate maps, persist, and reject stale saves", async () => {
+  test("workspace settings require a manager, validate maps, persist, and reject stale saves", async () => {
     const initial = (await request("/config")).data.workspace;
     const body = {
       name: "Garden team",
@@ -376,7 +385,7 @@ describe("authentication and authorization", () => {
     };
     expect(
       (await request("/admin/workspace", body, memberCookie, "PATCH")).status,
-    ).toBe(400);
+    ).toBe(403);
     expect(
       (
         await request(
@@ -401,7 +410,9 @@ describe("authentication and authorization", () => {
       (await request("/admin/workspace", body, ownerCookie, "PATCH")).status,
     ).toBe(200);
     const row = (
-      await pool.query("SELECT name, map_id FROM workspace_settings WHERE id=1")
+      await pool.query(
+        "SELECT name, map_id FROM workspaces WHERE slug='default'",
+      )
     ).rows[0];
     expect(row).toEqual({ name: "Garden team", map_id: "nature-large" });
     expect((await request("/config")).data.workspace.mapId).toBe(
@@ -411,7 +422,7 @@ describe("authentication and authorization", () => {
       (await request("/admin/workspace", body, ownerCookie, "PATCH")).status,
     ).toBe(400);
   });
-  test("daily map rotation is owner-controlled, persists once per Bangkok day, and waits for an empty office", async () => {
+  test("daily map rotation is manager-controlled, persists once per Bangkok day, and waits for an empty office", async () => {
     const { rotateDailyMap, mapDay } = await import("../server/daily-map");
     const { workspaceSettings } = await import("../server/db");
     const { office } = await import("../server/index");
@@ -427,7 +438,7 @@ describe("authentication and authorization", () => {
     };
     expect(
       (await request("/admin/workspace", body, memberCookie, "PATCH")).status,
-    ).toBe(400);
+    ).toBe(403);
     expect(
       (
         await request(
@@ -636,7 +647,7 @@ describe("authentication and authorization", () => {
     ).rejects.toThrow();
     boards.remove("c");
   });
-  test("only owners can change feature flags and inspect storage configuration", async () => {
+  test("members cannot change feature flags or inspect platform storage", async () => {
     const current = (await request("/config")).data.workspace;
     const body = {
       revision: current.revision,
@@ -644,7 +655,7 @@ describe("authentication and authorization", () => {
     };
     expect(
       (await request("/admin/features", body, memberCookie, "PATCH")).status,
-    ).toBe(400);
+    ).toBe(403);
     const saved = await request("/admin/features", body, ownerCookie, "PATCH");
     expect(saved.status).toBe(200);
     expect(saved.data.workspace.features.whiteboard).toBe(false);
@@ -671,6 +682,315 @@ describe("authentication and authorization", () => {
         )
       ).status,
     ).toBe(200);
+  });
+  test("two live workspaces isolate authority, presence, drawings, files, and revocation", async () => {
+    const owner = (await request("/me", undefined, ownerCookie)).data.user;
+    const member = (await request("/me", undefined, memberCookie)).data.user;
+    const a = await request(
+      "/workspaces",
+      { name: "Team Alpha", slug: "team-alpha", mapId: "zen-small" },
+      ownerCookie,
+    );
+    const b = await request(
+      "/workspaces",
+      { name: "Team Beta", slug: "team-beta", mapId: "zen-small" },
+      memberCookie,
+    );
+    expect(a.status).toBe(201);
+    expect(b.status).toBe(201);
+    const alpha = `/workspaces/${a.data.id}`,
+      beta = `/workspaces/${b.data.id}`;
+    expect(
+      (await request(beta + "/config", undefined, ownerCookie)).status,
+    ).toBe(404);
+    expect((await request(alpha + "/config")).status).toBe(401);
+    for (const path of ["/admin/activity", "/whiteboard/files", "/me"])
+      expect((await request(beta + path, undefined, ownerCookie)).status).toBe(
+        404,
+      );
+    expect((await request(beta + "/media/token", {}, ownerCookie)).status).toBe(
+      404,
+    );
+    expect(
+      (await request("/workspaces/not-a-uuid/config", undefined, ownerCookie))
+        .status,
+    ).toBe(404);
+    // A tenant owner has no platform administration authority.
+    expect(
+      (await request("/admin/storage", undefined, memberCookie)).status,
+    ).not.toBe(200);
+    await pool.query('UPDATE "user" SET "emailVerified"=true WHERE id=$1', [
+      owner.id,
+    ]);
+    const invitation = await request(
+      beta + "/invitations",
+      { email: "owner_test@local.invalid", role: "member" },
+      memberCookie,
+    );
+    expect(invitation.status).toBe(201);
+    const token = new URL(invitation.data.url).hash.slice("#invite=".length);
+    const accepted = await request(
+      "/invitations/accept",
+      { token },
+      ownerCookie,
+    );
+    expect(accepted.status).toBe(200);
+    expect(
+      (await request("/invitations/accept", { token }, ownerCookie)).status,
+    ).toBe(404);
+    expect(
+      (await request(beta + "/me", undefined, ownerCookie)).data.user.role,
+    ).toBe("member");
+    expect(
+      (await request(alpha + "/me", undefined, ownerCookie)).data.user.role,
+    ).toBe("owner");
+    expect(
+      (
+        await request(
+          beta,
+          { name: "Stolen", mapId: "beach-small" },
+          ownerCookie,
+          "PATCH",
+        )
+      ).status,
+    ).toBe(403);
+    const { runtimeFor } = await import("../server/workspace-runtime");
+    const runtimeA = await runtimeFor(a.data.id),
+      runtimeB = await runtimeFor(b.data.id);
+    expect(runtimeA.office.workspace.mapId).toBe("zen-small"); // first load at revision 1
+    const listener = app.listen({ port: 0, hostname: "127.0.0.1" });
+    const opened: WebSocket[] = [];
+    async function connect(path: string, cookie: string) {
+      const Socket = WebSocket as unknown as {
+        new (
+          url: string,
+          options: { headers: Record<string, string> },
+        ): WebSocket;
+      };
+      const ws = new Socket(
+        `ws://127.0.0.1:${listener.server!.port}/api${path}`,
+        { headers: { origin: "http://localhost:3000", cookie } },
+      );
+      opened.push(ws);
+      const events: any[] = [];
+      ws.addEventListener("message", (e) =>
+        events.push(JSON.parse(String(e.data))),
+      );
+      await new Promise<void>((resolve, reject) => {
+        ws.addEventListener("open", () => resolve(), { once: true });
+        ws.addEventListener(
+          "error",
+          () => reject(new Error("Socket rejected")),
+          { once: true },
+        );
+      });
+      return { ws, events };
+    }
+    async function until(check: () => boolean) {
+      for (let i = 0; i < 100; i++) {
+        if (check()) return;
+        await Bun.sleep(10);
+      }
+      throw new Error("Timed out waiting for socket event");
+    }
+    try {
+      const aSocket = await connect(alpha + "/office", ownerCookie);
+      const bSocket = await connect(beta + "/office", ownerCookie);
+      const bOwner = await connect(beta + "/office", memberCookie);
+      await until(
+        () =>
+          aSocket.events.some((e) => e.type === "snapshot") &&
+          bOwner.events.some((e) => e.type === "snapshot"),
+      );
+      expect(runtimeA.office.members.size).toBe(1);
+      expect(runtimeB.office.members.size).toBe(2);
+      expect(runtimeA.office.members.get(owner.id)!.room).not.toBe(
+        runtimeB.office.members.get(owner.id)!.room,
+      );
+      const boardA = await connect(alpha + "/whiteboard", ownerCookie);
+      const boardB = await connect(beta + "/whiteboard", ownerCookie);
+      await until(
+        () =>
+          boardA.events.some((e) => e.type === "ready") &&
+          boardB.events.some((e) => e.type === "ready"),
+      );
+      boardA.ws.send(
+        JSON.stringify({
+          type: "change",
+          batch: "tenant-a",
+          elements: [rectangle("alpha-only")],
+        }),
+      );
+      await until(() => boardA.events.some((e) => e.type === "saved"));
+      expect(
+        boardB.events.some((e) => JSON.stringify(e).includes("alpha-only")),
+      ).toBe(false);
+      const rows = await pool.query(
+        "SELECT workspace_id,elements FROM office_whiteboards WHERE workspace_id=$1",
+        [a.data.id],
+      );
+      expect(rows.rows[0].elements[0].id).toBe("alpha-only");
+      await pool.query(
+        "INSERT INTO office_files(id,workspace_id,board_id,object_key,name,size,created_by) VALUES($1,$2,'zen-small:floor','fixture.png','A private file',20,$3)",
+        [crypto.randomUUID(), a.data.id, owner.id],
+      );
+      expect(
+        (await request(alpha + "/whiteboard/files", undefined, ownerCookie))
+          .data,
+      ).toHaveLength(1);
+      expect(
+        (await request(beta + "/whiteboard/files", undefined, ownerCookie))
+          .data,
+      ).toHaveLength(0);
+      const removal = await request(
+        beta + `/members/${owner.id}`,
+        undefined,
+        memberCookie,
+        "DELETE",
+      );
+      expect(removal).toMatchObject({ status: 200, data: { ok: true } });
+      await until(
+        () =>
+          bSocket.ws.readyState === WebSocket.CLOSED &&
+          boardB.ws.readyState === WebSocket.CLOSED,
+      );
+      expect(aSocket.ws.readyState).toBe(WebSocket.OPEN);
+      expect(runtimeA.office.members.has(owner.id)).toBe(true);
+      expect(
+        (await request(beta + "/config", undefined, ownerCookie)).status,
+      ).toBe(404);
+      expect(
+        (
+          await request(
+            alpha + `/members/${owner.id}`,
+            undefined,
+            ownerCookie,
+            "DELETE",
+          )
+        ).status,
+      ).toBe(409);
+      expect(
+        (
+          await request(
+            alpha,
+            { name: "Alpha Updated", mapId: "beach-small" },
+            ownerCookie,
+            "PATCH",
+          )
+        ).status,
+      ).toBe(200);
+      expect(runtimeA.office.workspace.mapId).toBe("beach-small");
+      expect(runtimeB.office.workspace.mapId).toBe("zen-small");
+    } finally {
+      opened.forEach((ws) => ws.close());
+      await app.stop(true);
+    }
+  }, 20000);
+  test("native sign-in binds a one-use code to PKCE and never returns a session in a URL", async () => {
+    const { createHash } = await import("node:crypto");
+    const verifier = "a".repeat(64),
+      state = "b".repeat(40);
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
+    expect(
+      (await request("/native/authorize", { challenge, state })).status,
+    ).toBe(401);
+    const grant = await request(
+      "/native/authorize",
+      { challenge, state },
+      ownerCookie,
+    );
+    expect(grant.status).toBe(200);
+    const url = new URL(grant.data.url);
+    expect(url.protocol).toBe("littleoffice:");
+    expect(url.searchParams.get("state")).toBe(state);
+    expect(url.searchParams.has("token")).toBe(false);
+    const code = url.searchParams.get("code");
+    expect(
+      (await request("/native/exchange", { code, verifier: "x".repeat(64) }))
+        .status,
+    ).toBe(401);
+    const exchange = await request("/native/exchange", { code, verifier });
+    expect(exchange.status).toBe(200);
+    expect(exchange.data.cookieName).toContain("session_token");
+    const headers = { authorization: `Bearer ${exchange.data.token}` };
+    const response = await app.handle(
+      new Request("http://localhost:3000/api/workspaces", { headers }),
+    );
+    expect(response.status).toBe(200);
+    expect((await request("/native/exchange", { code, verifier })).status).toBe(
+      401,
+    );
+    const tampered = await app.handle(
+      new Request("http://localhost:3000/api/workspaces", {
+        headers: { authorization: `Bearer ${exchange.data.token}tampered` },
+      }),
+    );
+    expect(tampered.status).toBe(401);
+    // An expired browser grant cannot become an app credential.
+    const expired = await request(
+      "/native/authorize",
+      { challenge, state },
+      ownerCookie,
+    );
+    await pool.query(
+      "UPDATE native_handoffs SET expires_at=now()-interval '1 second'",
+    );
+    expect(
+      (
+        await request("/native/exchange", {
+          code: new URL(expired.data.url).searchParams.get("code"),
+          verifier,
+        })
+      ).status,
+    ).toBe(401);
+  });
+  test("workspace membership transactions preserve the last owner under concurrent demotion", async () => {
+    const owner = (await request("/me", undefined, ownerCookie)).data.user;
+    const member = (await request("/me", undefined, memberCookie)).data.user;
+    const created = await request(
+      "/workspaces",
+      {
+        name: "Concurrent team",
+        slug: "concurrent-team",
+        mapId: "nature-small",
+      },
+      ownerCookie,
+    );
+    expect(created.status).toBe(201);
+    const path = `/workspaces/${created.data.id}`;
+    await pool.query(
+      "INSERT INTO workspace_memberships(workspace_id,user_id,role) VALUES($1,$2,'owner')",
+      [created.data.id, member.id],
+    );
+    const results = await Promise.all([
+      request(
+        path + `/members/${owner.id}`,
+        { role: "member" },
+        ownerCookie,
+        "PATCH",
+      ),
+      request(
+        path + `/members/${member.id}`,
+        { role: "member" },
+        memberCookie,
+        "PATCH",
+      ),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual([200, 409]);
+    expect(
+      (
+        await pool.query(
+          "SELECT count(*)::int AS count FROM workspace_memberships WHERE workspace_id=$1 AND role='owner'",
+          [created.data.id],
+        )
+      ).rows[0].count,
+    ).toBe(1);
+    const duplicate = await request(
+      "/workspaces",
+      { name: "Duplicate", slug: "concurrent-team", mapId: "nature-small" },
+      ownerCookie,
+    );
+    expect(duplicate.status).toBe(409);
   });
   test("last-login and unconfigured SSO switches cannot lock the owner out", async () => {
     expect(
@@ -796,7 +1116,7 @@ describe("authentication and authorization", () => {
           "PATCH",
         )
       ).status,
-    ).toBe(400);
+    ).toBe(403);
     const owner = (await request("/me", undefined, ownerCookie)).data.user;
     expect(
       (
