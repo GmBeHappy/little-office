@@ -20,6 +20,8 @@ fun WorkspaceSettings(model: OfficeModel, workspace: Workspace, close: () -> Uni
     var name by remember { mutableStateOf(workspace.name) }
     var map by remember { mutableStateOf(workspace.mapId) }
     var invite by remember { mutableStateOf(false) }
+    var inviteEmail by remember { mutableStateOf("") }
+    var inviteRole by remember { mutableStateOf("member") }
     var remove by remember { mutableStateOf<JSONObject?>(null) }
     var invitationURL by remember { mutableStateOf("") }
     val role = detail?.string("role") ?: workspace.role
@@ -37,44 +39,52 @@ fun WorkspaceSettings(model: OfficeModel, workspace: Workspace, close: () -> Uni
                 Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                TextButton(onClick = close) { Text("‹ Workspaces") }
-                Text(workspace.name, style = MaterialTheme.typography.headlineMedium)
+                TextButton(onClick = close) { OfficeText("‹ Workspaces") }
+                OfficeText(workspace.name, style = MaterialTheme.typography.headlineMedium)
                 if (model.error.isNotBlank())
-                    Text(model.error, color = MaterialTheme.colorScheme.error)
+                    OfficeText(model.error, color = MaterialTheme.colorScheme.error)
                 if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if (role != "member") {
                     OutlinedTextField(
                         name,
                         { name = it },
-                        label = { Text("Workspace name") },
+                        label = { OfficeText("Workspace name") },
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    MapPicker(model.maps, map) { map = it }
+                    MapPicker(model.allMaps, map) { map = it }
                     Button(
                         enabled = !model.busy && name.trim().length in 2..60,
                         onClick = {
                             model.action {
                                 model.api!!.call(
-                                    model.api!!.path(workspace.id),
+                                    model.api!!.path(workspace.id, "/admin/workspace"),
                                     "PATCH",
-                                    json("name" to name.trim(), "mapId" to map),
+                                    json(
+                                        "name" to name.trim(),
+                                        "mapId" to map,
+                                        "revision" to requireNotNull(detail).getInt("revision"),
+                                    ),
                                 )
                                 model.load()
+                                detail = model.api!!.call(model.api!!.path(workspace.id))
                             }
                         },
                     ) {
-                        Text("Save workspace")
+                        OfficeText("Save workspace")
                     }
                 }
-                Text("Members", style = MaterialTheme.typography.titleLarge)
+                OfficeText("Members", style = MaterialTheme.typography.titleLarge)
                 detail?.getJSONArray("members")?.objects()?.forEach { member ->
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp)) {
-                            Text(
+                            OfficeText(
                                 member.string("name"),
                                 style = MaterialTheme.typography.titleMedium,
                             )
-                            Text(member.string("email"), style = MaterialTheme.typography.bodySmall)
+                            OfficeText(
+                                member.string("email"),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                             if (role == "owner") {
                                 Row(Modifier.horizontalScroll(rememberScrollState())) {
                                     listOf("owner", "admin", "member").forEach { role ->
@@ -97,20 +107,44 @@ fun WorkspaceSettings(model: OfficeModel, workspace: Workspace, close: () -> Uni
                                                     model.load()
                                                 }
                                             },
-                                            label = { Text(role) },
+                                            label = { OfficeText(role) },
                                             enabled = !model.busy,
                                         )
                                     }
                                 }
-                                TextButton(onClick = { remove = member }) { Text("Remove member") }
-                            } else Text(member.string("role"))
+                                if (!member.optBoolean("approved", true))
+                                    TextButton(
+                                        onClick = {
+                                            model.action {
+                                                model.api!!.call(
+                                                    model.api!!.path(
+                                                        workspace.id,
+                                                        "/members/${member.getString("id")}",
+                                                    ),
+                                                    "PATCH",
+                                                    json(
+                                                        "role" to member.string("role"),
+                                                        "approved" to true,
+                                                    ),
+                                                )
+                                                detail =
+                                                    model.api!!.call(model.api!!.path(workspace.id))
+                                            }
+                                        }
+                                    ) {
+                                        OfficeText("Restore")
+                                    }
+                                TextButton(onClick = { remove = member }) {
+                                    OfficeText("Remove member")
+                                }
+                            } else OfficeText(member.string("role"))
                         }
                     }
                 }
                 if (role != "member") {
-                    Button(onClick = { invite = true }) { Text("Invite a teammate") }
+                    Button(onClick = { invite = true }) { OfficeText("Invite a teammate") }
                     if (invitationURL.isNotEmpty()) {
-                        Text("Invitation ready. Share it with the invited email address.")
+                        OfficeText("Invitation ready. Share it with the invited email address.")
                         OutlinedButton(
                             onClick = {
                                 (context.getSystemService(Context.CLIPBOARD_SERVICE)
@@ -120,12 +154,12 @@ fun WorkspaceSettings(model: OfficeModel, workspace: Workspace, close: () -> Uni
                                     )
                             }
                         ) {
-                            Text("Copy invitation link")
+                            OfficeText("Copy invitation link")
                         }
                     }
                     detail?.getJSONArray("invitations")?.objects()?.forEach { invitation ->
                         Row {
-                            Text(invitation.string("email"), Modifier.weight(1f))
+                            OfficeText(invitation.string("email"), Modifier.weight(1f))
                             TextButton(
                                 onClick = {
                                     model.action {
@@ -140,39 +174,70 @@ fun WorkspaceSettings(model: OfficeModel, workspace: Workspace, close: () -> Uni
                                     }
                                 }
                             ) {
-                                Text("Revoke")
+                                OfficeText("Revoke")
                             }
                         }
                     }
                 }
-                TextButton(onClick = { reload() }) { Text("Refresh") }
+                key(detail?.optInt("revision")) { WorkspaceOptions(model, workspace, role) }
+                TextButton(onClick = { reload() }) { OfficeText("Refresh") }
             }
         }
     }
     if (invite)
-        TextEntryDialog(
-            "Invite teammate",
-            "Email address",
-            "Create invitation",
-            { invite = false },
-        ) { email ->
-            model.action {
-                val result =
-                    model.api!!.call(
-                        model.api!!.path(workspace.id, "/invitations"),
-                        "POST",
-                        json("email" to email.trim().lowercase(), "role" to "member"),
+        AlertDialog(
+            onDismissRequest = { invite = false },
+            title = { OfficeText("Invite teammate") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        inviteEmail,
+                        { inviteEmail = it.take(254) },
+                        label = { OfficeText("Email address") },
                     )
-                invitationURL = result.getString("url")
-                invite = false
-                detail = model.api!!.call(model.api!!.path(workspace.id))
-            }
-        }
+                    if (role == "owner")
+                        Row {
+                            listOf("member", "admin").forEach { value ->
+                                FilterChip(
+                                    inviteRole == value,
+                                    { inviteRole = value },
+                                    label = { OfficeText(value) },
+                                )
+                            }
+                        }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !model.busy && inviteEmail.contains('@'),
+                    onClick = {
+                        model.action {
+                            val result =
+                                model.api!!.call(
+                                    model.api!!.path(workspace.id, "/invitations"),
+                                    "POST",
+                                    json(
+                                        "email" to inviteEmail.trim().lowercase(),
+                                        "role" to if (role == "owner") inviteRole else "member",
+                                    ),
+                                )
+                            invitationURL = result.getString("url")
+                            invite = false
+                            inviteEmail = ""
+                            detail = model.api!!.call(model.api!!.path(workspace.id))
+                        }
+                    },
+                ) {
+                    OfficeText("Create invitation")
+                }
+            },
+            dismissButton = { TextButton(onClick = { invite = false }) { OfficeText("Cancel") } },
+        )
     remove?.let { member ->
         AlertDialog(
             onDismissRequest = { remove = null },
-            title = { Text("Remove ${member.string("name")}?") },
-            text = { Text("Their access to this workspace will end immediately.") },
+            title = { OfficeText("Remove ${member.string("name")}?") },
+            text = { OfficeText("Their access to this workspace will end immediately.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -191,10 +256,10 @@ fun WorkspaceSettings(model: OfficeModel, workspace: Workspace, close: () -> Uni
                         }
                     }
                 ) {
-                    Text("Remove")
+                    OfficeText("Remove")
                 }
             },
-            dismissButton = { TextButton(onClick = { remove = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { remove = null }) { OfficeText("Cancel") } },
         )
     }
 }

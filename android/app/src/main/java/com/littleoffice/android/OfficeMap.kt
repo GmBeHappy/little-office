@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -34,6 +35,12 @@ import kotlinx.coroutines.launch
 fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Person) -> Unit) {
     val actions = rememberCoroutineScope()
     val scene = office.scene
+    val world = remember(office, scene?.mapId, scene?.revision) { scene?.let { NativeWorld(it) } }
+    val worldStart = remember(world) { SystemClock.elapsedRealtime().toDouble() }
+    DisposableEffect(world) {
+        office.world = world
+        onDispose { if (office.world === world) office.world = null }
+    }
     val map =
         remember(scene) {
             scene?.let { value ->
@@ -46,10 +53,12 @@ fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Per
                         val canvas = android.graphics.Canvas(this)
                         canvas.drawColor(0xffd8dfbf.toInt())
                         val paint = Paint().apply { isAntiAlias = false }
-                        value.rectangles.forEach { p ->
-                            paint.color = (p.color or 0xff000000).toInt()
-                            canvas.drawRect(p.x, p.y, p.x + p.w, p.y + p.h, paint)
-                        }
+                        (value.animation?.optJSONArray("background")?.objects()?.map(Pixel::parse)
+                                ?: value.rectangles)
+                            .forEach { p ->
+                                paint.color = (p.color or 0xff000000).toInt()
+                                canvas.drawRect(p.x, p.y, p.x + p.w, p.y + p.h, paint)
+                            }
                         paint.isAntiAlias = true
                         paint.textAlign = Paint.Align.CENTER
                         paint.typeface =
@@ -132,6 +141,13 @@ fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Per
                             }
                         }
             }
+            .onFocusChanged {
+                if (!it.isFocused) {
+                    keys.clear()
+                    joystick = null
+                    office.move(0, 0)
+                }
+            }
             .focusRequester(focus)
             .focusable()
             .onKeyEvent { event ->
@@ -156,6 +172,22 @@ fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Per
                         (if (Key.DirectionDown in keys || Key.S in keys) 1 else 0) -
                             (if (Key.DirectionUp in keys || Key.W in keys) 1 else 0),
                     )
+                    true
+                } else if (
+                    event.type == KeyEventType.KeyUp &&
+                        key in listOf(Key.Z, Key.One, Key.Two, Key.Three)
+                ) {
+                    office.perform(
+                        when (key) {
+                            Key.Z -> "nudge"
+                            Key.One -> "sit"
+                            Key.Two -> "sleep"
+                            else -> "fish"
+                        }
+                    )
+                    true
+                } else if (event.type == KeyEventType.KeyUp && key == Key.E) {
+                    office.interact()
                     true
                 } else if (event.type == KeyEventType.KeyUp && key == Key.Spacebar) {
                     office.perform("jump")
@@ -223,6 +255,43 @@ fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Per
             translate(-camera.x, -camera.y)
         }) {
             drawImage(map, filterQuality = FilterQuality.None)
+            val wallTime = System.currentTimeMillis().toDouble()
+            val farmTime = time - worldStart
+            office.worldTime = farmTime
+            val features = office.snapshot?.workspace?.optJSONObject("features")
+            val wildlife = features?.optBoolean("wildlife", true) ?: true
+            val activities = features?.optBoolean("activities", true) ?: true
+            world?.effects(time, !office.preferences.effects)?.forEach { drawPixel(it) }
+            world?.farm?.update(farmTime, delta, me, wildlife, wallTime)
+            val farmTarget =
+                if (activities && me != null)
+                    world?.farm?.target(me.x.toDouble(), me.y.toDouble(), farmTime)
+                else null
+            val habitatTarget = world?.target(me, wallTime, wildlife, activities) ?: -1
+            office.interactionPrompt =
+                if (farmTarget != null)
+                    when (farmTarget.kind) {
+                        "egg" -> "Collect the egg"
+                        "plant" -> "Plant seeds"
+                        else -> "Harvest the wheat"
+                    }
+                else if (habitatTarget >= 0) world?.prompt(habitatTarget).orEmpty() else ""
+            office.farmScore =
+                world
+                    ?.farm
+                    ?.let { "🥚 ${it.eggCount}   🌾 ${it.cropCount}   🐟 ${it.fishCount}" }
+                    .orEmpty()
+            // Web painter order: ambient -1, habitat 940, farm 950, then people 1000+y.
+            world
+                ?.habitatPixels(
+                    office.snapshot?.habitat ?: org.json.JSONObject(),
+                    wallTime,
+                    wildlife,
+                    activities,
+                    reduced,
+                )
+                ?.forEach { drawPixel(it) }
+            world?.farm?.pixels(farmTime, wildlife)?.forEach { drawPixel(it) }
             val persons = office.snapshot?.people.orEmpty()
             positions.keys.retainAll(persons.map { it.id }.toSet())
             persons
@@ -249,6 +318,25 @@ fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Per
                             )
                     val atlas = office.avatars[person.avatar]
                     translate(position.x, position.y) {
+                        if (frame.nudgeOpacity > 0f) {
+                            val width = 40 + frame.nudgeMotion * 15
+                            val height = 19 + frame.nudgeMotion * 5
+                            drawOval(
+                                Color(0xffefb865).copy(alpha = frame.nudgeOpacity),
+                                Offset(-width / 2, 3 - height / 2),
+                                Size(width, height),
+                                style = Stroke(2f),
+                            )
+                        }
+                        if (person.id in office.media.speakers) {
+                            val pulse = if (reduced) 0f else kotlin.math.sin(time / 150).toFloat()
+                            drawCircle(
+                                Color(0xff40ba78).copy(alpha = 0.85f),
+                                29 + pulse * 2,
+                                Offset(0f, -13 - frame.height),
+                                style = Stroke(3f),
+                            )
+                        }
                         drawOval(
                             Color(0xff5c6551).copy(alpha = (0.18f - frame.height / 400)),
                             Offset(-15.5f + frame.height * 0.15f, -2f),
@@ -271,30 +359,66 @@ fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Per
                             )
                             scale(1 + frame.squash / 2, 1 - frame.squash, Offset.Zero)
                         }) {
+                            if (person.direction == "up")
+                                person.fishing?.let {
+                                    fishingPixels(
+                                            it,
+                                            System.currentTimeMillis().toDouble(),
+                                            atlas?.skin ?: 0xe0aa79,
+                                            reduced,
+                                        )
+                                        .forEach { drawPixel(it) }
+                                }
                             atlas
                                 ?.frames
                                 ?.get("${person.direction}-${person.pose}-${frame.index}")
                                 ?.forEach { drawPixel(it) }
-                            person.fishing?.let {
-                                fishingPixels(
-                                        it,
-                                        System.currentTimeMillis().toDouble(),
-                                        atlas?.skin ?: 0xe0aa79,
-                                        reduced,
-                                    )
-                                    .forEach { drawPixel(it) }
-                            }
+                            if (person.direction != "up")
+                                person.fishing?.let {
+                                    fishingPixels(
+                                            it,
+                                            System.currentTimeMillis().toDouble(),
+                                            atlas?.skin ?: 0xe0aa79,
+                                            reduced,
+                                        )
+                                        .forEach { drawPixel(it) }
+                                }
                         }
+                        val animation = office.animations[person.id]
+                        val farmIcon =
+                            animation
+                                ?.let { world?.farm?.icon(it.emote, it.emoteUntil - time) }
+                                .orEmpty()
+                        farmIcon.forEach { drawPixel(it) }
                         drawContext.canvas.nativeCanvas.apply {
-                            paint.textSize = 12f
+                            paint.textSize = office.preferences.nameSize
                             paint.color = 0xff394737.toInt()
                             val width = paint.measureText(person.name) + 12
                             val top = if (person.pose == "sleep") 20f else -60f - frame.height
-                            paint.color = 0xfffaf7e8.toInt()
+                            val speaking = person.id in office.media.speakers
+                            paint.color = if (speaking) 0xff28794f.toInt() else 0xfffaf7e8.toInt()
+                            paint.alpha = (office.preferences.nameOpacity * 2.55f).toInt()
                             drawRoundRect(-width / 2, top - 12, width / 2, top + 4, 4f, 4f, paint)
-                            paint.color = 0xff394737.toInt()
+                            paint.alpha = 255
+                            paint.color =
+                                if (speaking && office.preferences.nameOpacity >= 50)
+                                    0xffffffff.toInt()
+                                else 0xff394737.toInt()
                             drawText(person.name, 0f, top, paint)
-                            if (frame.reaction.isNotEmpty()) {
+                            if (
+                                person.activityIcon.isNotEmpty() || person.activityText.isNotEmpty()
+                            ) {
+                                paint.textSize = 11f
+                                drawText(
+                                    "${person.activityIcon} ${person.activityText}".take(55),
+                                    0f,
+                                    top - 18f,
+                                    paint,
+                                )
+                            }
+                            paint.textSize = 10f
+                            drawText(if (person.microphone) "●" else "×", width / 2 + 8, top, paint)
+                            if (frame.reaction.isNotEmpty() && farmIcon.isEmpty()) {
                                 paint.textSize = 24f
                                 drawText(frame.reaction, 0f, top - 22, paint)
                             }
@@ -322,7 +446,11 @@ fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Per
 }
 
 private fun DrawScope.drawPixel(p: Pixel) =
-    drawRect(Color((p.color or 0xff000000).toInt()), Offset(p.x, p.y), Size(p.w, p.h))
+    drawRect(
+        Color((p.color or 0xff000000).toInt()).copy(alpha = p.alpha.coerceIn(0f, 1f)),
+        Offset(p.x, p.y),
+        Size(p.w, p.h),
+    )
 
 fun fishingPixels(f: org.json.JSONObject, time: Double, skin: Long, reduced: Boolean): List<Pixel> {
     val start = f.getDouble("start")

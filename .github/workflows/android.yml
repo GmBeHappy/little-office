@@ -132,7 +132,7 @@ jobs:
       - name: Upload APK to Firebase App Distribution
         working-directory: android
         env:
-          RELEASE_NOTES: 'Developer beta — compatible SaaS/native server required; backend is on main, production deployment/migrations pending. Little Office Android · ${{ github.sha }} · build ${{ github.run_number }}.${{ github.run_attempt }}'
+          RELEASE_NOTES: 'Beta for https://app.littleoffice.app — native hardware/media acceptance testing remains in progress. Little Office Android · ${{ github.sha }} · build ${{ github.run_number }}.${{ github.run_attempt }}'
         run: bundle exec fastlane android distribute
       - name: Remove signing key
         if: always()

@@ -86,6 +86,25 @@ class NativeSmokeTest {
                 it.model.office!!.perform("sit")
             }
             waitFor("Sit broadcast") { it.office!!.snapshot!!.me!!.pose == "sit" }
+            // A system document chooser must preserve the joined office and its WebView.
+            scenario.onActivity { it.model.office!!.externalDocument = true }
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+            var retained = false
+            scenario.onActivity { retained = it.model.office?.connected == true }
+            Assert.assertTrue("Document chooser keeps office connected", retained)
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            scenario.onActivity { it.model.office!!.externalDocument = false }
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+            waitFor("Background stops media/socket") {
+                it.office?.connected == false && it.office?.media?.connected == false
+            }
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            waitFor("Foreground reconnect") { it.office?.connected == true }
+            scenario.onActivity { it.model.office!!.perform("stand") }
+            waitFor("Stand after reconnect") { it.office?.snapshot?.me?.pose == "stand" }
+            // Old workspace generations must not repopulate after a switch.
+            scenario.onActivity { it.model.select(it.model.workspaces.first()) }
+            waitFor("Workspace replacement reconnect") { it.office?.connected == true }
             val saved = store.read("session")!!
             val encrypted =
                 context
@@ -94,7 +113,50 @@ class NativeSmokeTest {
             Assert.assertFalse(
                 encrypted.contains(saved.getJSONObject("credential").getString("token"))
             )
+            // Exercise the real Compose Canvas, not only the standalone pixel-math helpers.
+            var originalScene: Scene? = null
+            scenario.onActivity { activity ->
+                val office = activity.model.office!!
+                originalScene = office.scene
+                val animation = JSONObject(office.scene!!.animation!!.toString())
+                val habitat = animation.getJSONObject("habitat")
+                habitat.put("animals", org.json.JSONArray())
+                val me = office.snapshot!!.me!!
+                habitat.put(
+                    "station",
+                    json(
+                        "x" to me.x,
+                        "y" to me.y - 100,
+                        "stages" to
+                            org.json
+                                .JSONArray()
+                                .put(
+                                    json(
+                                        "rectangles" to
+                                            org.json
+                                                .JSONArray()
+                                                .put(
+                                                    json(
+                                                        "x" to 0,
+                                                        "y" to 0,
+                                                        "w" to 20,
+                                                        "h" to 20,
+                                                        "color" to 0xfd02ef,
+                                                    )
+                                                ),
+                                        "motions" to org.json.JSONArray(),
+                                    )
+                                ),
+                    ),
+                )
+                office.scene =
+                    office.scene!!.copy(
+                        mapId = office.scene!!.mapId + "-render-test",
+                        animation = animation,
+                    )
+            }
             Thread.sleep(500)
+            var overlayVisible = false
             val capture = CountDownLatch(1)
             scenario.onActivity { activity ->
                 val bitmap =
@@ -107,16 +169,30 @@ class NativeSmokeTest {
                     activity.window,
                     bitmap,
                     { result ->
-                        if (result == android.view.PixelCopy.SUCCESS)
+                        if (result == android.view.PixelCopy.SUCCESS) {
+                            val pixels = IntArray(bitmap.width * bitmap.height)
+                            bitmap.getPixels(
+                                pixels,
+                                0,
+                                bitmap.width,
+                                0,
+                                0,
+                                bitmap.width,
+                                bitmap.height,
+                            )
+                            overlayVisible = pixels.any { it == 0xfffd02ef.toInt() }
                             File(context.filesDir, "office-smoke.png").outputStream().use {
                                 bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                             }
+                        }
                         capture.countDown()
                     },
                     android.os.Handler(android.os.Looper.getMainLooper()),
                 )
             }
             Assert.assertTrue(capture.await(5, TimeUnit.SECONDS))
+            Assert.assertTrue("Dynamic habitat must reach the displayed Canvas", overlayVisible)
+            scenario.onActivity { it.model.office!!.scene = originalScene }
             scenario.onActivity { it.model.leave() }
             waitFor("Leave workspace") { it.office == null }
             scenario.onActivity { it.model.logout() }

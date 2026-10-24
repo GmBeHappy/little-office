@@ -83,14 +83,33 @@ object NativeAuth {
     }
 }
 
-data class Workspace(val id: String, val name: String, val role: String, val mapId: String) {
+data class Workspace(
+    val id: String,
+    val name: String,
+    val role: String,
+    val mapId: String,
+    val slug: String = "",
+) {
     companion object {
         fun parse(j: JSONObject) =
-            Workspace(j.getString("id"), j.getString("name"), j.string("role"), j.string("mapId"))
+            Workspace(
+                j.getString("id"),
+                j.getString("name"),
+                j.string("role"),
+                j.string("mapId"),
+                j.string("slug"),
+            )
     }
 }
 
-data class Pixel(val x: Float, val y: Float, val w: Float, val h: Float, val color: Long) {
+data class Pixel(
+    val x: Float,
+    val y: Float,
+    val w: Float,
+    val h: Float,
+    val color: Long,
+    val alpha: Float = 1f,
+) {
     companion object {
         fun parse(j: JSONObject) =
             Pixel(
@@ -99,6 +118,7 @@ data class Pixel(val x: Float, val y: Float, val w: Float, val h: Float, val col
                 j.getDouble("w").toFloat(),
                 j.getDouble("h").toFloat(),
                 j.getLong("color"),
+                j.optDouble("alpha", 1.0).toFloat(),
             )
     }
 }
@@ -119,11 +139,45 @@ data class Person(
     val status: String,
     val statusText: String,
     val fishing: JSONObject?,
+    val microphone: Boolean = false,
+    val statusIcon: String = "",
+    val sharing: Boolean = false,
+    val watching: String = "",
+    val whiteboard: Boolean = false,
 ) {
     fun canHear(other: Person) =
         conversation == other.conversation &&
             (conversation != "floor" ||
                 (zone == other.zone && hypot(x - other.x, y - other.y) <= 190))
+
+    val activityStatus: String
+        get() = if ((sharing || whiteboard) && status != "dnd") "busy" else status
+
+    val activityIcon: String
+        get() =
+            when {
+                sharing -> "🖥️"
+                whiteboard -> "✏️"
+                statusIcon.isNotEmpty() -> statusIcon
+                status == "busy" -> "💻"
+                status == "dnd" -> "⛔"
+                status == "away" -> "☕"
+                else -> ""
+            }
+
+    val activityText: String
+        get() =
+            when {
+                sharing && whiteboard -> "Sharing screen · Using whiteboard"
+                sharing -> "Sharing screen"
+                whiteboard -> "Using whiteboard"
+                else -> statusText.trim()
+            }
+
+    fun volumeFor(other: Person): Double =
+        if (!canHear(other)) 0.0
+        else if (conversation == "floor") max(0.15, 1.0 - hypot(x - other.x, y - other.y) / 220.0)
+        else 1.0
 
     companion object {
         fun parse(j: JSONObject) =
@@ -143,6 +197,11 @@ data class Person(
                 j.string("status"),
                 j.string("statusText"),
                 j.optJSONObject("fishing"),
+                j.optBoolean("microphone"),
+                j.string("statusIcon"),
+                j.optBoolean("sharing"),
+                j.string("watching"),
+                j.optBoolean("whiteboard"),
             )
     }
 }
@@ -152,6 +211,9 @@ data class Snapshot(
     val revision: Int,
     val people: List<Person>,
     val locks: JSONObject,
+    val workspace: JSONObject = JSONObject(),
+    val habitat: JSONObject = JSONObject(),
+    val presenters: JSONObject = JSONObject(),
 ) {
     val me
         get() = people.find { it.id == self }
@@ -167,6 +229,9 @@ data class Snapshot(
                 j.getJSONObject("workspace").getInt("revision"),
                 j.getJSONArray("people").objects().map(Person::parse),
                 j.optJSONObject("locks") ?: JSONObject(),
+                j.getJSONObject("workspace"),
+                j.optJSONObject("habitat") ?: JSONObject(),
+                j.optJSONObject("presenters") ?: JSONObject(),
             )
         }
     }
@@ -178,6 +243,10 @@ data class Scene(
     val height: Float,
     val rectangles: List<Pixel>,
     val labels: List<JSONObject>,
+    val mapId: String = "",
+    val zones: List<JSONObject> = emptyList(),
+    val blocks: List<JSONObject> = emptyList(),
+    val animation: JSONObject? = null,
 ) {
     companion object {
         fun parse(j: JSONObject): Scene {
@@ -188,6 +257,10 @@ data class Scene(
                 j.getDouble("height").toFloat(),
                 j.getJSONArray("rectangles").objects().map(Pixel::parse),
                 j.getJSONArray("labels").objects(),
+                j.string("mapId"),
+                j.optJSONArray("zones")?.objects().orEmpty(),
+                j.optJSONArray("blocks")?.objects().orEmpty(),
+                j.optJSONObject("animation")?.takeIf { it.optInt("version") == 1 },
             )
         }
     }
@@ -228,6 +301,8 @@ class AvatarAnimation {
         val offsetX: Float,
         val offsetY: Float,
         val reaction: String,
+        val nudgeMotion: Float = 0f,
+        val nudgeOpacity: Float = 0f,
     )
 
     fun update(
@@ -275,6 +350,8 @@ class AvatarAnimation {
             nx.toFloat(),
             (ny + settle + breathe).toFloat(),
             reaction,
+            motion.toFloat(),
+            if (reacting) (1 - nudgeTime / 500).toFloat() else 0f,
         )
     }
 

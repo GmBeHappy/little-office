@@ -10,11 +10,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,9 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
-import io.livekit.android.renderer.TextureViewRenderer
 import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
@@ -36,7 +31,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         if (savedInstanceState == null) consume(intent)
-        setContent { LittleOfficeTheme { OfficeApp(model) } }
+        setContent { ProvideOfficeLanguage { LittleOfficeTheme { OfficeApp(model) } } }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -48,19 +43,25 @@ class MainActivity : ComponentActivity() {
         intent?.data?.let { model.callback(it.toString()) }
     }
 
+    override fun onStart() {
+        super.onStart()
+        model.office?.resume()
+    }
+
     override fun onStop() {
         super.onStop()
         if (
             !isChangingConfigurations &&
                 model.office?.media?.sharing != true &&
-                model.office?.media?.needsProjection != true
+                model.office?.media?.needsProjection != true &&
+                model.office?.externalDocument != true
         )
-            model.office?.stop()
+            model.office?.suspendForBackground()
     }
 }
 
-private val Moss = Color(0xff52674c)
-private val Cream = Color(0xfff5f4eb)
+private val Moss = Color(0xff607752)
+private val Cream = Color(0xfff7f7ef)
 
 @Composable
 fun LittleOfficeTheme(content: @Composable () -> Unit) {
@@ -76,7 +77,10 @@ fun LittleOfficeTheme(content: @Composable () -> Unit) {
                 background = Cream,
                 surface = Cream,
                 surfaceVariant = Color(0xffe9ecdf),
+                onBackground = Color(0xff304337),
+                onSurface = Color(0xff304337),
             ),
+        typography = officeTypography(),
         content = content,
     )
 }
@@ -92,53 +96,7 @@ fun OfficeApp(model: OfficeModel) {
             when {
                 office != null -> OfficeScreen(model, office)
                 model.account != null -> WorkspaceScreen(model)
-                else ->
-                    Column(
-                        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp),
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text(
-                            "little office",
-                            style = MaterialTheme.typography.displaySmall,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            "A place to work together.",
-                            Modifier.padding(top = 8.dp, bottom = 28.dp),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Text(
-                            "Your team, one shared office. Walk over, say hello, and make something together."
-                        )
-                        Spacer(Modifier.height(28.dp))
-                        OutlinedTextField(
-                            model.server,
-                            { model.server = it },
-                            label = { Text("Server address") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Button(
-                            onClick = {
-                                model.signIn()?.let {
-                                    try {
-                                        CustomTabsIntent.Builder().build().launchUrl(context, it)
-                                    } catch (e: Exception) {
-                                        model.error = "No browser available for secure sign-in."
-                                    }
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                            enabled = !model.busy,
-                        ) {
-                            Text("Sign in with your browser")
-                        }
-                        Text(
-                            "Continue with Google, your workspace SSO, or your existing account.",
-                            Modifier.padding(top = 12.dp),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
+                else -> ConnectionScreen(model)
             }
         }
     }
@@ -148,8 +106,8 @@ fun OfficeApp(model: OfficeModel) {
 fun Message(text: String, dismiss: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = dismiss) { Text("Dismiss") }
+            OfficeText(text, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = dismiss) { OfficeText("Dismiss") }
         }
     }
 }
@@ -164,43 +122,38 @@ fun WorkspaceScreen(model: OfficeModel) {
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "little office",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(model.account?.string("name").orEmpty())
-            }
-            TextButton(onClick = { model.logout() }) { Text("Sign out") }
+            OfficeBrand(Modifier.weight(1f))
+            TextButton(onClick = { model.logout() }) { OfficeText("Sign out") }
         }
-        Text("Your workspaces", style = MaterialTheme.typography.titleLarge)
-        if (model.workspaces.isEmpty())
-            Text("Create an office or accept an invitation to get started.")
+        Spacer(Modifier.height(12.dp))
+        OfficeText(
+            "YOUR PEOPLE. YOUR PLACE.",
+            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.labelMedium,
+        )
+        OfficeText(
+            "Your workspaces",
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Bold,
+        )
+        OfficeText(
+            "Welcome back, ${model.account?.string("name").orEmpty()}.",
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        if (model.workspaces.isEmpty()) {
+            OfficeScene(Modifier.fillMaxWidth().height(180.dp))
+            OfficeText("Create an office or accept an invitation to get started.")
+        }
         model.workspaces.forEach { workspace ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(18.dp)) {
-                    Text(workspace.name, style = MaterialTheme.typography.titleLarge)
-                    Text(
-                        workspace.role.replaceFirstChar(Char::uppercase),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Row(Modifier.padding(top = 12.dp)) {
-                        Button(onClick = { model.select(workspace) }) { Text("Enter office") }
-                        TextButton(onClick = { settings = workspace }) {
-                            Text("Members & settings")
-                        }
-                    }
-                }
-            }
+            WorkspaceCard(workspace, { model.select(workspace) }, { settings = workspace })
         }
         Row {
             if (model.account?.string("workspaceId").isNullOrBlank())
-                Button(onClick = { create = true }) { Text("New workspace") }
-            TextButton(onClick = { model.action { model.load() } }) { Text("Refresh") }
+                Button(onClick = { create = true }) { OfficeText("New workspace") }
+            TextButton(onClick = { model.action { model.load() } }) { OfficeText("Refresh") }
         }
         if (model.account?.string("workspaceId").isNullOrBlank())
-            TextButton(onClick = { join = true }) { Text("Accept an invitation") }
+            TextButton(onClick = { join = true }) { OfficeText("Accept an invitation") }
     }
     if (create) WorkspaceCreate(model) { create = false }
     if (join)
@@ -230,14 +183,14 @@ fun WorkspaceCreate(model: OfficeModel, close: () -> Unit) {
     var map by remember { mutableStateOf(model.maps.firstOrNull()?.string("id").orEmpty()) }
     AlertDialog(
         onDismissRequest = close,
-        title = { Text("New workspace") },
+        title = { OfficeText("New workspace") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text("Name") })
+                OutlinedTextField(name, { name = it }, label = { OfficeText("Name") })
                 OutlinedTextField(
                     slug,
                     { slug = it.lowercase() },
-                    label = { Text("Address (team-name)") },
+                    label = { OfficeText("Address (team-name)") },
                 )
                 MapPicker(model.maps, map) { map = it }
             }
@@ -262,10 +215,10 @@ fun WorkspaceCreate(model: OfficeModel, close: () -> Unit) {
                     }
                 },
             ) {
-                Text("Create")
+                OfficeText("Create")
             }
         },
-        dismissButton = { TextButton(onClick = close) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = close) { OfficeText("Cancel") } },
     )
 }
 
@@ -274,12 +227,12 @@ fun MapPicker(maps: List<JSONObject>, selected: String, select: (String) -> Unit
     var open by remember { mutableStateOf(false) }
     Box {
         OutlinedButton(onClick = { open = true }) {
-            Text(maps.find { it.string("id") == selected }?.string("name") ?: "Choose a map")
+            OfficeText(maps.find { it.string("id") == selected }?.string("name") ?: "Choose a map")
         }
         DropdownMenu(open, { open = false }) {
             maps.forEach { map ->
                 DropdownMenuItem(
-                    text = { Text(map.string("name")) },
+                    text = { OfficeText(map.string("name")) },
                     onClick = {
                         select(map.string("id"))
                         open = false
@@ -301,12 +254,14 @@ fun TextEntryDialog(
     var value by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = { OutlinedTextField(value, { value = it }, label = { Text(label) }) },
+        title = { OfficeText(title) },
+        text = { OutlinedTextField(value, { value = it }, label = { OfficeText(label) }) },
         confirmButton = {
-            TextButton(onClick = { submit(value) }, enabled = value.isNotBlank()) { Text(action) }
+            TextButton(onClick = { submit(value) }, enabled = value.isNotBlank()) {
+                OfficeText(action)
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { OfficeText("Cancel") } },
     )
 }
 
@@ -315,8 +270,20 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
     BackHandler { model.leave() }
     val context = LocalContext.current
     var people by remember { mutableStateOf(false) }
+    var settings by remember { mutableStateOf(false) }
+    var rooms by remember { mutableStateOf(false) }
+    var search by remember { mutableStateOf("") }
     var emotes by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf(false) }
+    var shareOptions by remember { mutableStateOf(false) }
+    var includeAudio by remember { mutableStateOf(false) }
+    val screenAudioPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) office.media.requestScreenShare(true)
+            else
+                office.notice =
+                    "Audio permission is needed to share app audio. You can still share your screen without audio."
+        }
     var selected by remember { mutableStateOf<Person?>(null) }
     val mic =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -349,23 +316,49 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
                 Modifier.fillMaxWidth().padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = { model.leave() }) { Text("‹ Offices") }
+                TextButton(onClick = { model.leave() }) { OfficeText("‹ Offices") }
                 Column(Modifier.weight(1f)) {
-                    Text(office.workspace.name, fontWeight = FontWeight.Bold)
-                    Text(
+                    OfficeText(office.workspace.name, fontWeight = FontWeight.Bold)
+                    OfficeText(
                         if (office.connected)
                             "${office.snapshot?.people?.size ?: 0} online · ${office.snapshot?.me?.zone.orEmpty()}"
                         else "Disconnected",
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }
-                TextButton(onClick = { people = true }) { Text("People") }
+                var menu by remember { mutableStateOf(false) }
+                Box {
+                    TextButton(onClick = { menu = true }) { OfficeText("Menu") }
+                    DropdownMenu(menu, { menu = false }) {
+                        DropdownMenuItem(
+                            text = { OfficeText("People") },
+                            onClick = {
+                                menu = false
+                                people = true
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { OfficeText("Rooms") },
+                            onClick = {
+                                menu = false
+                                rooms = true
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { OfficeText("Settings") },
+                            onClick = {
+                                menu = false
+                                settings = true
+                            },
+                        )
+                    }
+                }
             }
         }
         if (office.error.isNotBlank()) Message(office.error) { office.error = "" }
         if (office.notice.isNotBlank()) Message(office.notice) { office.notice = "" }
         if (office.media.error.isNotBlank())
-            Text(
+            OfficeText(
                 office.media.error,
                 Modifier.padding(8.dp),
                 color = MaterialTheme.colorScheme.error,
@@ -383,12 +376,23 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
                         Modifier.padding(20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Text(if (office.needsTakeover) "Open here instead?" else "Join your office")
+                        OfficeText(
+                            if (office.needsTakeover) "Open here instead?" else "Join your office"
+                        )
                         Button(onClick = { office.connect(office.needsTakeover) }) {
-                            Text(if (office.needsTakeover) "Take over" else "Connect")
+                            OfficeText(if (office.needsTakeover) "Take over" else "Connect")
                         }
                     }
                 }
+            if (office.connected && office.interactionPrompt.isNotEmpty())
+                FilledTonalButton(
+                    onClick = { office.interact() },
+                    modifier = Modifier.align(Alignment.TopCenter).padding(8.dp),
+                ) {
+                    OfficeText(office.interactionPrompt)
+                }
+            if (office.farmScore.isNotEmpty())
+                OfficeText(office.farmScore, Modifier.align(Alignment.TopStart).padding(8.dp))
             if (office.connected)
                 Row(
                     Modifier.align(Alignment.BottomStart).padding(12.dp),
@@ -399,33 +403,12 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
                             onClick = { office.send(json("type" to "zone", "zone" to zone)) },
                             contentPadding = PaddingValues(horizontal = 12.dp),
                         ) {
-                            Text(zone.replaceFirstChar(Char::uppercase))
+                            OfficeText(zone.replaceFirstChar(Char::uppercase))
                         }
                     }
                 }
         }
-        if (office.media.videos.isNotEmpty())
-            LazyRow(Modifier.height(120.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(office.media.videos, key = { it.id }) { video ->
-                    val room = office.media.room
-                    if (room != null)
-                        key(room, video.track) {
-                            AndroidView(
-                                factory = {
-                                    TextureViewRenderer(it).apply {
-                                        room.initVideoRenderer(this)
-                                        video.track.addRenderer(this)
-                                    }
-                                },
-                                modifier = Modifier.width(160.dp).fillMaxHeight(),
-                                onRelease = {
-                                    video.track.removeRenderer(it)
-                                    it.release()
-                                },
-                            )
-                        }
-                }
-            }
+        MediaPanel(office)
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -434,37 +417,50 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
                 enabled = office.media.connected,
                 onClick = { mic.launch(Manifest.permission.RECORD_AUDIO) },
             ) {
-                Text(if (office.media.microphone) "Mute" else "Mic")
+                OfficeText(if (office.media.microphone) "Mute" else "Mic")
             }
             FilledTonalButton(
                 enabled = office.media.connected,
                 onClick = { camera.launch(Manifest.permission.CAMERA) },
             ) {
-                Text(if (office.media.camera) "Camera off" else "Camera")
+                OfficeText(if (office.media.camera) "Camera off" else "Camera")
             }
             FilledTonalButton(
                 enabled = office.media.connected,
-                onClick = { office.media.requestScreenShare() },
+                onClick = {
+                    if (office.media.sharing) office.media.requestScreenShare()
+                    else {
+                        includeAudio = false
+                        shareOptions = true
+                    }
+                },
             ) {
-                Text(if (office.media.sharing) "Stop sharing" else "Share screen")
+                OfficeText(if (office.media.sharing) "Stop sharing" else "Share screen")
+            }
+            if (office.snapshot?.me?.conversation?.startsWith("call:") == true)
+                FilledTonalButton(onClick = { office.send(json("type" to "leave")) }) {
+                    OfficeText("Leave call")
+                }
+            FilledTonalButton(enabled = office.connected, onClick = { office.perform("nudge") }) {
+                OfficeText("Nudge nearby")
             }
             FilledTonalButton(enabled = office.connected, onClick = { office.perform("jump") }) {
-                Text("Jump")
+                OfficeText("Jump")
             }
             FilledTonalButton(enabled = office.connected, onClick = { office.perform("sit") }) {
-                Text("Sit")
+                OfficeText("Sit")
             }
             FilledTonalButton(enabled = office.connected, onClick = { office.perform("sleep") }) {
-                Text("Sleep")
+                OfficeText("Sleep")
             }
             FilledTonalButton(enabled = office.connected, onClick = { office.perform("fish") }) {
-                Text("Fish")
+                OfficeText("Fish")
             }
             FilledTonalButton(enabled = office.connected, onClick = { emotes = true }) {
-                Text("React")
+                OfficeText("React")
             }
             FilledTonalButton(enabled = office.connected, onClick = { status = true }) {
-                Text("Status")
+                OfficeText("Status")
             }
             FilledTonalButton(
                 enabled = office.connected && office.boardEnabled,
@@ -473,37 +469,49 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
                     office.board = true
                 },
             ) {
-                Text("Whiteboard")
+                OfficeText("Whiteboard")
             }
         }
     }
     if (people)
         AlertDialog(
             onDismissRequest = { people = false },
-            title = { Text("People") },
+            title = { OfficeText("People") },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
-                    office.snapshot?.people?.forEach { person ->
-                        TextButton(
-                            onClick = {
-                                selected = person
-                                people = false
+                    OutlinedTextField(
+                        search,
+                        { search = it },
+                        label = { OfficeText("Search people") },
+                    )
+                    office.snapshot
+                        ?.people
+                        ?.filter { it.name.contains(search, ignoreCase = true) }
+                        ?.forEach { person ->
+                            TextButton(
+                                onClick = {
+                                    selected = person
+                                    people = false
+                                }
+                            ) {
+                                OfficeText(
+                                    "${person.name} · ${person.activityIcon} ${person.activityText.ifBlank { person.activityStatus }}"
+                                )
                             }
-                        ) {
-                            Text("${person.name} · ${person.status} ${person.statusText}")
                         }
-                    }
                 }
             },
-            confirmButton = { TextButton(onClick = { people = false }) { Text("Done") } },
+            confirmButton = { TextButton(onClick = { people = false }) { OfficeText("Done") } },
         )
     selected?.let { person ->
         AlertDialog(
             onDismissRequest = { selected = null },
-            title = { Text(person.name) },
+            title = { OfficeText(person.name) },
             text = {
                 Column {
-                    Text(person.statusText.ifBlank { person.status })
+                    OfficeText(
+                        "${person.activityIcon} ${person.activityText.ifBlank { person.activityStatus }}"
+                    )
                     if (person.id != office.snapshot?.self)
                         listOf(
                                 "wave" to "Wave",
@@ -526,18 +534,18 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
                                         selected = null
                                     }
                                 ) {
-                                    Text(title)
+                                    OfficeText(title)
                                 }
                             }
                 }
             },
-            confirmButton = { TextButton(onClick = { selected = null }) { Text("Done") } },
+            confirmButton = { TextButton(onClick = { selected = null }) { OfficeText("Done") } },
         )
     }
     if (emotes)
         AlertDialog(
             onDismissRequest = { emotes = false },
-            title = { Text("Say it with a reaction") },
+            title = { OfficeText("Say it with a reaction") },
             text = {
                 Row(Modifier.horizontalScroll(rememberScrollState())) {
                     listOf("👋", "❤️", "🎉", "😂", "👍", "☕").forEach { emoji ->
@@ -547,23 +555,60 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
                                 emotes = false
                             }
                         ) {
-                            Text(emoji)
+                            OfficeText(emoji)
                         }
                     }
                 }
             },
             confirmButton = {},
         )
+    if (shareOptions)
+        AlertDialog(
+            onDismissRequest = { shareOptions = false },
+            title = { OfficeText("Share screen") },
+            text = {
+                Column {
+                    OfficeText("Choose what to share in Android's next prompt.")
+                    if (android.os.Build.VERSION.SDK_INT >= 29)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(includeAudio, { includeAudio = it })
+                            OfficeText("Include app audio")
+                        }
+                    OfficeText(
+                        "Only apps that allow playback capture can share audio. Your microphone keeps its current mute setting."
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        shareOptions = false
+                        if (includeAudio)
+                            screenAudioPermission.launch(Manifest.permission.RECORD_AUDIO)
+                        else office.media.requestScreenShare()
+                    }
+                ) {
+                    OfficeText("Continue")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { shareOptions = false }) { OfficeText("Cancel") }
+            },
+        )
+    if (settings) OfficeSettings(model, office) { settings = false }
+    if (rooms) RoomsDialog(office) { rooms = false }
     if (status) StatusDialog(office) { status = false }
     if (office.board)
         Dialog(
-            onDismissRequest = { office.board = false },
+            onDismissRequest = { office.closeBoard?.invoke() },
             properties =
                 androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Surface(Modifier.fillMaxSize()) {
                 Column(Modifier.safeDrawingPadding()) {
-                    TextButton(onClick = { office.board = false }) { Text("Close whiteboard") }
+                    TextButton(onClick = { office.closeBoard?.invoke() }) {
+                        OfficeText("Close whiteboard")
+                    }
                     Whiteboard(office, Modifier.weight(1f))
                 }
             }
@@ -577,15 +622,15 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
         }
         AlertDialog(
             onDismissRequest = { respond(false) },
-            title = { Text("${invitation.string("fromName")} invited you") },
+            title = { OfficeText("${invitation.string("fromName")} invited you") },
             text = {
-                Text(
+                OfficeText(
                     if (invitation.string("kind") == "call") "Join a private conversation?"
                     else "Walk over to their location?"
                 )
             },
-            confirmButton = { TextButton(onClick = { respond(true) }) { Text("Accept") } },
-            dismissButton = { TextButton(onClick = { respond(false) }) { Text("Decline") } },
+            confirmButton = { TextButton(onClick = { respond(true) }) { OfficeText("Accept") } },
+            dismissButton = { TextButton(onClick = { respond(false) }) { OfficeText("Decline") } },
         )
     }
 }
@@ -594,34 +639,103 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
 private fun StatusDialog(office: OfficeSession, close: () -> Unit) {
     var status by remember { mutableStateOf(office.snapshot?.me?.status ?: "available") }
     var text by remember { mutableStateOf(office.snapshot?.me?.statusText.orEmpty()) }
+    var icon by remember { mutableStateOf(office.snapshot?.me?.statusIcon.orEmpty()) }
     AlertDialog(
         onDismissRequest = close,
-        title = { Text("Your status") },
+        title = { OfficeText("Your status") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 listOf("available", "busy", "dnd", "away").forEach { value ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(status == value, { status = value })
-                        Text(value.replaceFirstChar(Char::uppercase))
+                        OfficeText(value.replaceFirstChar(Char::uppercase))
+                    }
+                }
+                Row(Modifier.horizontalScroll(rememberScrollState())) {
+                    statusPresets.forEach { preset ->
+                        TextButton(
+                            onClick = {
+                                status = preset.first
+                                icon = preset.second
+                                text = preset.third
+                            }
+                        ) {
+                            OfficeText("${preset.second} ${preset.third}")
+                        }
+                    }
+                }
+                Row(Modifier.horizontalScroll(rememberScrollState())) {
+                    statusIcons.forEach { value ->
+                        FilterChip(
+                            icon == value,
+                            { icon = value },
+                            label = { OfficeText(value.ifBlank { "Automatic" }) },
+                        )
                     }
                 }
                 OutlinedTextField(
                     text,
                     { text = it.take(80) },
-                    label = { Text("What are you working on?") },
+                    label = { OfficeText("What are you working on?") },
                 )
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    office.send(json("type" to "status", "status" to status, "text" to text))
+                    office.send(
+                        json("type" to "status", "status" to status, "text" to text, "icon" to icon)
+                    )
                     close()
                 }
             ) {
-                Text("Save")
+                OfficeText("Save")
             }
         },
-        dismissButton = { TextButton(onClick = close) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = close) { OfficeText("Cancel") } },
+    )
+}
+
+@Composable
+private fun RoomsDialog(office: OfficeSession, close: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = close,
+        title = { OfficeText("Rooms") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                office.scene?.zones.orEmpty().forEach { zone ->
+                    val id = zone.string("id")
+                    val locked = office.snapshot?.locks?.optBoolean(id) == true
+                    OfficeText(
+                        zone.string("name", id),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    OfficeText(
+                        "${office.snapshot?.people?.count { it.zone == id } ?: 0} people · ${if (locked) "Locked" else "Open"}"
+                    )
+                    Row {
+                        TextButton(
+                            onClick = {
+                                office.send(json("type" to "zone", "zone" to id))
+                                close()
+                            }
+                        ) {
+                            OfficeText("Enter room")
+                        }
+                        if (id != "floor")
+                            TextButton(
+                                onClick = {
+                                    office.send(
+                                        json("type" to "lock", "zone" to id, "locked" to !locked)
+                                    )
+                                }
+                            ) {
+                                OfficeText(if (locked) "Unlock" else "Lock")
+                            }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = close) { OfficeText("Done") } },
     )
 }
