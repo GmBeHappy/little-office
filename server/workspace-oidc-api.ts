@@ -1,4 +1,5 @@
-import { sameRequestOrigin } from "./workspace-domains";
+import { sameRequestOrigin, workspaceOrigin } from "./workspace-domains";
+import { workspaceSlug } from "../shared/workspace-domains";
 import { Elysia } from "elysia";
 import { and, eq, sql } from "drizzle-orm";
 import { Resolver } from "node:dns/promises";
@@ -90,6 +91,34 @@ export const workspaceOidcApi = new Elysia({ name: "workspace-oidc" })
     set.headers["cache-control"] = "no-store";
     if (request.method !== "GET" && !sameRequestOrigin(request))
       throw new Problem(403, "Untrusted request origin.");
+  })
+  .get("/api/saas/login/:slug", async ({ params }) => {
+    if (!workspaceSlug(params.slug))
+      throw new Problem(404, "Workspace not found.");
+    const [workspace] = await db
+      .select({
+        name: workspaces.name,
+        slug: workspaces.slug,
+        providerId: workspaceOidc.providerId,
+      })
+      .from(workspaces)
+      .leftJoin(
+        workspaceOidc,
+        and(
+          eq(workspaceOidc.workspaceId, workspaces.id),
+          eq(workspaceOidc.enabled, true),
+        ),
+      )
+      .where(eq(workspaces.slug, params.slug));
+    if (!workspace) throw new Problem(404, "Workspace not found.");
+    return {
+      workspace: {
+        name: workspace.name,
+        slug: workspace.slug,
+        url: config.workspaceDomain ? workspaceOrigin(workspace.slug) : null,
+      },
+      providerId: workspace.providerId,
+    };
   })
   .get("/api/saas/sso/:slug", async ({ params }) => {
     const slug = z

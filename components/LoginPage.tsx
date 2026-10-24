@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Login, PasswordChange } from "./OfficeApp";
 import { api, type AppConfig, type User } from "@/lib/api";
+import { loginReturnTarget } from "@/lib/native-login";
 export default function LoginPage() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [changePassword, setChangePassword] = useState(false);
@@ -13,23 +14,19 @@ export default function LoginPage() {
       const { user }: { user: User } = await response.json();
       if (user.mustChangePassword) setChangePassword(true);
       else {
-        const workspace = sessionStorage.getItem("workspace-return");
-        if (workspace?.startsWith("/workspace-connect?")) {
-          sessionStorage.removeItem("workspace-return");
-          location.assign(workspace);
-          return;
+        let target: ReturnType<typeof loginReturnTarget> = null;
+        try {
+          target = loginReturnTarget({
+            "native-return": sessionStorage.getItem("native-return"),
+            "workspace-return": sessionStorage.getItem("workspace-return"),
+            "profile-return": sessionStorage.getItem("profile-return"),
+          });
+          if (target) sessionStorage.removeItem(target.key);
+          else sessionStorage.removeItem("native-return");
+        } catch {
+          // Storage-disabled browsers can still reach the account dashboard.
         }
-        const profile = sessionStorage.getItem("profile-return");
-        if (profile?.startsWith("/profile?workspace=")) {
-          sessionStorage.removeItem("profile-return");
-          location.assign(profile);
-          return;
-        }
-        const pending = sessionStorage.getItem("native-return");
-        if (pending?.startsWith("/native/authorize?")) {
-          sessionStorage.removeItem("native-return");
-          location.assign(pending);
-        } else location.assign("/workspaces");
+        location.assign(target?.path || "/workspaces");
       }
     }
   }, []);
@@ -45,11 +42,16 @@ export default function LoginPage() {
   }, [refresh]);
   return (
     <>
-      {error && <p role="alert">{error}</p>}
+      {error && changePassword && <p role="alert">{error}</p>}
       {changePassword ? (
         <PasswordChange onDone={refresh} />
       ) : (
-        <Login config={config} refresh={refresh} notify={setError} />
+        <Login
+          config={config}
+          refresh={refresh}
+          notify={setError}
+          error={error}
+        />
       )}
     </>
   );

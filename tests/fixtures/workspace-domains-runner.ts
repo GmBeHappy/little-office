@@ -86,6 +86,18 @@ try {
       }),
     );
   }
+  const discovered = await req(portal, "/api/saas/login/gmtech");
+  assert.equal(discovered.status, 200);
+  assert.equal(discovered.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await discovered.json(), {
+    workspace: { name: "GMTECH", slug: "gmtech", url: tenant },
+    providerId: null,
+  });
+  assert.equal(
+    (await req(tenant, "/api/saas/login/gmtech")).status,
+    404,
+    "Public discovery remains on the portal, not tenant hosts",
+  );
   const { MAPS } = await import("../../shared/maps");
   const catalog = await (await req(portal, "/api/saas/config")).json();
   assert.deepEqual(
