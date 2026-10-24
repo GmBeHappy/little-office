@@ -15,6 +15,9 @@
 <key>NSMicrophoneUsageDescription</key><string>Talk with teammates near you or in your meeting room.</string>
 <key>NSLocalNetworkUsageDescription</key><string>Connect to your self-hosted Little Office server.</string>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
+<key>RTCAppGroupIdentifier</key><string>group.dev.littleoffice.app</string>
+<key>RTCScreenSharingExtension</key><string>dev.littleoffice.app.broadcast</string>
+<key>UIBackgroundModes</key><array><string>audio</string></array>
 <key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
 <key>UILaunchScreen</key><dict/>
 <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
