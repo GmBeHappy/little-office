@@ -11,17 +11,21 @@ import org.json.JSONObject
 
 class APIError(val status: Int, message: String) : Exception(message)
 
-class OfficeAPI(origin: String, val credential: JSONObject? = null) {
-    val origin = NativeAuth.origin(origin)
-    // Redirects are rejected so bearer credentials never leave the configured origin.
-    private val client =
+class OfficeAPI
+internal constructor(
+    origin: String,
+    val credential: JSONObject? = null,
+    private val client: OkHttpClient =
         OkHttpClient.Builder()
             .followRedirects(false)
             .followSslRedirects(false)
             .callTimeout(20, TimeUnit.SECONDS)
             .pingInterval(20, TimeUnit.SECONDS)
-            .build()
+            .build(),
+) {
+    val origin = NativeAuth.origin(origin)
 
+    // Redirects are rejected so bearer credentials never leave the configured origin.
     fun request(path: String): Request.Builder {
         require(path.startsWith('/') && !path.startsWith("//") && !path.contains('\\'))
         val base = origin.toHttpUrl()
@@ -65,6 +69,51 @@ class OfficeAPI(origin: String, val credential: JSONObject? = null) {
                             ?: "Request failed (${it.code}).",
                     )
                 result ?: throw APIError(it.code, "Invalid server response.")
+            }
+        }
+
+    suspend fun storageDownload(workspace: String, fileId: String): String =
+        withContext(Dispatchers.IO) {
+            require(fileId.matches(Regex("[a-fA-F0-9-]{36}")))
+            client
+                .newCall(request(path(workspace, "/whiteboard/files/$fileId")).build())
+                .execute()
+                .use { response ->
+                    if (response.code !in listOf(301, 302, 303, 307, 308))
+                        throw APIError(
+                            response.code,
+                            "Unable to download this whiteboard snapshot.",
+                        )
+                    val url =
+                        response.header("Location")?.toHttpUrl()
+                            ?: error("Missing download address.")
+                    require(url.isHttps && url.username.isEmpty() && url.password.isEmpty()) {
+                        "Invalid storage download address."
+                    }
+                    // Only the authenticated office request gets the bearer. The storage
+                    // request receives the signed URL alone.
+                    url.toString()
+                }
+        }
+
+    suspend fun snapshotBytes(workspace: String, fileId: String): ByteArray =
+        withContext(Dispatchers.IO) {
+            val address = storageDownload(workspace, fileId)
+            client.newCall(Request.Builder().url(address).build()).execute().use { response ->
+                require(response.isSuccessful) { "Unable to download snapshot." }
+                val body = requireNotNull(response.body)
+                require(body.contentLength() <= 5_000_000) { "Snapshot exceeds 5 MB." }
+                val output = java.io.ByteArrayOutputStream()
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        require(output.size() + count <= 5_000_000) { "Snapshot exceeds 5 MB." }
+                        output.write(buffer, 0, count)
+                    }
+                }
+                output.toByteArray()
             }
         }
 

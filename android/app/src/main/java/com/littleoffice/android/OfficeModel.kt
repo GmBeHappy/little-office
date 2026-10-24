@@ -17,11 +17,12 @@ class OfficeModel(application: Application) : AndroidViewModel(application) {
         mutableStateOf(
             store.read("server")?.string("origin")
                 ?: store.read("session")?.string("origin")
-                ?: "http://localhost:3000"
+                ?: "https://app.littleoffice.app"
         )
     var account by mutableStateOf<JSONObject?>(null)
     var workspaces by mutableStateOf(emptyList<Workspace>())
     var maps by mutableStateOf(emptyList<JSONObject>())
+    var allMaps by mutableStateOf(emptyList<JSONObject>())
     var office by mutableStateOf<OfficeSession?>(null)
     var error by mutableStateOf("")
     var busy by mutableStateOf(false)
@@ -71,6 +72,7 @@ class OfficeModel(application: Application) : AndroidViewModel(application) {
         account = next
         workspaces = spaces
         maps = config.getJSONArray("maps").objects()
+        allMaps = config.optJSONArray("allMaps")?.objects() ?: maps
     }
 
     fun signIn(): Uri? =
@@ -174,6 +176,13 @@ class OfficeSession(
     var needsTakeover by mutableStateOf(false)
     var error by mutableStateOf("")
     var notice by mutableStateOf("")
+    var world: NativeWorld? = null
+    var worldTime = 0.0
+    var interactionPrompt by mutableStateOf("")
+    var farmScore by mutableStateOf("")
+    var externalDocument by mutableStateOf(false)
+    var closeBoard: (() -> Unit)? = null
+    var operator by mutableStateOf(false)
     var board by mutableStateOf(false)
     var boardEnabled by mutableStateOf(false)
     var invitations by mutableStateOf(emptyList<JSONObject>())
@@ -181,12 +190,20 @@ class OfficeSession(
     private var scope: CoroutineScope? = null
     private var socket: WebSocket? = null
     private var generation = 0
+    private var retry: Job? = null
+    private var reconnectAttempt = 0
+    private var suspended = false
+    var reconnecting by mutableStateOf(false)
+        private set
+
+    val preferences = OfficePreferences(application)
     private var direction = 0 to 0
     private var sequence = 0
     private val loading = mutableSetOf<String>()
 
     fun connect(takeover: Boolean = false) {
         stop()
+        suspended = false
         val epoch = generation
         needsTakeover = false
         error = ""
@@ -198,6 +215,10 @@ class OfficeSession(
         scope.launch {
             try {
                 val config = api.call(api.path(workspace.id, "/config"))
+                val identity = api.call(api.path(workspace.id, "/me"))
+                operator =
+                    identity.optBoolean("operator") &&
+                        api.credential?.string("workspaceId").isNullOrBlank()
                 require(config.getInt("protocolVersion") == 1) {
                     "Update Little Office to connect."
                 }
@@ -233,7 +254,7 @@ class OfficeSession(
                             ) {
                                 scope.launch {
                                     if (generation == epoch)
-                                        fail(t.message ?: "Connection lost. Reconnect to continue.")
+                                        recover(t.message ?: "Connection lost. Reconnecting…")
                                 }
                             }
 
@@ -241,11 +262,12 @@ class OfficeSession(
                                 scope.launch {
                                     if (generation == epoch) {
                                         needsTakeover = code == 4001
-                                        fail(
-                                            if (needsTakeover)
-                                                "This workspace is open on another device."
-                                            else reason.ifBlank { "Disconnected." }
-                                        )
+                                        if (needsTakeover)
+                                            fail("This workspace is open on another device.")
+                                        else
+                                            recover(
+                                                reason.ifBlank { "Connection lost. Reconnecting…" }
+                                            )
                                     }
                                 }
                             }
@@ -259,14 +281,60 @@ class OfficeSession(
                             }
                         },
                     )
+                var lastPing = SystemClock.elapsedRealtime()
                 while (isActive) {
                     delay(80)
-                    if (connected) sendMove()
+                    if (connected) {
+                        sendMove()
+                        if (SystemClock.elapsedRealtime() - lastPing >= 10000) {
+                            send(json("type" to "ping"))
+                            lastPing = SystemClock.elapsedRealtime()
+                        }
+                    }
                 }
             } catch (cancel: CancellationException) {
                 throw cancel
             } catch (e: Exception) {
-                if (generation == epoch) fail(e.message.orEmpty())
+                if (generation == epoch) {
+                    if (e is APIError && e.status in listOf(401, 403, 404))
+                        fail(e.message.orEmpty())
+                    else recover(e.message.orEmpty())
+                }
+            }
+        }
+    }
+
+    fun suspendForBackground() {
+        if (!needsTakeover) suspended = true
+        stop()
+    }
+
+    fun resume() {
+        if (suspended && !needsTakeover) connect()
+    }
+
+    private fun recover(message: String) {
+        error = message
+        stop()
+        reconnecting = true
+        val epoch = generation
+        retry = parentScope.launch {
+            delay((1000L shl reconnectAttempt.coerceAtMost(4)).coerceAtMost(10000))
+            reconnectAttempt++
+            if (generation != epoch || suspended || needsTakeover) return@launch
+            try {
+                api.call(api.path(workspace.id, "/me"))
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (e: APIError) {
+                if (e.status in listOf(401, 403, 404)) {
+                    fail(e.message.orEmpty())
+                    return@launch
+                }
+            } catch (_: Exception) {}
+            if (generation == epoch) {
+                retry = null
+                connect()
             }
         }
     }
@@ -293,9 +361,18 @@ class OfficeSession(
                             error = e.message.orEmpty()
                         }
                     }
-                if (snapshot?.me?.zone != next.me?.zone) board = false
+                if (
+                    snapshot?.me?.conversation != next.me?.conversation ||
+                        snapshot?.revision != next.revision
+                )
+                    board = false
+                boardEnabled =
+                    next.workspace.optJSONObject("features")?.optBoolean("whiteboard", true) ?: true
+                if (!boardEnabled) board = false
                 snapshot = next
                 connected = true
+                reconnecting = false
+                reconnectAttempt = 0
                 sequence = maxOf(sequence, next.me?.seq ?: 0)
                 if (mediaEnabled) media.update(next, api, workspace.id)
                 next.people.forEach { person ->
@@ -341,7 +418,11 @@ class OfficeSession(
                 }
             }
             "presenter" -> media.presenter(event.optBoolean("enabled"))
-            "nudge" -> notice = "${event.string("name", "Someone")} nudged you."
+            "nudge" -> {
+                notice = "${event.string("name", "Someone")} nudged you."
+                media.playNudge()
+            }
+            "nudge-sent" -> media.playNudge()
             "notice",
             "error" -> notice = event.string("message")
             "invitation" -> invitations = invitations + event.getJSONObject("invitation")
@@ -378,6 +459,36 @@ class OfficeSession(
             )
     }
 
+    fun interact() {
+        if (!connected) return
+        val state = snapshot ?: return
+        val me = state.me ?: return
+        val world = world ?: return
+        val features = state.workspace.optJSONObject("features")
+        if (features?.optBoolean("activities", true) == false) return
+        val farm = world.farm
+        val target = farm?.target(me.x.toDouble(), me.y.toDouble(), worldTime)
+        if (target != null)
+            send(json("type" to "emote", "emoji" to farm.interact(target, worldTime)))
+        else {
+            val habitatTarget =
+                world.target(
+                    me,
+                    System.currentTimeMillis().toDouble(),
+                    features?.optBoolean("wildlife", true) ?: true,
+                    true,
+                )
+            if (habitatTarget >= 0)
+                send(
+                    json(
+                        "type" to "interact",
+                        "target" to habitatTarget,
+                        "revision" to state.habitat.optInt("revision"),
+                    )
+                )
+        }
+    }
+
     fun perform(action: String) {
         if (!connected) return
         if (action in listOf("stand", "sit", "sleep", "fish")) {
@@ -392,6 +503,9 @@ class OfficeSession(
     }
 
     fun stop() {
+        retry?.cancel()
+        retry = null
+        reconnecting = false
         generation++
         direction = 0 to 0
         connected = false
