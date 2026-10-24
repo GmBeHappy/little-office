@@ -5,12 +5,14 @@ import SwiftUI
 @MainActor
 final class AppModel: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
   @Published var serverAddress =
-    UserDefaults.standard.string(forKey: "serverAddress") ?? "http://localhost:3000"
+    UserDefaults.standard.string(forKey: "serverAddress") ?? "https://app.littleoffice.app"
+  @Published var workspaceSlug: String?
+  @Published var workspaceName: String?
   @Published var account: Account?
   @Published var workspaces: [Workspace] = []
   @Published var office: WorkspaceSession?
   @Published var error = ""
-  @Published var busy = false
+  @Published var busy = true
   private(set) var api: OfficeAPI?
   private var browser: ASWebAuthenticationSession?
   private var selection = UUID()
@@ -19,6 +21,9 @@ final class AppModel: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     Task { await restore() }
   }
   func restore() async {
+    // Keep destination/account actions disabled until the saved-origin restore has settled.
+    busy = true
+    defer { busy = false }
     do {
       guard let origin = URL(string: serverAddress),
         let credential = CredentialStore.load(origin: origin)
@@ -36,10 +41,12 @@ final class AppModel: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     UserDefaults.standard.set(client.origin.absoluteString, forKey: "serverAddress")
   }
   func refresh() async {
-    guard let api else { return }
+    guard let api, !busy else { return }
+    busy = true
+    defer { busy = false }
     do { try await load(api) } catch { self.error = error.localizedDescription }
   }
-  func signIn() {
+  func signIn(fresh: Bool = false) {
     guard !busy else { return }
     do {
       guard let origin = URL(string: serverAddress) else {
@@ -47,9 +54,16 @@ final class AppModel: NSObject, ObservableObject, ASWebAuthenticationPresentatio
       }
       let client = try OfficeAPI(origin: origin)
       let pkce = try PKCE()
-      let url = URL(
-        string: "/native/authorize?challenge=\(pkce.challenge)&state=\(pkce.state)",
-        relativeTo: origin)!.absoluteURL
+      var authorization = URLComponents(
+        url: origin.appendingPathComponent("native/authorize"), resolvingAgainstBaseURL: false)!
+      authorization.queryItems = [
+        URLQueryItem(name: "challenge", value: pkce.challenge),
+        URLQueryItem(name: "state", value: pkce.state),
+      ]
+      if !fresh, let workspaceSlug {
+        authorization.queryItems?.append(URLQueryItem(name: "workspace", value: workspaceSlug))
+      }
+      let url = authorization.url!
       busy = true
       error = ""
       browser = ASWebAuthenticationSession(url: url, callbackURLScheme: "littleoffice") {
@@ -71,6 +85,7 @@ final class AppModel: NSObject, ObservableObject, ASWebAuthenticationPresentatio
           } catch { self.error = error.localizedDescription }
         }
       }
+      browser?.prefersEphemeralWebBrowserSession = fresh
       browser?.presentationContextProvider = self
       if browser?.start() != true {
         busy = false
@@ -78,8 +93,31 @@ final class AppModel: NSObject, ObservableObject, ASWebAuthenticationPresentatio
       }
     } catch { self.error = error.localizedDescription }
   }
+  func chooseWorkspaceAddress(_ address: String) async throws {
+    guard !busy else {
+      throw APIError(status: 0, message: "Wait for sign-in to finish before changing workspace.")
+    }
+    busy = true
+    defer { busy = false }
+    let slug = try OfficeDestination.workspaceSlug(address)
+    let portal = try OfficeAPI(origin: OfficeDestination.canonicalOrigin)
+    let destination: WorkspaceLogin
+    do { destination = try await portal.call("/api/saas/login/\(slug)") } catch {
+      throw APIError(
+        status: (error as? APIError)?.status ?? 0,
+        message: "We couldn't load this workspace. Check its address and try again.")
+    }
+    // Discovery names the workspace; it never redirects native credentials or API calls.
+    serverAddress = portal.origin.absoluteString
+    workspaceSlug = slug
+    workspaceName = destination.workspace.name
+  }
+  private struct WorkspaceLogin: Decodable {
+    let workspace: Detail
+    struct Detail: Decodable { let name: String }
+  }
   func select(_ workspace: Workspace) async {
-    guard let api else { return }
+    guard let api, !busy else { return }
     let generation = UUID()
     selection = generation
     let previous = office
@@ -97,6 +135,9 @@ final class AppModel: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     await previous?.stop()
   }
   func logout() async {
+    guard !busy else { return }
+    busy = true
+    defer { busy = false }
     await leave()
     if let api {
       do {

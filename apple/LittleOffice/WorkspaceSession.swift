@@ -17,6 +17,7 @@ final class WorkspaceSession: ObservableObject, Identifiable {
   @Published var needsTakeover = false
   @Published var error = ""
   @Published var notice = ""
+  @Published var profile: ProfileResponse?
   @Published var showingBoard = false
   @Published var showingEmotePicker = false
   let media = OfficeMedia()
@@ -26,6 +27,8 @@ final class WorkspaceSession: ObservableObject, Identifiable {
   private var socket: URLSessionWebSocketTask?
   private var receiver: Task<Void, Never>?
   private var pulse: Task<Void, Never>?
+  private var reconnect: Task<Void, Never>?
+  private var retryDelay = 2.0
   private var generation = UUID()
   private var sequence = 0
   private var direction = (0, 0)
@@ -36,6 +39,8 @@ final class WorkspaceSession: ObservableObject, Identifiable {
   }
   func connect(takeover: Bool = false) {
     guard receiver == nil else { return }
+    reconnect?.cancel()
+    reconnect = nil
     let epoch = UUID()
     generation = epoch
     error = ""
@@ -87,6 +92,16 @@ final class WorkspaceSession: ObservableObject, Identifiable {
         self.socket = nil
         await media.stop()
         receiver = nil
+        let apiFailure = error as? APIError
+        if !needsTakeover && ![401, 403, 426].contains(apiFailure?.status ?? 0) {
+          let delay = retryDelay
+          retryDelay = min(30, retryDelay * 2)
+          reconnect = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard let self, !Task.isCancelled, generation == epoch else { return }
+            connect()
+          }
+        }
       }
     }
   }
@@ -117,6 +132,8 @@ final class WorkspaceSession: ObservableObject, Identifiable {
       sequence = max(sequence, next.me?.seq ?? 0)
       snapshot = next
       connected = true
+      retryDelay = 2
+      invitations.removeAll { $0.expires <= Date().timeIntervalSince1970 * 1000 }
       if mediaEnabled {
         media.update(
           next, api: api, workspaceId: workspace.id, send: { [weak self] in self?.send($0) })
@@ -160,7 +177,12 @@ final class WorkspaceSession: ObservableObject, Identifiable {
     case "invitation-ended": invitations.removeAll { $0.id == event["id"] as? String }
     case "notice", "error": notice = event["message"] as? String ?? ""
     case "presenter": Task { await media.share(authorized: event["enabled"] as? Bool ?? false) }
-    case "user-updated": notice = "Your account changed. Reconnect to refresh your access."
+    case "user-updated":
+      Task {
+        do { profile = try await api.call(api.workspacePath(workspace.id, "/me")) } catch {
+          self.error = error.localizedDescription
+        }
+      }
     default: break
     }
   }
@@ -197,6 +219,8 @@ final class WorkspaceSession: ObservableObject, Identifiable {
   }
   func stop() async {
     generation = UUID()
+    reconnect?.cancel()
+    reconnect = nil
     resetInput.send()
     chime?.stop()
     direction = (0, 0)

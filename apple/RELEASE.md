@@ -33,9 +33,9 @@ Xcode Cloud assigns increasing build numbers automatically; no custom counter sc
 
 ## Source publication
 
-The isolated Apple release branch is `codex/apple-testflight`, based on `origin/main`. Use a manual build of this branch for the first TestFlight build. The automatic `main` trigger can build the app after the reviewed Apple source is merged there. Review and publish the entire `apple/` directory except ignored `.build`/per-user files; `public/sounds/nudge.wav` is already tracked on `main`. Do not accidentally include pending backend/auth/Android changes in an Apple-only publication. A review branch can validate the archive manually before merging into the configured `main` trigger.
+The initial Apple branch `codex/apple-testflight` was merged in PR #10. The current parity and branded-onboarding branch is `codex/apple-web-parity`; review it before merging or starting a new beta build. The automatic `main` trigger can build the app after the reviewed Apple source is merged there. Review and publish the entire `apple/` directory except ignored `.build`/per-user files; `public/sounds/nudge.wav` is already tracked on `main`. Do not accidentally include pending backend/auth/Android changes in an Apple-only publication. A review branch can validate the archive manually before merging into the configured `main` trigger.
 
-This build expects the workspace/native APIs described in `../docs/native-contract.md` on its chosen server. Backend PR #9 is merged into `main` at `1ebdf3838f6f957914cb010908a986d6c6a8390b`; deployment and database migrations are still pending. A successful native build does not deploy those server routes. The app defaults to loopback for development; testers on physical devices must enter an available HTTPS server with the corresponding backend version.
+This build expects the workspace/native APIs described in `../docs/native-contract.md` on its chosen server. Backend PR #9 and subsequent workspace-domain, animation-manifest and native whiteboard/login contracts are on `main`. Coordinate rollout of those contracts before testing this native branch. A successful native build does not deploy those server routes. The app defaults to `https://app.littleoffice.app`; an explicitly saved server override is preserved. The selected server must provide the matching workspace/native API version.
 
 ## Validation and beta availability
 
@@ -44,3 +44,13 @@ On 22 October 2026, `apple/ci_scripts/ci_post_clone.sh` passed all ten tests and
 The app icon reproduces the existing web brand. Regenerate its checked-in iOS/macOS sizes with `swift apple/scripts/generate-app-icon.swift` from the repository root.
 
 Sources: [first Xcode Cloud workflow](https://developer.apple.com/documentation/xcode/configuring-your-first-xcode-cloud-workflow), [custom script location](https://developer.apple.com/documentation/xcode/writing-custom-build-scripts), [TestFlight distribution](https://developer.apple.com/documentation/xcode/distributing-your-xcode-cloud-builds-through-testflight), [automatic build numbering](https://developer.apple.com/documentation/xcode/setting-the-next-build-number-for-xcode-cloud-builds/).
+
+## ReplayKit extension provisioning
+
+The parity branch adds iOS-only target `LittleOfficeBroadcast`, bundle ID `dev.littleoffice.app.broadcast`, embedded in the main iOS/iPadOS application. Its minimum deployment target is iOS 26. It is excluded from macOS builds. Both iOS targets require App Group `group.dev.littleoffice.app` in their signed profiles; macOS does not receive this entitlement. Register/enable these exact identifiers before the signed cloud archive. The group transports LiveKit screen-capture IPC only; account credentials remain in the application's Keychain and are not written to the group.
+
+The extension subclasses LiveKit's `LKSampleHandler`; the main app disables automatic publication and starts the system broadcast picker only after server presenter authorization. Camera/microphone capture is separate. The iOS audio background capability permits the media session during screen broadcast. Test with a signed physical device: share another app, stop from Control Center, cancel the picker, switch room/workspace, lose network, and sign out. Confirm both server presenter/viewer state and the system recording indicator clear. Simulator compilation cannot verify this behavior.
+
+App and extension marketing/build versions must match. Xcode Cloud's build-number override applies to both targets. Do not ship if the extension signing or provisioning step is incomplete.
+
+The Apple portal App Group `group.dev.littleoffice.app` is assigned to the main app and broadcast extension only. Existing profiles need regeneration through automatic signing. Local parity verification passed 21 Swift tests plus unsigned macOS/iOS simulator builds; physical ReplayKit/media acceptance and a new signed cloud archive remain separate release requirements.

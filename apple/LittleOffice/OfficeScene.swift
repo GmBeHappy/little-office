@@ -5,10 +5,25 @@ import SpriteKit
 final class OfficeScene: SKScene {
   var moveInput: ((Int, Int) -> Void)?
   var action: ((String) -> Void)?
+  var interact: ((Int, Int) -> Void)?
+  var actionPrompt: ((String, Bool) -> Void)?
   var selectPerson: ((String) -> Void)?
   var reducedMotion = false
+  var nameTagSize = 10.0
+  var nameTagOpacity = 85.0
+  var speaking = Set<String>()
   var inputEnabled = true { didSet { if !inputEnabled { stopInput() } } }
   private var revision = -1
+  private var mapId = ""
+  private var animation: MapAnimation?
+  private var latestSnapshot: Snapshot?
+  private var farm: FarmSimulation?
+  private var farmStart = 0.0
+  private let ambient = SKNode()
+  private let habitat = SKNode()
+  private let farmLayer = SKNode()
+  private let farmHud = SKLabelNode(fontNamed: "Menlo-Bold")
+  private var lastPrompt = ""
   private var people: [Person] = []
   private var selfId = ""
   private var avatars: [String: AvatarManifest] = [:]
@@ -38,6 +53,8 @@ final class OfficeScene: SKScene {
     let nameLabel = SKLabelNode(fontNamed: "Helvetica-Bold")
     let plate = SKShapeNode()
     let reaction = SKLabelNode(fontNamed: "Helvetica-Bold")
+    let statusLabel = SKLabelNode(fontNamed: "Helvetica")
+    let pickup = SKNode()
     var fishing: [UInt32: SKShapeNode] = [:]
     override init() {
       super.init()
@@ -63,7 +80,13 @@ final class OfficeScene: SKScene {
       reaction.fontSize = 24
       reaction.verticalAlignmentMode = .bottom
       reaction.zPosition = 6
-      for node in [shadow, ring, nudge, body, plate, nameLabel, reaction] { addChild(node) }
+      statusLabel.fontSize = 12
+      statusLabel.fontColor = .darkGray
+      statusLabel.zPosition = 6
+      pickup.zPosition = 7
+      for node in [shadow, ring, nudge, body, plate, nameLabel, reaction, statusLabel, pickup] {
+        addChild(node)
+      }
     }
     required init?(coder: NSCoder) { fatalError("Use init()") }
   }
@@ -72,6 +95,15 @@ final class OfficeScene: SKScene {
     scaleMode = .resizeFill
     backgroundColor = .black
     isUserInteractionEnabled = true
+    ambient.zPosition = -999
+    habitat.zPosition = 940
+    farmLayer.zPosition = 950
+    for node in [ambient, habitat, farmLayer] { addChild(node) }
+    farmHud.fontSize = 12
+    farmHud.fontColor = .darkGray
+    farmHud.horizontalAlignmentMode = .left
+    farmHud.zPosition = 10000
+    viewport.addChild(farmHud)
     addChild(labels)
     addChild(viewport)
     camera = viewport
@@ -89,13 +121,21 @@ final class OfficeScene: SKScene {
   required init?(coder: NSCoder) { fatalError("Use init(size:)") }
   func render(manifest: SceneManifest, snapshot: Snapshot?, avatars: [String: AvatarManifest]) {
     self.avatars = avatars
-    if revision != manifest.revision {
+    latestSnapshot = snapshot
+    if revision != manifest.revision || mapId != manifest.mapId {
+      mapId = manifest.mapId
+      animation = manifest.animation
+      farm = manifest.animation?.farm.map {
+        FarmSimulation(manifest: $0, blocks: manifest.blocks ?? [])
+      }
+      farmStart = ProcessInfo.processInfo.systemUptime * 1000
       revision = manifest.revision
       worldSize = CGSize(width: manifest.width, height: manifest.height)
       background?.removeFromParent()
       let node = SKSpriteNode(
         texture: texture(
-          manifest.rectangles, width: Int(manifest.width), height: Int(manifest.height)))
+          manifest.animation?.background ?? manifest.rectangles, width: Int(manifest.width),
+          height: Int(manifest.height)))
       node.anchorPoint = .zero
       node.zPosition = -1000
       addChild(node)
@@ -184,7 +224,13 @@ final class OfficeScene: SKScene {
       figure.nudge.alpha = frame.nudgeOpacity
       let name =
         person.name + (person.id == selfId ? " · you" : "") + (person.microphone ? " 🎙" : "")
-      if figure.nameLabel.text != name {
+      figure.nameLabel.fontSize = min(16, max(8, nameTagSize))
+      let talking = speaking.contains(person.id)
+      figure.nameLabel.fontColor =
+        talking ? (nameTagOpacity >= 50 ? .white : color(0x205e3e)) : color(0x3b4839)
+      figure.plate.fillColor = (talking ? color(0x28794f) : color(0xfaf7e9)).withAlphaComponent(
+        min(1, max(0, nameTagOpacity / 100)))
+      do {
         figure.nameLabel.text = name
         figure.plate.path = CGPath(
           roundedRect: CGRect(
@@ -196,12 +242,110 @@ final class OfficeScene: SKScene {
       let fishingSpace = person.direction == "up" && fishingActive ? 28.0 : 0
       figure.nameLabel.position.y = 57 + frame.height + fishingSpace
       figure.plate.position.y = figure.nameLabel.position.y
-      figure.reaction.text = frame.reaction
-      figure.reaction.position.y = 66 + frame.height + fishingSpace
+      let icon = animation?.farm?.iconEmojis?[figure.motion.emote]
+      if let icon, figure.motion.emoteUntil > time,
+        let rects = animation?.farm?.atlas["icon-" + icon]
+      {
+        figure.reaction.text = ""
+        let remaining = figure.motion.emoteUntil - time
+        drawPixels(
+          rects.map {
+            $0.offset(
+              x: frame.offsetX,
+              y: worldSize.height - 76 - (3000 - remaining) / 3000 * 14 + frame.offsetY)
+          }, in: figure.pickup)
+        figure.pickup.alpha = min(1, remaining / 600)
+      } else {
+        figure.reaction.text = frame.reaction
+        figure.pickup.isHidden = true
+      }
+      if icon != nil && figure.motion.emoteUntil > time { figure.pickup.isHidden = false }
+      figure.reaction.position.y = 88 + frame.height + fishingSpace
+      figure.statusLabel.text = "\(person.presence.icon) \(person.presence.text)"
+      figure.statusLabel.position.y = 70 + frame.height + fishingSpace
       drawFishing(person, figure: figure, time: wallTime)
       if person.id == selfId { focus = figure.position }
     }
+    updateMap(time: time, wallTime: wallTime, delta: delta)
     updateViewport()
+  }
+  func performInteraction() {
+    guard inputEnabled, let me = latestSnapshot?.me, let animation else { return }
+    let activities = latestSnapshot?.workspace.features?.activities != false
+    guard activities else { return }
+    if let emoji = farm?.interact(
+      x: me.x, y: me.y, time: ProcessInfo.processInfo.systemUptime * 1000 - farmStart)
+    {
+      action?("emote:" + emoji)
+      return
+    }
+    let now = Date().timeIntervalSince1970 * 1000
+    if let target = animation.target(
+      x: me.x, y: me.y, zone: me.zone, time: now,
+      wildlife: latestSnapshot?.workspace.features?.wildlife != false, activities: activities)
+    {
+      interact?(target, latestSnapshot?.habitat?.revision ?? 0)
+    }
+  }
+  private func updateMap(time: Double, wallTime: Double, delta: Double) {
+    guard let animation else { return }
+    let wildlife = latestSnapshot?.workspace.features?.wildlife != false
+    let activities = latestSnapshot?.workspace.features?.activities != false
+    drawPixels(animation.effectRects(at: wallTime, still: reducedMotion), in: ambient)
+    drawPixels(
+      animation.habitatRects(
+        state: latestSnapshot?.habitat, at: wallTime, wildlife: wildlife, activities: activities,
+        still: reducedMotion), in: habitat)
+    let me = latestSnapshot?.me
+    let farmTime = time - farmStart
+    farm?.update(
+      time: farmTime, delta: delta, person: me.map { WorldPoint(x: $0.x, y: $0.y) },
+      wildlife: wildlife)
+    drawPixels(farm?.rectangles(time: farmTime, wildlife: wildlife) ?? [], in: farmLayer)
+    farmHud.text = farm.map { "🥚 \($0.collectedEggs)   🌾 \($0.harvestedCrops)   🐟 0" } ?? ""
+    farmHud.position = CGPoint(x: -size.width / 2 + 90, y: -size.height / 2 + 115)
+    var prompt = ""
+    var enabled = true
+    if let me, activities {
+      if let target = farm?.target(x: me.x, y: me.y, time: farmTime) {
+        prompt =
+          target.kind == "egg"
+          ? "Collect egg" : target.kind == "plant" ? "Plant seeds" : "Harvest wheat"
+      } else if let target = animation.target(
+        x: me.x, y: me.y, zone: me.zone, time: wallTime, wildlife: wildlife, activities: activities)
+      {
+        prompt = target == 0 ? animation.habitat.style.activity : animation.habitat.style.quick
+        if target == 0, let state = latestSnapshot?.habitat,
+          wallTime - state.updatedAt < animation.habitat.resetMs, state.step == 3
+        {
+          prompt = animation.habitat.style.stages.last ?? prompt
+          enabled = false
+        }
+      }
+    }
+    let key = prompt + String(enabled)
+    if key != lastPrompt {
+      lastPrompt = key
+      actionPrompt?(prompt, enabled)
+    }
+  }
+  private func drawPixels(_ rectangles: [DrawingRect], in layer: SKNode) {
+    while layer.children.count < rectangles.count {
+      let node = SKSpriteNode()
+      node.anchorPoint = .zero
+      layer.addChild(node)
+    }
+    for (index, child) in layer.children.enumerated() {
+      guard let node = child as? SKSpriteNode else { continue }
+      node.isHidden = index >= rectangles.count
+      guard !node.isHidden else { continue }
+      let rect = rectangles[index]
+      node.position = CGPoint(x: rect.x, y: worldSize.height - rect.y - rect.h)
+      node.size = CGSize(width: rect.w, height: rect.h)
+      node.color = color(rect.color)
+      node.alpha = rect.alpha ?? 1
+      node.zPosition = Double(index) * 0.0001
+    }
   }
   private func drawFishing(_ person: Person, figure: Figure, time: Double) {
     let rects =
@@ -272,7 +416,7 @@ final class OfficeScene: SKScene {
     context.translateBy(x: offsetX, y: Double(height) - offsetY)
     context.scaleBy(x: 1, y: -1)
     for rect in rectangles {
-      context.setFillColor(color(rect.color).cgColor)
+      context.setFillColor(color(rect.color).withAlphaComponent(rect.alpha ?? 1).cgColor)
       context.fill(CGRect(x: rect.x, y: rect.y, width: rect.w, height: rect.h))
     }
     let texture = SKTexture(cgImage: context.makeImage()!)
@@ -299,6 +443,10 @@ final class OfficeScene: SKScene {
     override func keyDown(with event: NSEvent) {
       guard inputEnabled, event.modifierFlags.intersection([.command, .control, .option]).isEmpty
       else { return }
+      if event.keyCode == 14 {
+        if !event.isARepeat { performInteraction() }
+        return
+      }
       let actions: [UInt16: String] = [
         49: "jump", 6: "nudge", 18: "sit", 19: "sleep", 20: "fish", 83: "sit", 84: "sleep",
         85: "fish",

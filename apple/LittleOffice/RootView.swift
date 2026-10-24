@@ -5,75 +5,11 @@ import SwiftUI
 
 struct RootView: View {
   @ObservedObject var model: AppModel
-  @State private var creating = false
   var body: some View {
-    Group {
-      if let office = model.office {
-        OfficeView(office: office, leave: { Task { await model.leave() } }).id(office.id)
-      } else if let account = model.account {
-        NavigationStack {
-          List {
-            Section("Your workspaces") {
-              ForEach(model.workspaces) { workspace in
-                Button {
-                  Task { await model.select(workspace) }
-                } label: {
-                  HStack {
-                    Image(systemName: "building.2.crop.circle.fill").font(.title)
-                    VStack(alignment: .leading) {
-                      Text(workspace.name).font(.headline)
-                      Text(workspace.role.capitalized).font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                  }.contentShape(Rectangle())
-                }
-                .accessibilityAction { Task { await model.select(workspace) } }
-                .buttonStyle(.plain).padding(.vertical, 8)
-              }
-              if model.workspaces.isEmpty {
-                Text("Create a workspace or accept an invitation to get started.").foregroundStyle(
-                  .secondary)
-              }
-            }
-            if !model.error.isEmpty { Text(model.error).foregroundStyle(.red) }
-          }
-          .navigationTitle("Hello, \(account.name)")
-          .toolbar {
-            Button("Refresh", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
-            Button("Create workspace", systemImage: "plus") { creating = true }
-            Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right") {
-              Task { await model.logout() }
-            }
-          }
-          .sheet(isPresented: $creating) {
-            if let api = model.api {
-              CreateWorkspaceView(
-                api: api,
-                done: {
-                  creating = false
-                  Task { await model.refresh() }
-                })
-            }
-          }
-        }
-      } else {
-        VStack(spacing: 20) {
-          Image(systemName: "building.2.crop.circle.fill").font(.system(size: 64)).foregroundStyle(
-            .green)
-          Text("Little Office").font(.largeTitle.bold())
-          Text("Your people, in a little shared world.").foregroundStyle(.secondary)
-          TextField("Server address", text: $model.serverAddress).textFieldStyle(.roundedBorder)
-            .autocorrectionDisabled()
-          Button("Sign in with your browser") { model.signIn() }.buttonStyle(.glassProminent)
-            .controlSize(.large)
-            .disabled(model.busy)
-          if model.busy { ProgressView() }
-          if !model.error.isEmpty {
-            Text(model.error).foregroundStyle(.red).textSelection(.enabled)
-          }
-        }.padding(32).frame(maxWidth: 500)
-      }
+    if let office = model.office {
+      OfficeView(office: office, leave: { Task { await model.leave() } }).id(office.id)
+    } else {
+      WelcomeView(model: model)
     }
   }
 }
@@ -83,11 +19,19 @@ struct OfficeView: View {
   let leave: () -> Void
   @State private var scene = OfficeScene(size: CGSize(width: 1120, height: 720))
   @State private var managing = false
+  @State private var profile = false
+  @State private var display = false
+  @State private var mediaSettings = false
+  @AppStorage("nameTagSize") private var nameTagSize = 10.0
+  @AppStorage("nameTagOpacity") private var nameTagOpacity = 85.0
+  @AppStorage("mapMotion") private var mapMotion = true
   @State private var panel = "People"
   @State private var panelOpen = true
   @State private var search = ""
   @State private var movementVisible = false
   @State private var emojiDraft = ""
+  @State private var interactionPrompt = ""
+  @State private var interactionEnabled = true
   @FocusState private var searchFocused: Bool
   @Environment(\.accessibilityReduceMotion) private var reducedMotion
   @Environment(\.scenePhase) private var scenePhase
@@ -101,7 +45,7 @@ struct OfficeView: View {
   private var zoneName: String {
     office.manifest?.zones.first { $0.id == office.snapshot?.me?.zone }?.name ?? "The commons"
   }
-  var body: some View {
+  private var layout: some View {
     GeometryReader { geometry in
       let compact = geometry.size.width < 700
       ZStack {
@@ -118,20 +62,7 @@ struct OfficeView: View {
                 media.connected ? "Nearby voice" : "Connecting audio…", systemImage: "headphones"
               )
               .font(.caption.weight(.medium)).padding(10).glassEffect()
-              if !media.videos.isEmpty {
-                ScrollView(.horizontal) {
-                  HStack(spacing: 8) {
-                    ForEach(media.videos) { video in
-                      VStack(spacing: 4) {
-                        SwiftUIVideoView(video.track, layoutMode: .fit)
-                          .frame(width: compact ? 150 : 220, height: compact ? 95 : 140)
-                          .clipShape(.rect(cornerRadius: 12))
-                        Text(video.name).font(.caption)
-                      }.padding(6).background(.regularMaterial, in: .rect(cornerRadius: 16))
-                    }
-                  }
-                }.frame(maxWidth: compact ? 170 : 480)
-              }
+              if !media.videos.isEmpty { MediaPanel(media: media, compact: compact) }
               Spacer(minLength: 0)
               if movementVisible {
                 GlassEffectContainer(spacing: 12) {
@@ -145,6 +76,10 @@ struct OfficeView: View {
                 maxHeight: min(520, geometry.size.height - 210))
             }
           }.frame(maxHeight: .infinity)
+          if !interactionPrompt.isEmpty {
+            Button(LocalizedStringKey(interactionPrompt)) { scene.performInteraction() }
+              .buttonStyle(.glassProminent).disabled(!interactionEnabled || !office.connected)
+          }
           notices
           OfficeDock(office: office, media: media, compact: compact)
           #if os(macOS)
@@ -170,62 +105,107 @@ struct OfficeView: View {
         #endif
       }
     }
-    .sheet(isPresented: $office.showingBoard) {
-      NavigationStack {
-        WhiteboardView(api: office.api, workspaceId: office.workspace.id)
+  }
+  private var panels: some View {
+    layout
+      .sheet(isPresented: $office.showingBoard) {
+        NavigationStack {
+          WhiteboardPanel(api: office.api, workspaceId: office.workspace.id) {
+            office.showingBoard = false
+          }
           .frame(minWidth: 340, maxWidth: .infinity, minHeight: 400, maxHeight: .infinity)
           .navigationTitle("Whiteboard")
-          .toolbar { Button("Done") { office.showingBoard = false } }
-      }.frame(minWidth: 340, minHeight: 500)
-    }
-    .sheet(isPresented: $managing) {
-      WorkspaceManagementView(api: office.api, workspace: office.workspace)
-    }
-    .alert("Send an emoji", isPresented: $office.showingEmotePicker) {
-      TextField("Emoji", text: $emojiDraft)
-      Button("Send") {
-        office.send(["type": "emote", "emoji": emojiDraft])
-        emojiDraft = ""
+
+        }.frame(minWidth: 340, minHeight: 500)
       }
-      .disabled(emojiDraft.count != 1)
-      Button("Cancel", role: .cancel) { emojiDraft = "" }
-    } message: {
-      Text("Choose one emoji with your keyboard or paste it here.")
-    }
-    .onAppear {
-      scene.moveInput = { office.move($0, $1) }
-      scene.action = { office.perform($0) }
-      scene.selectPerson = { id in
-        search = office.snapshot?.people.first { $0.id == id }?.name ?? ""
-        panel = "People"
-        panelOpen = true
+      .sheet(isPresented: $profile) { ProfileSettings(office: office) }
+      .sheet(isPresented: $display) { DisplaySettings() }
+      .sheet(isPresented: $mediaSettings) { MediaSettings(media: media) }
+      #if os(macOS)
+        .sheet(isPresented: $media.choosingScreen) { ScreenSourcePicker(media: media) }
+      #endif
+      .sheet(isPresented: $managing) {
+        WorkspaceManagementView(api: office.api, workspace: office.workspace)
       }
-      scene.reducedMotion = reducedMotion
-      updateInput()
-      render()
-    }
-    .onDisappear {
-      scene.stopInput()
-      scene.moveInput = nil
-      scene.action = nil
-      scene.selectPerson = nil
-    }
-    .onReceive(office.effects) { scene.receive($0) }
-    .onReceive(office.resetInput) { scene.stopInput() }
-    .onChange(of: reducedMotion) { _, value in scene.reducedMotion = value }
-    .onChange(of: office.showingBoard) { _, _ in updateInput() }
-    .onChange(of: office.showingEmotePicker) { _, _ in updateInput() }
-    .onChange(of: managing) { _, _ in updateInput() }
-    .onChange(of: searchFocused) { _, _ in updateInput() }
-    .onChange(of: scenePhase) { _, _ in updateInput() }
-    .onReceive(office.$snapshot) { _ in DispatchQueue.main.async { render() } }
-    .onReceive(office.$manifest) { _ in DispatchQueue.main.async { render() } }
-    .onReceive(office.$avatars) { _ in DispatchQueue.main.async { render() } }
+      .alert("Send an emoji", isPresented: $office.showingEmotePicker) {
+        TextField("Emoji", text: $emojiDraft)
+        Button("Send") {
+          office.send(["type": "emote", "emoji": emojiDraft])
+          emojiDraft = ""
+        }
+        .disabled(emojiDraft.count != 1)
+        Button("Cancel", role: .cancel) { emojiDraft = "" }
+      } message: {
+        Text("Choose one emoji with your keyboard or paste it here.")
+      }
+  }
+  private var configuredScene: some View {
+    panels
+      .onAppear {
+        scene.moveInput = { office.move($0, $1) }
+        scene.action = { action in
+          if action.hasPrefix("emote:") {
+            office.send(["type": "emote", "emoji": String(action.dropFirst(6))])
+          } else {
+            office.perform(action)
+          }
+        }
+        scene.interact = { target, revision in
+          office.send(["type": "interact", "target": target, "revision": revision])
+        }
+        scene.actionPrompt = { text, enabled in
+          interactionPrompt = text
+          interactionEnabled = enabled
+        }
+        scene.selectPerson = { id in
+          search = office.snapshot?.people.first { $0.id == id }?.name ?? ""
+          panel = "People"
+          panelOpen = true
+        }
+        scene.reducedMotion = reducedMotion || !mapMotion
+        scene.nameTagSize = nameTagSize
+        scene.nameTagOpacity = nameTagOpacity
+        updateInput()
+        render()
+      }
+      .onDisappear {
+        scene.stopInput()
+        scene.moveInput = nil
+        scene.action = nil
+        scene.interact = nil
+        scene.actionPrompt = nil
+        scene.selectPerson = nil
+      }
+  }
+  var body: some View {
+    configuredScene
+      .onChange(of: inputAllowed) { _, _ in updateInput() }
+      .onReceive(office.effects) { scene.receive($0) }
+      .onReceive(office.resetInput) { scene.stopInput() }
+      .onChange(of: reducedMotion) { _, value in scene.reducedMotion = value || !mapMotion }
+      .onChange(of: mapMotion) { _, value in scene.reducedMotion = reducedMotion || !value }
+      .onChange(of: nameTagSize) { _, value in scene.nameTagSize = value }
+      .onChange(of: nameTagOpacity) { _, value in scene.nameTagOpacity = value }
+      .onReceive(media.$speaking) { scene.speaking = $0 }
+      .onChange(of: media.sharing) { _, value in
+        if !value && !media.broadcastPending && scenePhase == .background {
+          Task { await office.stop() }
+        }
+      }
+      .onChange(of: media.broadcastPending) { _, value in
+        if !value && !media.sharing && scenePhase == .background { Task { await office.stop() } }
+      }
+      .onReceive(office.$snapshot) { _ in DispatchQueue.main.async { render() } }
+      .onReceive(office.$manifest) { _ in DispatchQueue.main.async { render() } }
+      .onReceive(office.$avatars) { _ in DispatchQueue.main.async { render() } }
+  }
+  private var inputAllowed: Bool {
+    !office.showingBoard && !office.showingEmotePicker && !managing && !profile && !display
+      && !mediaSettings && !media.choosingScreen && !searchFocused
+      && scenePhase == .active
   }
   private func updateInput() {
-    scene.inputEnabled =
-      !office.showingBoard && !office.showingEmotePicker && !managing && !searchFocused
-      && scenePhase == .active
+    scene.inputEnabled = inputAllowed
     if !scene.inputEnabled { office.move(0, 0) }
   }
   private func header(compact: Bool) -> some View {
@@ -236,7 +216,7 @@ struct OfficeView: View {
       }.help("Switch workspace").accessibilityLabel("Switch workspace")
       if !compact {
         Divider().frame(height: 24)
-        Text(title).font(.subheadline).lineLimit(1)
+        Text(LocalizedStringKey(title)).font(.subheadline).lineLimit(1)
       }
       Label(zoneName, systemImage: "leaf").font(.caption.weight(.semibold)).lineLimit(1)
       Spacer(minLength: 0)
@@ -246,8 +226,12 @@ struct OfficeView: View {
       }
       Button("Movement controls", systemImage: "gamecontroller") { movementVisible.toggle() }
         .labelStyle(.iconOnly).help("Movement controls")
-      NativeAvatar(person: office.snapshot?.me, avatars: office.avatars).frame(
-        width: 28, height: 32)
+      Button {
+        profile = true
+      } label: {
+        NativeAvatar(person: office.snapshot?.me, avatars: office.avatars).frame(
+          width: 28, height: 32)
+      }.accessibilityLabel("Profile and status")
     }
     .buttonStyle(.plain).padding(.horizontal, 16).frame(height: 54)
     .glassEffect(.regular, in: .rect(cornerRadius: 18))
@@ -264,6 +248,9 @@ struct OfficeView: View {
         panelOpen = true
       }
       Divider().padding(.horizontal, 8)
+      railButton("Profile", icon: "person.crop.circle") { profile = true }
+      railButton("Media", icon: "headphones") { mediaSettings = true }
+      railButton("Display", icon: "slider.horizontal.3") { display = true }
       railButton("Settings", icon: "gearshape") { managing = true }
       railButton("Leave", icon: "rectangle.portrait.and.arrow.right", action: leave)
     }.padding(6).frame(width: compact ? 54 : 64)
@@ -276,7 +263,7 @@ struct OfficeView: View {
     Button(action: action) {
       VStack(spacing: 5) {
         Image(systemName: icon).font(.system(size: 18))
-        Text(title).font(.system(size: 9, weight: .medium))
+        Text(LocalizedStringKey(title)).font(.system(size: 9, weight: .medium))
       }.frame(maxWidth: .infinity).frame(height: 48)
         .background(
           selected ? Color.accentColor.opacity(0.15) : .clear, in: .rect(cornerRadius: 12)
@@ -314,8 +301,10 @@ struct OfficeView: View {
                 VStack(alignment: .leading, spacing: 3) {
                   Text(person.name + (person.id == office.snapshot?.selfId ? " (you)" : ""))
                     .font(.callout.weight(.medium))
-                  Text(person.statusText.isEmpty ? person.status.capitalized : person.statusText)
-                    .font(.caption).foregroundStyle(.secondary)
+                  Text(
+                    "\(person.presence.icon) \(person.presence.text.isEmpty ? person.presence.label : person.presence.text)"
+                  )
+                  .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
                 if person.id != office.snapshot?.selfId {
@@ -349,8 +338,11 @@ struct OfficeView: View {
                   .font(.title2).frame(width: 36)
                 VStack(alignment: .leading, spacing: 4) {
                   Text(zone.name).font(.callout.weight(.medium))
-                  Text("\(office.snapshot?.people.filter { $0.zone == zone.id }.count ?? 0) here")
-                    .font(.caption).foregroundStyle(.secondary)
+                  Text(
+                    "\(office.snapshot?.people.filter { $0.zone == zone.id }.count ?? 0) here"
+                      + (office.snapshot?.locks[zone.id] == true ? " · Locked" : "")
+                  )
+                  .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Image(systemName: "chevron.right").font(.caption)
@@ -358,6 +350,17 @@ struct OfficeView: View {
                 .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 12))
                 .contentShape(Rectangle())
             }.buttonStyle(.plain).disabled(!office.connected)
+            if zone.id != "floor", office.snapshot?.me?.zone == zone.id {
+              Button(
+                office.snapshot?.locks[zone.id] == true ? "Unlock room" : "Lock room",
+                systemImage: office.snapshot?.locks[zone.id] == true ? "lock.open" : "lock"
+              ) {
+                office.send([
+                  "type": "lock", "zone": zone.id,
+                  "locked": office.snapshot?.locks[zone.id] != true,
+                ])
+              }.disabled(!office.connected)
+            }
           }
         }.padding(2)
       }
@@ -376,11 +379,14 @@ struct OfficeView: View {
       if !office.notice.isEmpty { Text(office.notice) }
       if !office.error.isEmpty {
         Text(office.error).foregroundStyle(.red)
-        Button(office.needsTakeover ? "Open here instead" : "Reconnect") {
+        Button(LocalizedStringKey(office.needsTakeover ? "Open here instead" : "Reconnect")) {
           office.connect(takeover: office.needsTakeover)
         }
       }
-      if !media.error.isEmpty { Text(media.error).foregroundStyle(.red) }
+      if !media.error.isEmpty {
+        Text(media.error).foregroundStyle(.red)
+        Button("Retry media") { media.retry() }
+      }
     }.font(.caption).padding(
       office.invitations.isEmpty && office.notice.isEmpty && office.error.isEmpty
         && media.error.isEmpty ? 0 : 12
@@ -438,7 +444,9 @@ private struct OfficeDock: View {
         Task { await media.toggleCamera() }
       }.disabled(!media.connected)
       dockButton(
-        media.sharing ? "Stop sharing" : "Share screen", icon: "rectangle.on.rectangle",
+        media.broadcastPending
+          ? "Cancel screen share" : media.sharing ? "Stop sharing" : "Share screen",
+        icon: "rectangle.on.rectangle",
         active: media.sharing
       ) {
         media.requestScreenShare()
@@ -481,7 +489,7 @@ private struct OfficeDock: View {
       VStack(spacing: 5) {
         Image(systemName: icon).font(.system(size: 20)).frame(width: 36, height: 30)
           .foregroundStyle(active ? Color.accentColor : .primary)
-        if !compact { Text(title).font(.system(size: 9)) }
+        if !compact { Text(LocalizedStringKey(title)).font(.system(size: 9)) }
       }.frame(minWidth: 40, minHeight: 44).contentShape(Rectangle())
     }.accessibilityLabel(title).help(title)
   }

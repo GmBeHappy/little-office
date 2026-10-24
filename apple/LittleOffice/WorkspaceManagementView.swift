@@ -6,6 +6,7 @@ private struct Member: Decodable, Identifiable {
   let name: String
   let email: String
   let role: String
+  let approved: Bool
 }
 private struct PendingInvite: Decodable, Identifiable {
   let id: String
@@ -23,7 +24,10 @@ private struct MapChoice: Decodable, Identifiable {
   let id: String
   let name: String
 }
-private struct Catalog: Decodable { let maps: [MapChoice] }
+private struct Catalog: Decodable {
+  let maps: [MapChoice]
+  let allMaps: [MapChoice]?
+}
 private struct InviteResult: Decodable { let url: String }
 private struct MutationResult: Decodable { let ok: Bool }
 struct CreateWorkspaceView: View {
@@ -84,6 +88,12 @@ struct WorkspaceManagementView: View {
   let workspace: Workspace
   @Environment(\.dismiss) private var dismiss
   @State private var detail: Detail?
+  @State private var settings: WorkspaceSettings?
+  @State private var dailyMap = false
+  @State private var whiteboard = true
+  @State private var wildlife = true
+  @State private var activities = true
+  @State private var isOperator = false
   @State private var maps: [MapChoice] = []
   @State private var name = ""
   @State private var mapId = "nature-small"
@@ -100,9 +110,16 @@ struct WorkspaceManagementView: View {
             Section("Workspace") {
               TextField("Name", text: $name)
               Picker("Map", selection: $mapId) { ForEach(maps) { Text($0.name).tag($0.id) } }
+              Toggle("Change map daily", isOn: $dailyMap)
               Button("Save workspace") {
-                mutate("", method: "PATCH", body: ["name": name, "mapId": mapId])
+                saveSettings(features: false)
               }
+            }
+            Section("Workspace features") {
+              Toggle("Whiteboard", isOn: $whiteboard)
+              Toggle("Wildlife", isOn: $wildlife)
+              Toggle("Activities", isOn: $activities)
+              Button("Save features") { saveSettings(features: true) }
             }
             Section("Invite a teammate") {
               TextField("Email address", text: $email).autocorrectionDisabled()
@@ -127,11 +144,24 @@ struct WorkspaceManagementView: View {
               }
             }
           }
+          Section("Account & administration") {
+            NavigationLink("Organization SSO") {
+              WorkspaceSecurityView(api: api, workspace: workspace)
+            }
+            if detail.role == "owner" {
+              NavigationLink("Activity log") {
+                WorkspaceActivityView(api: api, workspace: workspace)
+              }
+            }
+            if isOperator {
+              NavigationLink("System administration") { OperatorSettingsView(api: api) }
+            }
+          }
           Section("Members") {
             ForEach(detail.members) { member in
               HStack {
                 VStack(alignment: .leading) {
-                  Text(member.name)
+                  Text(member.name + (member.approved ? "" : " · Removed"))
                   Text(member.email).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -140,6 +170,13 @@ struct WorkspaceManagementView: View {
                     ForEach(["owner", "admin", "member"], id: \.self) { newRole in
                       Button(newRole.capitalized) {
                         mutate("/members/\(member.id)", method: "PATCH", body: ["role": newRole])
+                      }
+                    }
+                    if !member.approved {
+                      Button("Restore member") {
+                        mutate(
+                          "/members/\(member.id)", method: "PATCH",
+                          body: ["role": member.role, "approved": true])
                       }
                     }
                     Button("Remove member", role: .destructive) {
@@ -175,7 +212,7 @@ struct WorkspaceManagementView: View {
       .task {
         await run {
           let catalog: Catalog = try await api.call("/api/saas/config")
-          maps = catalog.maps
+          maps = catalog.allMaps ?? catalog.maps
           try await refresh()
         }
       }
@@ -186,6 +223,36 @@ struct WorkspaceManagementView: View {
     detail = value
     name = value.name
     mapId = value.mapId
+    let config: OfficeConfig = try await api.call(api.workspacePath(workspace.id, "/config"))
+    settings = config.workspace
+    dailyMap = config.workspace.dailyMap?.enabled ?? false
+    whiteboard = config.workspace.features?.whiteboard ?? true
+    wildlife = config.workspace.features?.wildlife ?? true
+    activities = config.workspace.features?.activities ?? true
+    let profile: ProfileResponse = try await api.call(api.workspacePath(workspace.id, "/me"))
+    let account: Account = try await api.call("/api/account")
+    isOperator = profile.operator == true && account.workspaceId == nil
+  }
+  private func saveSettings(features: Bool) {
+    guard let settings else { return }
+    Task {
+      await run {
+        let body: [String: Any] =
+          features
+          ? [
+            "revision": settings.revision,
+            "features": ["whiteboard": whiteboard, "wildlife": wildlife, "activities": activities],
+          ]
+          : [
+            "name": name, "mapId": mapId, "dailyMapEnabled": dailyMap,
+            "revision": settings.revision,
+          ]
+        let _: WorkspaceUpdate = try await api.call(
+          api.workspacePath(workspace.id, features ? "/admin/features" : "/admin/workspace"),
+          method: "PATCH", body: body)
+        try await refresh()
+      }
+    }
   }
   private func mutate(_ path: String, method: String, body: [String: Any]? = nil) {
     Task {
@@ -203,3 +270,5 @@ struct WorkspaceManagementView: View {
     do { try await operation() } catch { self.error = error.localizedDescription }
   }
 }
+
+private struct WorkspaceUpdate: Decodable { let workspace: WorkspaceSettings }

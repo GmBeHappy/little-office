@@ -12,6 +12,11 @@ public struct WorkspaceSettings: Codable {
   public let mapId: String
   public let revision: Int
   public let features: Features?
+  public let dailyMap: DailyMap?
+  public struct DailyMap: Codable {
+    public let enabled: Bool
+    public let date: String?
+  }
   public struct Features: Codable {
     public let whiteboard: Bool
     public let wildlife: Bool?
@@ -40,10 +45,22 @@ public struct Person: Codable, Identifiable {
   public let statusText: String
   public let statusIcon: String?
   public let sharing: Bool?
+  public let watching: String?
+  public let whiteboard: Bool?
   public let zone: String
   public let conversation: String
   public let room: String
   public let seq: Int
+  public var presence: Presence {
+    Presence(
+      status: status, text: statusText, icon: statusIcon ?? "", sharing: sharing == true,
+      whiteboard: whiteboard == true)
+  }
+  public func volume(for other: Person) -> Double {
+    guard canHear(other) else { return 0 }
+    if conversation != "floor" { return 1 }
+    return max(0.15, 1 - hypot(x - other.x, y - other.y) / 220)
+  }
   public func canHear(_ other: Person) -> Bool {
     conversation == other.conversation
       && (conversation != "floor" || (zone == other.zone && hypot(x - other.x, y - other.y) <= 190))
@@ -59,9 +76,10 @@ public struct Snapshot: Decodable {
   public let people: [Person]
   public let presenters: [String: [String]]
   public let locks: [String: Bool]
+  public let habitat: HabitatState?
   public var me: Person? { people.first { $0.id == selfId } }
   enum CodingKeys: String, CodingKey {
-    case type, protocolVersion, workspaceId, workspace, epoch, people, presenters, locks
+    case type, protocolVersion, workspaceId, workspace, epoch, people, presenters, locks, habitat
     case selfId = "self"
   }
 }
@@ -77,6 +95,15 @@ public struct DrawingRect: Codable, Equatable {
   public let w: Double
   public let h: Double
   public let color: UInt32
+  public let alpha: Double?
+  public init(x: Double, y: Double, w: Double, h: Double, color: UInt32, alpha: Double? = nil) {
+    self.x = x
+    self.y = y
+    self.w = w
+    self.h = h
+    self.color = color
+    self.alpha = alpha
+  }
 }
 public struct SceneManifest: Decodable {
   public let version: Int
@@ -85,6 +112,8 @@ public struct SceneManifest: Decodable {
   public let width: Double
   public let height: Double
   public let rectangles: [DrawingRect]
+  public let animation: MapAnimation?
+  public let blocks: [WorldBounds]?
   public let labels: [Label]
   public let zones: [Zone]
   public struct Label: Decodable {
@@ -114,6 +143,7 @@ public struct Account: Decodable {
   public let id: String
   public let name: String
   public let email: String
+  public let workspaceId: String?
 }
 public struct Credential: Codable {
   public let token: String
