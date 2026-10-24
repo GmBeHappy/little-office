@@ -24,6 +24,7 @@ await server.start();
 Object.assign(process.env, {
   DATABASE_URL: `postgres://postgres:postgres@${server.getServerConn()}/postgres`,
   APP_URL: origin,
+  WORKSPACE_BASE_DOMAIN: "",
   BETTER_AUTH_SECRET: "oidc-test-only-" + "s".repeat(40),
   LIVEKIT_URL: "",
   LIVEKIT_API_KEY: "",
@@ -254,6 +255,23 @@ try {
     { workspaceId: otherWorkspace, userId: owner.user.id, role: "owner" },
     { workspaceId: workspace, userId: admin.user.id, role: "admin" },
   ]);
+  const publicLogin = {
+    workspace: { name: "Example team", slug: "example-team", url: null },
+    providerId: null,
+  };
+  const unconfiguredLogin = await request("/saas/login/example-team");
+  assert.equal(unconfiguredLogin.status, 200);
+  assert.deepEqual(unconfiguredLogin.data, publicLogin);
+  for (const slug of [
+    "missing-team",
+    "app",
+    "ab",
+    "invalid--slug",
+    "UPPERCASE",
+    "x".repeat(49),
+  ]) {
+    assert.equal((await request(`/saas/login/${slug}`)).status, 404, slug);
+  }
   console.log("Created personal accounts and workspaces");
   const configuration = {
     issuer,
@@ -277,6 +295,11 @@ try {
   assert.equal(saved.status, 200, JSON.stringify(saved.data));
   assert.equal(saved.data.enabled, false);
   assert.equal(saved.data.hasClientSecret, true);
+  assert.deepEqual(
+    (await request("/saas/login/example-team")).data,
+    publicLogin,
+    "A saved but disabled provider must remain undiscoverable",
+  );
   assert.ok(!JSON.stringify(saved.data).includes(clientSecret));
   const [connection] = await db
     .select()
@@ -306,6 +329,26 @@ try {
     200,
   );
   const provider = saved.data.providerId as string;
+  const enabledLogin = await request("/saas/login/example-team");
+  assert.equal(enabledLogin.status, 200);
+  assert.deepEqual(
+    enabledLogin.data,
+    { ...publicLogin, providerId: provider },
+    "Public discovery returns only workspace name/slug/url and enabled provider ID",
+  );
+  for (const secret of [
+    clientId,
+    clientSecret,
+    issuer,
+    configuration.domain,
+    connection.clientSecret,
+    connection.verificationToken,
+  ]) {
+    assert.ok(
+      !JSON.stringify(enabledLogin.data).includes(secret),
+      "No provider configuration leaks",
+    );
+  }
   assert.equal(
     (await request("/saas/sso/example-team")).data.providerId,
     provider,
@@ -664,6 +707,11 @@ try {
   assert.equal(
     (await request(endpoint, { enabled: false }, owner.jar, "PATCH")).status,
     200,
+  );
+  assert.deepEqual(
+    (await request("/saas/login/example-team")).data,
+    publicLogin,
+    "Disabling a provider immediately removes it from public discovery",
   );
   assert.equal(
     (await request("/account", undefined, flow.jar)).status,

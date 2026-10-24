@@ -1,14 +1,11 @@
 "use client";
 import { useWorkspaceApi } from "@/lib/workspace-api";
-import { SaaSSignIn } from "./WorkspaceOIDC";
+import Login from "./Login";
+export { default as Login } from "./Login";
 import { FormProvider, useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import {
-  loginSchema,
-  passwordChangeSchema,
-  profileSchema,
-} from "@/shared/forms";
+import { passwordChangeSchema, profileSchema } from "@/shared/forms";
 import { FormInput, FormError } from "./FormInput";
 import { Field, FieldLabel } from "./ui/field";
 import { Button } from "./ui/button";
@@ -1595,144 +1592,6 @@ function RoomCards({
         </div>
       ))}
     </div>
-  );
-}
-export function Login({
-  config,
-  refresh,
-  notify,
-}: {
-  config: AppConfig | null;
-  refresh: () => Promise<void>;
-  notify: (s: string) => void;
-}) {
-  const { api, base } = useWorkspaceApi();
-  const { t } = useI18n();
-  const form = useForm({
-    resolver: zodResolver(loginSchema),
-    defaultValues: { username: "", password: "" },
-  });
-  const busy = form.formState.isSubmitting;
-  async function login(values: z.infer<typeof loginSchema>) {
-    form.clearErrors("root");
-    try {
-      await api("/auth/sign-in/username", values);
-      await refresh();
-    } catch (error) {
-      form.setError("root", { message: (error as Error).message });
-    }
-  }
-  return (
-    <main className="login-page">
-      <div className="login-language">
-        <LanguageToggle />
-      </div>
-      <div className="login-art">
-        <div className="login-sun" />
-        <div className="login-window">
-          <i />
-          <i />
-          <i />
-          <i />
-        </div>
-        <div className="login-desk">
-          <div className="login-monitor" />
-          <div className="login-coffee" />
-        </div>
-        <div className="login-plant">✿</div>
-        <div className="login-art-copy">
-          <span>{t("YOUR PEOPLE. YOUR PLACE.")}</span>
-          <h2>
-            {t("A little closer.")}
-            <br />
-            {t("Even from afar.")}
-          </h2>
-          <p>
-            {t("A cozy corner of the internet")}
-            <br />
-            {t("to do good work, together.")}
-          </p>
-        </div>
-      </div>
-      <div className="login-card">
-        <Brand />
-        <div className="eyebrow">{t("MAKE YOURSELF AT HOME")}</div>
-        <h1>
-          {t("Your office,")}
-          <br />
-          {t("wherever you are.")}
-        </h1>
-        <p>{t("Step inside. Your people are just a few pixels away.")}</p>
-        {config?.password && (
-          <FormProvider {...form}>
-            <form
-              noValidate
-              onSubmit={form.handleSubmit(login)}
-              className="space-y-5"
-            >
-              <FormInput
-                name="username"
-                label={t("Username")}
-                autoComplete="username"
-                required
-                placeholder={t("Your username")}
-              />
-              <FormInput
-                name="password"
-                label={t("Password")}
-                type="password"
-                autoComplete="current-password"
-                required
-                placeholder={t("Your password")}
-              />
-              <FormError />
-              <Button type="submit" className="primary w-full" disabled={busy}>
-                {busy ? t("Opening the door…") : t("Enter the office")}
-                <ArrowRight size={17} />
-              </Button>
-            </form>
-          </FormProvider>
-        )}
-        {config?.sso && (
-          <>
-            <div className="login-or">{config.password ? t("or") : ""}</div>
-            <Button
-              variant="secondary"
-              className="secondary sso-button"
-              onClick={async () => {
-                try {
-                  const r = await api<{ url: string }>("/auth/sign-in/social", {
-                    provider: config.provider,
-                    callbackURL: `${location.origin}/login`,
-                  });
-                  location.assign(r.url);
-                } catch (error) {
-                  notify((error as Error).message);
-                }
-              }}
-            >
-              <Shield size={17} />
-              {t("Sign in with SSO")}
-            </Button>
-          </>
-        )}
-        {config && (
-          <SaaSSignIn google={!!config.googleConfigured} notify={notify} />
-        )}
-        {!config && (
-          <p className="error-text">
-            {t(
-              "The office server is unavailable. Start the API and database, then reload.",
-            )}
-          </p>
-        )}
-        <p className="login-footnote">
-          {t("A private space for your team.")}
-          <br />
-          {t("Need an account? Ask your office owner.")}
-        </p>
-      </div>
-    </main>
   );
 }
 export function PasswordChange({ onDone }: { onDone: () => Promise<void> }) {
