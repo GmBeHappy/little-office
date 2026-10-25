@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { workspaceForm, invitationForm } from "@/shared/saas/forms";
+import { workspaceForm } from "@/shared/saas/forms";
 import { MAPS } from "@/shared/maps";
 import {
   Select,
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import styles from "./WorkspaceDashboard.module.css";
 import Brand from "./Brand";
+import WorkspaceMembers from "./WorkspaceMembers";
 import WorkspaceOIDC, { SaaSSignIn } from "./WorkspaceOIDC";
 type Role = "owner" | "admin" | "member";
 type Person = {
@@ -85,21 +86,15 @@ export default function WorkspaceDashboard() {
     [detail, setDetail] = useState<Detail | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [invite, setInvite] = useState(""),
-    [link, setLink] = useState("");
+    [invite, setInvite] = useState("");
   const create = useForm<z.infer<typeof workspaceForm>>({
     resolver: zodResolver(workspaceForm),
     defaultValues: { name: "", slug: "", mapId: "nature-small" },
-  });
-  const invitation = useForm<z.infer<typeof invitationForm>>({
-    resolver: zodResolver(invitationForm),
-    defaultValues: { email: "", role: "member" },
   });
   async function refresh() {
     setItems(await api<Workspace[]>("/workspaces"));
   }
   async function open(id: string) {
-    setLink("");
     setDetail(await api<Detail>(`/workspaces/${id}`));
   }
   async function run(action: () => Promise<void>) {
@@ -384,175 +379,16 @@ export default function WorkspaceDashboard() {
               >
                 Enter office →
               </Link>
-              <h3>People</h3>
-              {detail.members.map((person) => (
-                <div className={styles.person} key={person.id}>
-                  <span>
-                    <strong>{person.name}</strong>
-                    <small>{person.email}</small>
-                    {person.approved === false && <small>Suspended</small>}
-                  </span>
-                  {detail.role === "owner" ? (
-                    <>
-                      {person.approved === false && (
-                        <button
-                          disabled={busy}
-                          onClick={() =>
-                            void run(async () => {
-                              await api(
-                                `/workspaces/${detail.id}/members/${person.id}`,
-                                "PATCH",
-                                { role: person.role, approved: true },
-                              );
-                              await open(detail.id);
-                            })
-                          }
-                        >
-                          Restore membership
-                        </button>
-                      )}
-                      <Choice
-                        label={`Role for ${person.name}`}
-                        value={person.role}
-                        options={["owner", "admin", "member"].map((value) => ({
-                          value,
-                          label: value,
-                        }))}
-                        onChange={(role) => {
-                          if (!busy)
-                            void run(async () => {
-                              await api(
-                                `/workspaces/${detail.id}/members/${person.id}`,
-                                "PATCH",
-                                { role },
-                              );
-                              await refresh();
-                              await open(detail.id);
-                            });
-                        }}
-                      />
-                      <button
-                        disabled={busy}
-                        onClick={() => {
-                          if (
-                            confirm(
-                              `Remove ${person.name} from ${detail.name}?`,
-                            )
-                          )
-                            void run(async () => {
-                              await api(
-                                `/workspaces/${detail.id}/members/${person.id}`,
-                                "DELETE",
-                              );
-                              await refresh();
-                              if (person.id === user.id) setDetail(null);
-                              else await open(detail.id);
-                            });
-                        }}
-                      >
-                        Remove
-                      </button>
-                    </>
-                  ) : (
-                    <small>{person.role}</small>
-                  )}
-                </div>
-              ))}
+              <WorkspaceMembers
+                key={detail.id}
+                workspaceId={detail.id}
+                userId={user.id}
+              />
               <WorkspaceOIDC
                 key={detail.id}
                 workspaceId={detail.id}
                 slug={detail.slug}
               />
-              {detail.role !== "member" && (
-                <>
-                  <h3>Invite a teammate</h3>
-                  <p>
-                    Links expire in 7 days and work only for the invited Google
-                    email. Share the link yourself.
-                  </p>
-                  <form
-                    onSubmit={invitation.handleSubmit((values) =>
-                      run(async () => {
-                        const result = await api<{ url: string }>(
-                          `/workspaces/${detail.id}/invitations`,
-                          "POST",
-                          values,
-                        );
-                        await open(detail.id);
-                        setLink(result.url);
-                        invitation.reset();
-                      }),
-                    )}
-                  >
-                    <label>
-                      Email address
-                      <input type="email" {...invitation.register("email")} />
-                    </label>
-                    <Controller
-                      control={invitation.control}
-                      name="role"
-                      render={({ field }) => (
-                        <Choice
-                          label="Invitation role"
-                          value={field.value}
-                          onChange={field.onChange}
-                          options={(detail.role === "owner"
-                            ? ["member", "admin"]
-                            : ["member"]
-                          ).map((value) => ({ value, label: value }))}
-                        />
-                      )}
-                    />
-                    {Object.values(invitation.formState.errors).map((e, i) => (
-                      <p className={styles.error} key={i}>
-                        {e.message}
-                      </p>
-                    ))}
-                    <button disabled={busy}>Create invitation link</button>
-                  </form>
-                  {link && (
-                    <label>
-                      Invitation link
-                      <input
-                        readOnly
-                        value={link}
-                        onFocus={(event) => event.target.select()}
-                      />
-                      <button
-                        onClick={() =>
-                          run(async () => {
-                            await navigator.clipboard.writeText(link);
-                          })
-                        }
-                      >
-                        Copy link
-                      </button>
-                    </label>
-                  )}
-                  {detail.invitations.map((item) => (
-                    <div key={item.id} className={styles.person}>
-                      <span>
-                        {item.email}
-                        <small>{item.role} · pending</small>
-                      </span>
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          run(async () => {
-                            await api(
-                              `/workspaces/${detail.id}/invitations/${item.id}`,
-                              "DELETE",
-                            );
-                            await open(detail.id);
-                          })
-                        }
-                      >
-                        Revoke
-                      </button>
-                    </div>
-                  ))}
-                </>
-              )}
             </section>
           )}
         </>
