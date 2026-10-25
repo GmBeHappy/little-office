@@ -40,7 +40,7 @@ test("full-page settings keep navigation visible, work on mobile and show only p
       exact: true,
     });
     const nav = settings.locator(".settings-navigation");
-    await expect(nav.getByRole("tab")).toHaveCount(7);
+    await expect(nav.getByRole("tab")).toHaveCount(8);
     await nav.getByRole("tab", { name: "Devices", exact: true }).click();
     await expect(
       settings.getByRole("heading", { name: "Audio", exact: true }),

@@ -99,6 +99,9 @@ import {
   type NameTagPreferences,
 } from "@/lib/name-tags";
 import { WorkspaceSettings } from "./WorkspaceSettings";
+import WorkspaceMembers from "./WorkspaceMembers";
+import WorkspaceOIDC from "./WorkspaceOIDC";
+import { DEFAULT_WORKSPACE_ID } from "@/shared/workspaces";
 import {
   DEFAULT_WORKSPACE,
   getMap,
@@ -1937,6 +1940,7 @@ function SettingsPanel({
       | "members"
       | "workspace"
       | "activity"
+      | "sso"
     >(["owner", "admin"].includes(user.role) ? initialTab : "audio"),
     [users, setUsers] = useState<AdminUser[]>([]),
     [busy, setBusy] = useState(false);
@@ -1997,6 +2001,14 @@ function SettingsPanel({
         ]
       : []),
   ];
+  const workspaceId = config.workspaceId || DEFAULT_WORKSPACE_ID;
+  if (["owner", "admin"].includes(user.role))
+    sections.push({
+      value: "sso",
+      label: "Workspace SSO",
+      icon: Shield,
+      description: "Connect your organization’s identity provider.",
+    });
   const visibleSections = sections.filter(
     (section) =>
       (section.value !== "auth" || (user.operator && base === "/api")) &&
@@ -2064,6 +2076,19 @@ function SettingsPanel({
         </Button>
       </header>
       <aside className="settings-sidebar">
+        <div
+          className="settings-workspace-card"
+          aria-label={t("Current workspace")}
+        >
+          <span className="settings-workspace-icon">
+            <Home size={21} />
+          </span>
+          <div>
+            <small>{t("YOUR WORKSPACE")}</small>
+            <strong>{workspace.name}</strong>
+            <span>{t(getMap(workspace.mapId).name)}</span>
+          </div>
+        </div>
         <div className="settings-account">
           <Avatar color={user.avatar} />
           <div>
@@ -2308,12 +2333,15 @@ function SettingsPanel({
               </div>
             </>
           )}
+          {tab === "sso" && (
+            <WorkspaceOIDC key={workspaceId} workspaceId={workspaceId} />
+          )}
           {tab === "members" && !(user.operator && base === "/api") && (
-            <a
-              href={`/workspaces?workspace=${base.split("/")[3] || "00000000-0000-4000-8000-000000000001"}`}
-            >
-              Manage workspace members and invitations
-            </a>
+            <WorkspaceMembers
+              key={workspaceId}
+              workspaceId={workspaceId}
+              userId={user.id}
+            />
           )}
           {tab === "members" && user.operator && base === "/api" && (
             <>

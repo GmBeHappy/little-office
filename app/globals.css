@@ -3104,8 +3104,15 @@
   .workspace-storage-panel {
     @apply min-h-[360px];
   }
+  .workspace-feature-panel {
+    display: grid;
+    align-content: start;
+    gap: 16px;
+  }
   .workspace-feature-card {
-    @apply flex items-center gap-[18px] p-[22px] rounded-[14px];
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    @apply items-center gap-[18px] p-[22px] rounded-[14px];
     border: 1px solid #dce5d2;
     background: #fffef9;
   }
@@ -3680,6 +3687,143 @@
   }
   .settings-team-section {
     margin-top: 20px;
+  }
+  .settings-workspace-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 12px;
+    margin-bottom: 24px;
+    border: 1px solid #dce5d2;
+    border-radius: 16px;
+    background: #fffef9;
+  }
+  .settings-workspace-icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: #e0e9d2;
+    color: #526b42;
+  }
+  .settings-workspace-card > div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+  .settings-workspace-card strong {
+    overflow-wrap: anywhere;
+    font-size: 14px;
+  }
+  .settings-workspace-card small {
+    font-size: 9px;
+    color: #607752;
+    letter-spacing: 0.08em;
+  }
+  .settings-workspace-card span {
+    font-size: 11px;
+    color: #69765d;
+  }
+  .workspace-members,
+  .workspace-oidc {
+    display: grid;
+    gap: 20px;
+  }
+  .workspace-member-list {
+    display: grid;
+    gap: 12px;
+  }
+  .workspace-member-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 16px 0;
+    border-top: 1px solid #e2e7da;
+  }
+  .workspace-member-copy {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .workspace-member-copy span,
+  .workspace-member-copy small {
+    font-size: 12px;
+    color: #69765d;
+  }
+  .workspace-member-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .workspace-count {
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 12px;
+    background: #e0e9d2;
+  }
+  .workspace-invite-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 160px;
+    gap: 16px;
+  }
+  .workspace-invite-form > button {
+    justify-self: start;
+  }
+  .workspace-invite-form label,
+  .workspace-copy-field label {
+    display: grid;
+    gap: 8px;
+    font-size: 13px;
+    min-width: 0;
+  }
+  .workspace-members input,
+  .workspace-oidc input {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid #dce5d2;
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: #fffef9;
+  }
+  .workspace-copy-field {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .workspace-copy-field label {
+    flex: 1;
+    min-width: min(240px, 100%);
+  }
+  .settings-feedback {
+    border: 1px solid #e6c6ac;
+    border-radius: 12px;
+    padding: 16px;
+    background: #fff7ef;
+  }
+  @media (max-width: 760px) {
+    .settings-workspace-card {
+      margin: 0 0 10px;
+      padding: 10px 12px;
+    }
+    .settings-workspace-card small,
+    .settings-workspace-card div > span {
+      display: none;
+    }
+    .settings-workspace-icon {
+      width: 28px;
+      height: 28px;
+    }
+    .workspace-invite-form {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
   .settings-sidebar-note {
     margin: 28px 12px 0;

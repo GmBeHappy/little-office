@@ -310,6 +310,34 @@ try {
     clientSecret,
     "Client secret must be encrypted at rest",
   );
+  const preserved = await request(
+    endpoint,
+    { issuer, clientId, domain: configuration.domain },
+    owner.jar,
+    "PUT",
+  );
+  assert.equal(
+    preserved.status,
+    200,
+    "Saving unchanged settings can omit the saved secret",
+  );
+  const [preservedConnection] = await db
+    .select()
+    .from(schema.workspaceOidc)
+    .where(eq(schema.workspaceOidc.workspaceId, workspace));
+  assert.ok(
+    preservedConnection.clientSecret === connection.clientSecret,
+    "Omitting the secret preserves its encrypted value",
+  );
+  assert.equal(
+    preservedConnection.providerId,
+    connection.providerId,
+    "Omitting the secret preserves the callback identity",
+  );
+  assert.ok(
+    !JSON.stringify(preserved.data).includes(clientSecret),
+    "The response must not expose the preserved secret",
+  );
   assert.equal(
     (await request(`${endpoint}/verify`, {}, owner.jar)).status,
     400,

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
+import { useI18n } from "@/lib/i18n";
 
 async function api<T>(
   path: string,
@@ -124,218 +125,338 @@ type Settings = {
 };
 export default function WorkspaceOIDC({
   workspaceId,
-  slug,
 }: {
   workspaceId: string;
-  slug: string;
+  slug?: string;
 }) {
+  const { t } = useI18n();
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [portal, setPortal] = useState(""),
+    [slug, setSlug] = useState("");
   const [issuer, setIssuer] = useState(""),
     [clientId, setClientId] = useState(""),
     [secret, setSecret] = useState(""),
     [domain, setDomain] = useState("");
   const [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
-  const path = `/workspaces/${workspaceId}/oidc`;
+    [message, setMessage] = useState(""),
+    [busy, setBusy] = useState(false),
+    [loading, setLoading] = useState(true);
+  const path = `/workspaces/${encodeURIComponent(workspaceId)}/oidc`;
   async function refresh() {
-    const data = await api<Settings>(path);
+    const [data, config, workspace] = await Promise.all([
+      api<Settings>(path),
+      api<{ portalOrigin: string }>("/saas/config"),
+      api<{ slug: string }>(`/workspaces/${encodeURIComponent(workspaceId)}`),
+    ]);
     setSettings(data);
+    setPortal(config.portalOrigin);
+    setSlug(workspace.slug);
     setIssuer(data.connection?.issuer || "");
     setClientId(data.connection?.clientId || "");
     setDomain(data.connection?.domain || "");
     setSecret("");
   }
-  useEffect(() => {
-    void refresh().catch((e) => setError(e.message));
-  }, [workspaceId]); // component is keyed by workspace
-  async function run(action: () => Promise<unknown>) {
+  async function load() {
+    setLoading(true);
     setError("");
+    try {
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    void load();
+  }, [workspaceId]); // callers key this component by workspace
+  async function run(action: () => Promise<unknown>, success: string) {
+    setError("");
+    setMessage("");
     setBusy(true);
     try {
       await action();
       await refresh();
+      setMessage(success);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
   }
+  async function copy(value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setMessage("Copied.");
+    } catch {
+      setError("Could not copy. Select the value and copy it manually.");
+    }
+  }
   const connection = settings?.connection;
+  const personalURL = portal
+    ? `${portal}/workspaces?workspace=${encodeURIComponent(workspaceId)}`
+    : "";
+  const copyField = (label: string, value: string) => (
+    <div className="workspace-copy-field">
+      <label>
+        {t(label)}
+        <input readOnly value={value} onFocus={(e) => e.target.select()} />
+      </label>
+      <Button variant="secondary" onClick={() => void copy(value)}>
+        {t("Copy {label}", { label: t(label) })}
+      </Button>
+    </div>
+  );
   return (
-    <div className="space-y-4 mt-6 border-t pt-6">
-      <h3 className="font-semibold">Workspace SSO</h3>
-      {error && <p role="alert">{error}</p>}
-      {!settings ? (
-        <p>Loading SSO settings…</p>
-      ) : (
+    <div className="workspace-oidc">
+      {error && (
+        <div className="settings-feedback" role="alert">
+          <p>{t(error)}</p>
+          <Button
+            variant="secondary"
+            disabled={loading || busy}
+            onClick={() => void load()}
+          >
+            {t("Try again")}
+          </Button>
+        </div>
+      )}
+      {message && <p role="status">{t(message)}</p>}
+      {loading && <p role="status">{t("Loading SSO settings…")}</p>}
+      {settings && (
         <>
-          <p>
-            {connection?.enabled
-              ? `Enabled for @${connection.domain}. New people join as members.`
-              : "Workspace SSO is disabled."}
-          </p>
-          {connection?.enabled && (
-            <>
-              <a
-                className="underline"
-                href={`/login?workspace=${encodeURIComponent(slug)}`}
-              >
-                Workspace sign-in link
-              </a>
-              {settings.canLink && (
-                <Button
-                  disabled={busy}
-                  variant="secondary"
-                  onClick={() =>
-                    void run(() =>
-                      redirect(connection.providerId, true, workspaceId),
-                    )
-                  }
-                >
-                  {settings.linked
-                    ? "Reconnect your SSO account"
-                    : "Connect your SSO account"}
-                </Button>
+          <section className="settings-card">
+            <h4>{t("Workspace SSO")}</h4>
+            <p role="status">
+              {connection?.enabled
+                ? t("Enabled for @{domain}. New people join as members.", {
+                    domain: connection.domain,
+                  })
+                : t("Workspace SSO is disabled.")}
+            </p>
+            <p className="muted">
+              {t(
+                "Only people with a verified email at your verified organization domain can join automatically. They join as members, never as admins or owners.",
               )}
-            </>
-          )}
-          {settings.canConfigure && (
-            <>
-              <p className="text-sm">
-                Use an OIDC application with the authorization code flow, PKCE
-                and verified email claims. Verify your organization's domain in
-                DNS before enabling automatic membership.
-              </p>
-              <form
-                className="space-y-3"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void run(() =>
-                    api(path, "PUT", {
-                      issuer,
-                      clientId,
-                      domain,
-                      ...(secret ? { clientSecret: secret } : {}),
-                    }),
-                  );
-                }}
-              >
-                <label className="block">
-                  Issuer URL
-                  <input
-                    className="block w-full rounded border p-2"
-                    type="url"
-                    value={issuer}
-                    onChange={(e) => setIssuer(e.target.value)}
-                    placeholder="https://identity.example.com/realms/company"
-                    maxLength={2048}
-                    required
-                  />
-                </label>
-                <label className="block">
-                  Client ID
-                  <input
-                    className="block w-full rounded border p-2"
-                    value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
-                    maxLength={512}
-                    required
-                    autoComplete="off"
-                  />
-                </label>
-                <label className="block">
-                  Client secret
-                  <input
-                    className="block w-full rounded border p-2"
-                    type="password"
-                    value={secret}
-                    onChange={(e) => setSecret(e.target.value)}
-                    required={!connection}
-                    maxLength={4096}
-                    autoComplete="new-password"
-                    placeholder={
-                      connection ? "Leave blank to keep the saved secret" : ""
+            </p>
+            {connection?.enabled && (
+              <div className="flex flex-wrap gap-3">
+                <a
+                  className="underline"
+                  href={`${portal}/login?workspace=${encodeURIComponent(slug)}`}
+                >
+                  {t("Workspace sign-in link")}
+                </a>
+                {settings.canLink && (
+                  <Button
+                    disabled={busy}
+                    variant="secondary"
+                    onClick={() =>
+                      void run(
+                        () =>
+                          redirect(connection.providerId, true, workspaceId),
+                        "SSO account connected.",
+                      )
                     }
-                  />
-                </label>
-                <label className="block">
-                  Organization email domain
-                  <input
-                    className="block w-full rounded border p-2"
-                    value={domain}
-                    onChange={(e) => setDomain(e.target.value)}
-                    placeholder="example.com"
-                    maxLength={253}
-                    required
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                  />
-                </label>
-                <p className="text-sm">
-                  Saving disables SSO and signs out its active sessions.
-                  Changing issuer, client ID or domain creates a new callback
-                  URL and requires existing accounts to reconnect.
+                  >
+                    {t(
+                      settings.linked
+                        ? "Reconnect your SSO account"
+                        : "Connect your SSO account",
+                    )}
+                  </Button>
+                )}
+              </div>
+            )}
+          </section>
+          {settings.canConfigure ? (
+            <>
+              <section className="settings-card">
+                <h4>{t("1. Save your identity provider")}</h4>
+                <p className="muted">
+                  {t(
+                    "Create an OpenID Connect (OIDC) application using authorization code flow with PKCE. Allow the openid, profile and email scopes and provide a verified email claim. Enter one organization email domain below.",
+                  )}
                 </p>
-                <Button type="submit" disabled={busy}>
-                  Save connection
-                </Button>
-              </form>
-              {connection && (
-                <div className="space-y-3">
-                  <p>
-                    Register this exact redirect URI with your identity
-                    provider:
+                <form
+                  className="space-y-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void run(
+                      () =>
+                        api(path, "PUT", {
+                          issuer,
+                          clientId,
+                          domain,
+                          ...(secret ? { clientSecret: secret } : {}),
+                        }),
+                      "Connection saved. Register the callback and verify your domain before enabling SSO.",
+                    );
+                  }}
+                >
+                  <fieldset disabled={busy} className="space-y-4">
+                    <label className="block">
+                      {t("Issuer URL")}
+                      <input
+                        className="block w-full rounded border p-2"
+                        type="url"
+                        value={issuer}
+                        onChange={(e) => setIssuer(e.target.value)}
+                        placeholder="https://identity.example.com/realms/company"
+                        maxLength={2048}
+                        required
+                      />
+                    </label>
+                    <label className="block">
+                      {t("Client ID")}
+                      <input
+                        className="block w-full rounded border p-2"
+                        value={clientId}
+                        onChange={(e) => setClientId(e.target.value)}
+                        maxLength={512}
+                        required
+                        autoComplete="off"
+                      />
+                    </label>
+                    <label className="block">
+                      {t("Client secret")}
+                      <input
+                        className="block w-full rounded border p-2"
+                        type="password"
+                        value={secret}
+                        onChange={(e) => setSecret(e.target.value)}
+                        required={!connection}
+                        maxLength={4096}
+                        autoComplete="new-password"
+                        placeholder={
+                          connection
+                            ? t("Leave blank to keep the saved secret")
+                            : ""
+                        }
+                      />
+                      <small>
+                        {t(
+                          "Saved secrets are never shown. Leave this blank to keep the secret for an unchanged connection.",
+                        )}
+                      </small>
+                    </label>
+                    <label className="block">
+                      {t("Organization email domain")}
+                      <input
+                        className="block w-full rounded border p-2"
+                        value={domain}
+                        onChange={(e) => setDomain(e.target.value)}
+                        placeholder="example.com"
+                        maxLength={253}
+                        required
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                      />
+                    </label>
+                    <p className="settings-feedback">
+                      {t(
+                        "Saving disables SSO and signs out its active sessions. Changing issuer, client ID or domain creates a new callback URL and requires existing accounts to reconnect.",
+                      )}
+                    </p>
+                    <Button type="submit" disabled={busy}>
+                      {t(busy ? "Saving…" : "Save connection")}
+                    </Button>
+                  </fieldset>
+                </form>
+              </section>
+              <section className="settings-card">
+                <h4>{t("2. Register the callback and verify your domain")}</h4>
+                {!connection ? (
+                  <p className="muted">
+                    {t(
+                      "Save the connection first. Your exact callback URL and DNS TXT record will appear here.",
+                    )}
                   </p>
-                  <code className="block break-all">
-                    {connection.redirectURI}
-                  </code>
-                  <p>Add this DNS TXT record:</p>
-                  <dl>
-                    <dt>Name</dt>
-                    <dd className="break-all">
-                      <code>{connection.dnsName}</code>
-                    </dd>
-                    <dt>Value</dt>
-                    <dd className="break-all">
-                      <code>{connection.dnsValue}</code>
-                    </dd>
-                  </dl>
-                  <p role="status">
-                    {connection.verified
-                      ? "Domain verified"
-                      : "Domain not verified yet"}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
+                ) : (
+                  <>
+                    <p>
+                      {t(
+                        "Register this exact callback URL in your identity provider. It uses the main Little Office portal, even when your workspace has its own subdomain.",
+                      )}
+                    </p>
+                    {copyField("Callback URL", connection.redirectURI || "")}
+                    <p>
+                      {t(
+                        "Add this TXT record at your domain’s DNS provider. Keep the value unchanged, then select Verify domain. DNS changes may take time to appear.",
+                      )}
+                    </p>
+                    {copyField("DNS record name", connection.dnsName || "")}
+                    {copyField("DNS record value", connection.dnsValue || "")}
+                    <p role="status">
+                      {t(
+                        connection.verified
+                          ? "Domain verified"
+                          : "Domain not verified yet",
+                      )}
+                    </p>
                     <Button
                       variant="secondary"
                       disabled={busy}
                       onClick={() =>
-                        void run(() => api(`${path}/verify`, "POST", {}))
-                      }
-                    >
-                      Verify domain
-                    </Button>
-                    <Button
-                      disabled={busy}
-                      onClick={() =>
-                        void run(() =>
-                          api(path, "PATCH", { enabled: !connection.enabled }),
+                        void run(
+                          () => api(`${path}/verify`, "POST", {}),
+                          "Domain verified.",
                         )
                       }
                     >
-                      {connection.enabled
-                        ? "Disable SSO"
-                        : "Verify and enable SSO"}
+                      {t("Verify domain")}
                     </Button>
-                  </div>
-                </div>
-              )}
+                  </>
+                )}
+              </section>
+              <section className="settings-card">
+                <h4>{t("3. Enable workspace SSO")}</h4>
+                <p className="muted">
+                  {t(
+                    "After registering the callback, enable SSO to verify the provider and domain again. Keep your personal owner login as a recovery method.",
+                  )}
+                </p>
+                <Button
+                  disabled={busy || !connection}
+                  onClick={() => {
+                    if (connection)
+                      void run(
+                        () =>
+                          api(path, "PATCH", { enabled: !connection.enabled }),
+                        connection.enabled
+                          ? "Workspace SSO disabled."
+                          : "Workspace SSO enabled.",
+                      );
+                  }}
+                >
+                  {t(
+                    connection?.enabled
+                      ? "Disable SSO"
+                      : "Verify and enable SSO",
+                  )}
+                </Button>
+              </section>
             </>
+          ) : (
+            <section className="settings-card">
+              <h4>{t("Owner access required")}</h4>
+              <p>
+                {t(
+                  settings.canLink
+                    ? "Only workspace owners can configure the identity provider."
+                    : "Use the workspace owner’s original personal account (or Google if available) to configure SSO. A workspace SSO session cannot change its own sign-in provider.",
+                )}
+              </p>
+            </section>
           )}
-          {!settings.canLink && (
-            <p className="text-sm">
-              Sign in with Google or your original account to configure SSO or
-              connect another login method.
+          {personalURL && (
+            <p className="settings-note">
+              {t(
+                "Authentication changes need a recent personal sign-in. If asked to sign in again, open the portal, sign out and sign back in with your personal account, then select this workspace.",
+              )}{" "}
+              <a className="underline" href={personalURL}>
+                {t("Open workspace in personal portal")}
+              </a>
             </p>
           )}
         </>

@@ -43,6 +43,7 @@ export type User = {
   statusIcon?: string;
 };
 export type AppConfig = {
+  workspaceId?: string;
   workspace: import("@/shared/maps").WorkspaceSettings;
   password: boolean;
   sso: boolean;
