@@ -1932,7 +1932,7 @@ function SettingsPanel({
 }) {
   const { api, base } = useWorkspaceApi();
   const { t } = useI18n();
-  const [tab, setTab] = useState<
+  const [requestedTab, setTab] = useState<
       | "profile"
       | "audio"
       | "display"
@@ -2014,6 +2014,9 @@ function SettingsPanel({
       (section.value !== "auth" || (user.operator && base === "/api")) &&
       (section.value !== "activity" || user.role === "owner"),
   );
+  const tab = visibleSections.some((section) => section.value === requestedTab)
+    ? requestedTab
+    : "audio";
   const selectedSection = visibleSections.find(
     (section) => section.value === tab,
   )!;

@@ -163,5 +163,27 @@ test("workspace settings load scoped people, retry errors, and keep feature cont
       await settings.evaluate((el) => el.scrollWidth <= el.clientWidth),
     ).toBe(true);
   }
+  // A role refresh must leave a now-forbidden tab without rendering stale controls.
+  await nav.getByRole("tab", { name: "Workspace SSO", exact: true }).click();
+  await page.route(`**/api/workspaces/${workspace.id}/me`, async (route) => {
+    const response = await route.fetch();
+    const data = await response.json();
+    await route.fulfill({
+      json: { ...data, user: { ...data.user, role: "member" } },
+    });
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(
+    nav.getByRole("tab", { name: "Devices", exact: true }),
+  ).toHaveAttribute("data-state", "active");
+  await expect(
+    nav.getByRole("tab", { name: "Members", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    settings.getByLabel("Client secret", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    settings.getByRole("heading", { name: "Audio", exact: true }),
+  ).toBeVisible();
   expect(globalUsers).toEqual([]);
 });
