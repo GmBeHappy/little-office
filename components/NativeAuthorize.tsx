@@ -23,7 +23,7 @@ function AuthorizeCard() {
   );
   const path = authorization?.path;
   const { t } = useI18n();
-  const [name, setName] = useState("");
+  const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -33,7 +33,7 @@ function AuthorizeCard() {
       return;
     }
     let active = true;
-    setName("");
+    setUser(null);
     setLoading(true);
     try {
       sessionStorage.setItem("native-return", path);
@@ -42,7 +42,7 @@ function AuthorizeCard() {
     }
     void api<{ user: User }>("/me")
       .then((r) => {
-        if (active && !r.user.mustChangePassword) setName(r.user.name);
+        if (active && !r.user.mustChangePassword) setUser(r.user);
       })
       .catch(() => {})
       .finally(() => {
@@ -95,10 +95,14 @@ function AuthorizeCard() {
           <p role="status" className={styles.loading}>
             {t("Loading sign-in options…")}
           </p>
-        ) : name ? (
+        ) : user ? (
           <>
             <p className={styles.intro}>
-              {t("Continue as {name} in the Little Office app.", { name })}
+              {user.name.trim()
+                ? t("Continue as {name} in the Little Office app.", {
+                    name: user.name,
+                  })
+                : t("You’re signed in. Continue to the Little Office app.")}
             </p>
             <Button
               className={styles.primary}
