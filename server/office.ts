@@ -34,6 +34,7 @@ type Member = Person & {
   role: string;
   sessionId: string;
   connectionId: string;
+  clientId?: string;
   expires: number;
   sharing: boolean;
   whiteboardScope?: string;
@@ -219,6 +220,7 @@ export class Office {
     send: Member["send"],
     close: Member["close"],
     connectionId = crypto.randomUUID(),
+    clientId?: string,
   ) {
     this.remove(user.id, 4001, "Office opened elsewhere");
     const status = ["available", "busy", "dnd", "away"].includes(
@@ -251,6 +253,7 @@ export class Office {
       role: user.role,
       sessionId,
       connectionId,
+      clientId,
       expires,
       sharing: false,
     };

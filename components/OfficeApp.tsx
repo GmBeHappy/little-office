@@ -313,19 +313,23 @@ export default function OfficeApp() {
       timer: ReturnType<typeof setTimeout> | undefined,
       attempt = 0,
       takeover = true;
+    // Kept across retries, never shared with another tab or stored in cookies.
+    const client = crypto.randomUUID();
     function connect() {
       if (disposed) return;
       setConnection("Connecting");
       const ws = new WebSocket(
-        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${base}/office${takeover ? "?takeover=1" : ""}`,
+        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${base}/office?client=${client}${takeover ? "&takeover=1" : ""}`,
       );
       socket.current = ws;
       ws.onopen = () => {
+        if (disposed || socket.current !== ws) return;
         attempt = 0;
         takeover = false;
         setConnection("Connected");
       };
       ws.onmessage = (event) => {
+        if (disposed || socket.current !== ws) return;
         const message = JSON.parse(event.data);
         if (message.type === "snapshot") setSnapshot(message);
         else if (message.type === "error" || message.type === "notice") {
@@ -382,7 +386,7 @@ export default function OfficeApp() {
         }
       };
       ws.onclose = async (event) => {
-        if (disposed) return;
+        if (disposed || socket.current !== ws) return;
         setConnection("Reconnecting");
         setSnapshot(null);
         setInvites([]);
@@ -395,7 +399,7 @@ export default function OfficeApp() {
         }
         try {
           await api("/me");
-          if (!disposed)
+          if (!disposed && socket.current === ws)
             timer = setTimeout(connect, Math.min(1000 * 2 ** attempt++, 10000));
         } catch {
           setUser(null);
