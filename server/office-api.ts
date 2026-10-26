@@ -585,6 +585,7 @@ export function officeRoutes(scoped: boolean): AnyElysia {
     .ws("/office", {
       query: t.Object({
         takeover: t.Optional(t.Literal("1")),
+        client: t.Optional(t.String({ format: "uuid" })),
         protocol: t.Optional(t.Literal("1")),
       }),
       beforeHandle({
@@ -610,7 +611,14 @@ export function officeRoutes(scoped: boolean): AnyElysia {
             workspaceId,
           );
           if (ws.raw.readyState !== 1) return;
-          if (office.members.has(s.user.id) && ws.data.query.takeover !== "1") {
+          const current = office.members.get(s.user.id);
+          // A reconnect can arrive before the old socket's close/timeout. Only
+          // the same client AND login session may resume without a takeover.
+          const resuming =
+            ws.data.query.client &&
+            current?.clientId === ws.data.query.client &&
+            current.sessionId === s.session.id;
+          if (current && !resuming && ws.data.query.takeover !== "1") {
             ws.close(4001, "Office opened elsewhere");
             return;
           }
@@ -627,6 +635,7 @@ export function officeRoutes(scoped: boolean): AnyElysia {
             },
             (code, reason) => ws.close(code, reason),
             ws.id,
+            ws.data.query.client,
           );
           whiteboards.prune();
         } catch (error) {
