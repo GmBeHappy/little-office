@@ -11,7 +11,12 @@ const BunWebSocket = WebSocket as unknown as new (
 const origin = "http://localhost:3000";
 const pg = new PGlite();
 await pg.waitReady;
-const database = new PGLiteSocketServer({ db: pg, host: "127.0.0.1", port: 0 });
+const database = new PGLiteSocketServer({
+  db: pg,
+  host: "127.0.0.1",
+  port: 0,
+  maxConnections: 10,
+});
 await database.start();
 Object.assign(process.env, {
   DATABASE_URL: `postgres://postgres:postgres@${database.getServerConn()}/postgres`,
