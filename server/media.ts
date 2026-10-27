@@ -1,3 +1,5 @@
+import { serverLog, diagnosticRef, errorKind } from "./diagnostics";
+import type { DiagnosticReason } from "../shared/diagnostics";
 import {
   AccessToken,
   RoomServiceClient,
@@ -27,7 +29,13 @@ function clearPreviousProcessRooms() {
   if (!initialized)
     initialized = (async () => {
       for (const old of await client!.listRooms())
-        if (deploymentRoom.test(old.name)) retired.add(old.name);
+        if (deploymentRoom.test(old.name)) {
+          retired.add(old.name);
+          serverLog("media.retire", {
+            roomRef: diagnosticRef(old.name),
+            reason: "process_cleanup",
+          });
+        }
       await flushRetired();
     })().catch((error) => {
       initialized = undefined;
@@ -35,7 +43,11 @@ function clearPreviousProcessRooms() {
     });
   return initialized;
 }
-export function retireRoom(room: string) {
+export function retireRoom(
+  room: string,
+  reason: DiagnosticReason = "unspecified",
+) {
+  serverLog("media.retire", { roomRef: diagnosticRef(room), reason });
   retired.add(room);
   work = work.then(flushRetired).catch(() => {});
 }
@@ -45,9 +57,17 @@ export async function flushRetired() {
     try {
       await client.deleteRoom(room);
       retired.delete(room);
+      serverLog("media.deleted", { roomRef: diagnosticRef(room) });
     } catch (error) {
       if ((error as { status?: number }).status === 404) retired.delete(room);
-      else throw error;
+      else {
+        serverLog(
+          "media.delete_failed",
+          { roomRef: diagnosticRef(room), errorKind: errorKind(error) },
+          "error",
+        );
+        throw error;
+      }
     }
   }
 }

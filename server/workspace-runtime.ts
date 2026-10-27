@@ -1,3 +1,4 @@
+import { serverLog, diagnosticRef, errorKind } from "./diagnostics";
 import { and, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { db, workspaceSettings } from "./db";
 import {
@@ -69,14 +70,14 @@ export function revokeSession(id: string) {
 export async function revokeMember(workspaceId: string, userId: string) {
   const runtime = runtimes.get(workspaceId);
   if (runtime) {
-    runtime.office.remove(userId);
+    runtime.office.remove(userId, undefined, undefined, "access_revoked");
     runtime.whiteboards.prune();
   }
   await flushRetired();
 }
 export function revokeUser(userId: string) {
   for (const { office, whiteboards } of runtimes.values()) {
-    office.remove(userId);
+    office.remove(userId, undefined, undefined, "access_revoked");
     whiteboards.prune();
   }
 }
@@ -128,9 +129,20 @@ export async function revalidateRuntimes() {
         );
       const keep = new Set(valid.map((row) => row.id));
       for (const m of [...office.members.values()])
-        if (!keep.has(m.sessionId)) office.remove(m.id);
-    } catch {
-      for (const m of [...office.members.values()]) office.remove(m.id);
+        if (!keep.has(m.sessionId))
+          office.remove(m.id, undefined, undefined, "access_revoked");
+    } catch (error) {
+      serverLog(
+        "auth.revalidation_failed",
+        {
+          workspaceRef: diagnosticRef(workspaceId),
+          errorKind: errorKind(error),
+          peers: office.members.size,
+        },
+        "error",
+      );
+      for (const m of [...office.members.values()])
+        office.remove(m.id, undefined, undefined, "revalidation_failed");
     }
     whiteboards.prune();
   }

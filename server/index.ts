@@ -1,3 +1,4 @@
+import { serverLog, errorKind, requestRef } from "./diagnostics";
 import { workspaceDomainApi } from "./workspace-domain-api";
 import {
   hostFor,
@@ -107,7 +108,24 @@ export const app = new Elysia({ serve: { maxRequestBodySize: 5_100_000 } })
       return { error: "Untrusted request origin." };
     }
   })
-  .onError(({ error, set, code }) => {
+  .onError(({ error, set, code, request }) => {
+    serverLog(
+      "api.failed",
+      {
+        requestRef: requestRef(request),
+        errorKind: errorKind(error),
+        status:
+          error instanceof Problem
+            ? error.status
+            : code === "NOT_FOUND"
+              ? 404
+              : error instanceof DrizzleQueryError &&
+                  (error.cause as { code?: string })?.code === "23505"
+                ? 409
+                : 400,
+      },
+      "error",
+    );
     if (error instanceof Problem) {
       set.status = error.status;
       return { error: error.message };

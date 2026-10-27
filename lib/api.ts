@@ -1,3 +1,4 @@
+import { clientLog, diagnosticRef, errorKind } from "./diagnostics";
 export class APIError extends Error {
   constructor(
     message: string,
@@ -12,19 +13,45 @@ export async function api<T = Record<string, unknown>>(
   method?: string,
   base = "/api",
 ): Promise<T> {
+  const requestId = crypto.randomUUID();
+  const started = performance.now();
   const response = await fetch(`${base}${path}`, {
     method: method || (body ? "POST" : "GET"),
     credentials: "same-origin",
-    headers: body ? { "Content-Type": "application/json" } : undefined,
+    headers: {
+      "x-office-request-id": requestId,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
+  }).catch((error: unknown) => {
+    clientLog(
+      "api.failed",
+      {
+        requestRef: diagnosticRef(requestId),
+        errorKind: errorKind(error),
+        durationMs: performance.now() - started,
+      },
+      "error",
+    );
+    throw error;
   });
   const data = await response.json().catch(() => null);
   const fallback = "Something went wrong. Please try again.";
-  if (!response.ok)
+  if (!response.ok) {
+    clientLog(
+      "api.failed",
+      {
+        requestRef: diagnosticRef(requestId),
+        status: response.status,
+        durationMs: performance.now() - started,
+      },
+      "warn",
+    );
     throw new APIError(
       data?.error || data?.message || fallback,
       response.status,
     );
+  }
   if (data === null) throw new Error(fallback);
   return data;
 }

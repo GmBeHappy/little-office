@@ -133,6 +133,16 @@ try {
     const first = await connect(`takeover=1&client=${client}`, cookie, path);
     assert.equal(first.outcome, "snapshot");
     const oldConnection = office.members.get(user.id)!.connectionId;
+    const oldRoom = office.members.get(user.id)!.room;
+    const peer = office.add(
+      { id: "media-peer", name: "Peer", role: "member" },
+      "peer-session",
+      Date.now() + 3600000,
+      () => {},
+      () => {},
+    );
+    assert.equal(peer.room, oldRoom);
+    office.members.get(user.id)!.seq = 42;
     // A brief network loss may leave the old server socket alive until its timeout.
     const reconnect = await connect(`client=${client}`, cookie, path);
     assert.equal(
@@ -141,6 +151,18 @@ try {
       `Same-tab reconnect incorrectly closed with ${reconnect.code} (Office opened elsewhere)`,
     );
     assert.notEqual(office.members.get(user.id)!.connectionId, oldConnection);
+    assert.equal(
+      peer.room,
+      oldRoom,
+      "Same-tab resume must not delete the voice room of other people",
+    );
+    assert.equal(office.members.get(user.id)!.room, oldRoom);
+    assert.equal(
+      office.members.get(user.id)!.seq,
+      42,
+      "Resume preserves movement sequence",
+    );
+    office.remove(peer.id);
     const resumedConnection = office.members.get(user.id)!.connectionId;
     const differentTab = await connect(
       `client=${crypto.randomUUID()}`,
@@ -234,6 +256,13 @@ try {
   );
   await stop?.();
   await pool.end();
+  // PGliteSocketServer.stop() does not await deferred socket-close handlers.
+  // Drain them before closing the WASM database (observable on Linux CI).
+  const deadline = Date.now() + 3000;
+  while (database.getStats().activeConnections > 0) {
+    assert.ok(Date.now() < deadline, "Database sockets did not finish closing");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
   await database.stop();
   await pg.close();
 }
