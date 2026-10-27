@@ -1,4 +1,5 @@
 "use client";
+import { clientLog, diagnosticRef, errorKind } from "@/lib/diagnostics";
 import { useWorkspaceApi } from "@/lib/workspace-api";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
@@ -19,6 +20,8 @@ import {
 import {
   Room,
   RoomEvent,
+  setLogLevel,
+  LogLevel,
   Track,
   createLocalScreenTracks,
   ScreenSharePresets,
@@ -30,6 +33,10 @@ import {
 import { MEDIA_QUALITY, type MediaQuality } from "@/lib/media-quality";
 import { nearby, type Person } from "@/shared/world";
 import { ScreenViewers } from "./ScreenViewers";
+
+// SDK context may include signal URLs/tokens. Our allowlisted lifecycle records
+// below replace raw SDK console output in production and diagnostic exports.
+setLogLevel(LogLevel.silent);
 
 type DeviceChoices = Record<MediaDeviceKind, string>;
 const defaultDevices: DeviceChoices = {
@@ -183,6 +190,9 @@ export function useOfficeMedia(
     setMic(false);
     setCamera(false);
     if (!roomId) return;
+    const roomRef = diagnosticRef(roomId);
+    const started = performance.now();
+    clientLog("media.connect", { roomRef, attempt });
     (async () => {
       try {
         const access = await api<{ token: string; url: string; room: string }>(
@@ -242,15 +252,29 @@ export function useOfficeMedia(
         ])
           next.on(event, () => bump((v) => v + 1));
         next.on(RoomEvent.Reconnecting, () => {
+          clientLog("media.reconnecting", { roomRef }, "warn");
           setConnected(false);
           setConnecting(true);
           setSpeaking([]);
         });
         next.on(RoomEvent.Reconnected, () => {
+          clientLog("media.reconnected", { roomRef });
           setConnected(true);
           setConnecting(false);
         });
-        next.on(RoomEvent.Disconnected, () => {
+        next.on(RoomEvent.MediaDevicesError, (error) => {
+          clientLog(
+            "media.failed",
+            { roomRef, errorKind: errorKind(error) },
+            "warn",
+          );
+        });
+        next.on(RoomEvent.Disconnected, (reason) => {
+          clientLog(
+            "media.disconnected",
+            { roomRef, code: reason, durationMs: performance.now() - started },
+            "warn",
+          );
           setConnected(false);
           setConnecting(false);
           setSpeaking([]);
@@ -262,6 +286,10 @@ export function useOfficeMedia(
           await next.disconnect();
           return;
         }
+        clientLog("media.connected", {
+          roomRef,
+          durationMs: performance.now() - started,
+        });
         setRoom(next);
         setConnected(true);
         void enumerate(false, true);
@@ -282,13 +310,28 @@ export function useOfficeMedia(
         }
         bump((v) => v + 1);
       } catch (e) {
-        if (!cancelled) setError((e as Error).message);
+        if (!cancelled) {
+          clientLog(
+            "media.failed",
+            {
+              roomRef,
+              errorKind: errorKind(e),
+              durationMs: performance.now() - started,
+            },
+            "error",
+          );
+          setError((e as Error).message);
+        }
       } finally {
         if (!cancelled) setConnecting(false);
       }
     })();
     return () => {
       cancelled = true;
+      clientLog("media.dispose", {
+        roomRef,
+        durationMs: performance.now() - started,
+      });
       current.current = null;
       cancelShare();
       if (next) {

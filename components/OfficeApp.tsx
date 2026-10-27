@@ -1,4 +1,11 @@
 "use client";
+import {
+  clientLog,
+  diagnosticRef,
+  setDiagnosticClient,
+  downloadDiagnostics,
+  errorKind,
+} from "@/lib/diagnostics";
 import { useWorkspaceApi } from "@/lib/workspace-api";
 import Login from "./Login";
 export { default as Login } from "./Login";
@@ -315,9 +322,15 @@ export default function OfficeApp() {
       takeover = true;
     // Kept across retries, never shared with another tab or stored in cookies.
     const client = crypto.randomUUID();
+    setDiagnosticClient(client);
+    const pageState = () => clientLog("page.state");
+    document.addEventListener("visibilitychange", pageState);
+    window.addEventListener("online", pageState);
+    window.addEventListener("offline", pageState);
     function connect() {
       if (disposed) return;
       setConnection("Connecting");
+      clientLog("socket.connect", { attempt });
       const ws = new WebSocket(
         `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${base}/office?client=${client}${takeover ? "&takeover=1" : ""}`,
       );
@@ -326,6 +339,7 @@ export default function OfficeApp() {
         if (disposed || socket.current !== ws) return;
         attempt = 0;
         takeover = false;
+        clientLog("socket.open");
         setConnection("Connected");
       };
       ws.onmessage = (event) => {
@@ -387,6 +401,11 @@ export default function OfficeApp() {
       };
       ws.onclose = async (event) => {
         if (disposed || socket.current !== ws) return;
+        clientLog(
+          "socket.close",
+          { code: event.code, clean: event.wasClean },
+          "warn",
+        );
         setConnection("Reconnecting");
         setSnapshot(null);
         setInvites([]);
@@ -399,9 +418,14 @@ export default function OfficeApp() {
         }
         try {
           await api("/me");
-          if (!disposed && socket.current === ws)
-            timer = setTimeout(connect, Math.min(1000 * 2 ** attempt++, 10000));
-        } catch {
+          if (!disposed && socket.current === ws) {
+            const delay = Math.min(1000 * 2 ** attempt++, 10000);
+            clientLog("socket.retry", { attempt, durationMs: delay });
+            timer = setTimeout(connect, delay);
+          }
+        } catch (error) {
+          if (disposed || socket.current !== ws) return;
+          clientLog("socket.failed", { errorKind: errorKind(error) }, "error");
           setUser(null);
           setConnection("Disconnected");
         }
@@ -411,6 +435,10 @@ export default function OfficeApp() {
     const ping = setInterval(() => send({ type: "ping" }), 10000);
     return () => {
       disposed = true;
+      clientLog("socket.dispose", { clientRef: diagnosticRef(client) });
+      document.removeEventListener("visibilitychange", pageState);
+      window.removeEventListener("online", pageState);
+      window.removeEventListener("offline", pageState);
       clearInterval(ping);
       clearTimeout(timer);
       socket.current?.close();
@@ -1405,6 +1433,9 @@ export default function OfficeApp() {
                   {t("WELCOME TO YOUR LITTLE OFFICE")}
                 </div>
                 <h2>{t("Make yourself at home.")}</h2>
+                <Button variant="secondary" onClick={downloadDiagnostics}>
+                  {t("Download connection diagnostics")}
+                </Button>
                 <div className="help-grid">
                   <p>
                     <strong>{t("Walk & talk")}</strong>

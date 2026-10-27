@@ -1,3 +1,5 @@
+import { serverLog, diagnosticRef } from "./diagnostics";
+import type { DiagnosticReason } from "../shared/diagnostics";
 import { emptyHabitat, habitatTarget } from "../shared/habitats";
 import { startFishing, FISHING_CATCH_DURATION } from "../shared/fishing";
 import { isAvatar } from "../shared/appearance";
@@ -57,7 +59,7 @@ export class Office {
       for (const room of new Set(
         [...this.members.values()].map((m) => m.room).filter(Boolean),
       ))
-        this.retire(room);
+        this.retire(room, "map_changed");
       this.generations.clear();
       this.presenters = {};
       this.locks = { studio: false, library: false };
@@ -97,7 +99,10 @@ export class Office {
   cooldowns = new Map<string, number>();
   dirty = false;
   constructor(
-    private retire: (room: string) => void = () => {},
+    private retire: (
+      room: string,
+      reason?: DiagnosticReason,
+    ) => void = () => {},
     private permissions: (
       room: string,
       id: string,
@@ -222,7 +227,37 @@ export class Office {
     connectionId = crypto.randomUUID(),
     clientId?: string,
   ) {
-    this.remove(user.id, 4001, "Office opened elsewhere");
+    const current = this.members.get(user.id);
+    if (
+      clientId &&
+      current?.clientId === clientId &&
+      current.sessionId === sessionId
+    ) {
+      const closePrevious = current.close;
+      const previousConnectionRef = diagnosticRef(current.connectionId);
+      // Rebind before closing: a late close from the old socket must not remove
+      // this member or revoke the media room used by everyone else.
+      Object.assign(current, {
+        send,
+        close,
+        connectionId,
+        expires,
+        role: user.role,
+        seen: Date.now(),
+        input: { dx: 0, dy: 0, at: 0 },
+        moving: false,
+      });
+      serverLog("socket.resumed", {
+        clientRef: diagnosticRef(clientId),
+        connectionRef: diagnosticRef(connectionId),
+        previousConnectionRef,
+        roomRef: diagnosticRef(current.room),
+      });
+      closePrevious(1000, "Connection resumed");
+      this.broadcast();
+      return current;
+    }
+    this.remove(user.id, 4001, "Office opened elsewhere", "takeover");
     const status = ["available", "busy", "dnd", "away"].includes(
       user.availability || "",
     )
@@ -260,15 +295,27 @@ export class Office {
     this.members.set(user.id, member);
     this.log(member, "office.join");
     this.syncConversation(member);
+    serverLog("socket.accepted", {
+      clientRef: diagnosticRef(clientId),
+      connectionRef: diagnosticRef(connectionId),
+      roomRef: diagnosticRef(member.room),
+    });
     this.broadcast();
     return member;
   }
-  rotate(group: string) {
+  rotate(group: string, reason: DiagnosticReason = "conversation_changed") {
     if (!group) return;
     const old = this.room(group);
     this.generations.set(group, crypto.randomUUID());
     delete this.presenters[group];
-    this.retire(old);
+    serverLog("media.rotate", {
+      roomRef: diagnosticRef(old),
+      nextRoomRef: diagnosticRef(this.room(group)),
+      reason,
+      peers: [...this.members.values()].filter((m) => m.conversation === group)
+        .length,
+    });
+    this.retire(old, reason);
     for (const member of this.members.values())
       if (member.conversation === group) {
         this.stopSharing(member);
@@ -306,14 +353,27 @@ export class Office {
       m.zone !== "floor" ? `zone:${m.zone}` : m.status !== "dnd" ? "floor" : "",
     );
   }
-  remove(id: string, code?: number, reason?: string) {
+  remove(
+    id: string,
+    code?: number,
+    reason?: string,
+    cause: DiagnosticReason = "member_removed",
+  ) {
     const member = this.members.get(id);
     if (!member) return;
     this.stopSharing(member);
+    serverLog("office.removed", {
+      clientRef: diagnosticRef(member.clientId),
+      connectionRef: diagnosticRef(member.connectionId),
+      roomRef: diagnosticRef(member.room),
+      reason: cause,
+      code,
+      ageMs: Date.now() - member.seen,
+    });
     this.log(member, "office.leave");
     this.members.delete(id);
     member.close(code, reason);
-    if (member.conversation) this.rotate(member.conversation);
+    if (member.conversation) this.rotate(member.conversation, cause);
     if (member.conversation.startsWith("call:"))
       for (const m of this.members.values())
         if (m.conversation === member.conversation) {
@@ -335,7 +395,8 @@ export class Office {
   }
   revokeSession(sessionId: string) {
     for (const m of [...this.members.values()])
-      if (m.sessionId === sessionId) this.remove(m.id);
+      if (m.sessionId === sessionId)
+        this.remove(m.id, undefined, undefined, "session_revoked");
   }
   go(m: Member, zone: ZoneId, invited = false) {
     if (zone !== "floor" && this.locks[zone] && !invited && m.zone !== zone)
@@ -678,7 +739,12 @@ export class Office {
   tick(dt: number, now = Date.now()) {
     for (const m of [...this.members.values()]) {
       if (now > m.expires || now - m.seen > 35000) {
-        this.remove(m.id);
+        this.remove(
+          m.id,
+          undefined,
+          undefined,
+          now > m.expires ? "session_expired" : "heartbeat_timeout",
+        );
         continue;
       }
       if (

@@ -26,6 +26,11 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
   api:
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     image: ${OFFICE_IMAGE:-ghcr.io/gmbehappy/little-office:latest}
     pull_policy: ${OFFICE_PULL_POLICY:-always}
     network_mode: host
@@ -48,6 +53,11 @@ services:
       retries: 3
     restart: unless-stopped
   web:
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     image: ${OFFICE_IMAGE:-ghcr.io/gmbehappy/little-office:latest}
     pull_policy: ${OFFICE_PULL_POLICY:-always}
     network_mode: host

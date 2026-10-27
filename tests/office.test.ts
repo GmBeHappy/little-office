@@ -623,3 +623,75 @@ test("activity records accepted actions once, including sharing interruptions an
     "office.join",
   ]);
 });
+
+test("same authenticated client rebinds transport without retiring shared media or resetting presence", () => {
+  const retired: string[] = [];
+  const office = new Office((room) => retired.push(room));
+  const user = { id: "a", name: "A", role: "member" };
+  let previousClosed = false;
+  const original = office.add(
+    user,
+    "session",
+    Date.now() + 3600000,
+    () => {},
+    () => {
+      previousClosed = true;
+      expect(office.members.get("a")?.connectionId).toBe("new-connection");
+    },
+    "old-connection",
+    "same-client",
+  );
+  const peer = office.add(
+    { id: "b", name: "B", role: "member" },
+    "other-session",
+    Date.now() + 3600000,
+    () => {},
+    () => {},
+  );
+  office.go(original, "studio");
+  office.go(peer, "studio");
+  original.status = "busy";
+  original.seq = 37;
+  original.microphone = true;
+  original.sharing = true;
+  original.input = { dx: 1, dy: 0, at: Date.now() };
+  const before = {
+    room: original.room,
+    x: original.x,
+    y: original.y,
+    zone: original.zone,
+    seq: original.seq,
+    status: original.status,
+    microphone: true,
+    sharing: true,
+  };
+  retired.length = 0;
+  const messages: unknown[] = [];
+  const resumed = office.add(
+    user,
+    "session",
+    Date.now() + 3600000,
+    (event) => messages.push(event),
+    () => {},
+    "new-connection",
+    "same-client",
+  );
+  expect(resumed).toBe(original);
+  expect(resumed).toMatchObject(before);
+  expect(resumed.input.dx).toBe(0);
+  expect(peer.room).toBe(before.room);
+  expect(retired).toEqual([]);
+  expect(previousClosed).toBe(true);
+  expect(messages.length).toBeGreaterThan(0);
+  office.add(
+    user,
+    "different-session",
+    Date.now() + 3600000,
+    () => {},
+    () => {},
+    "takeover-connection",
+    "same-client",
+  );
+  expect(retired).toContain(before.room);
+  expect(peer.room).not.toBe(before.room);
+});

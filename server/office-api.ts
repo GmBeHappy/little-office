@@ -1,3 +1,4 @@
+import { serverLog, diagnosticRef, errorKind } from "./diagnostics";
 import {
   sameRequestOrigin,
   workspaceForHost,
@@ -619,6 +620,16 @@ export function officeRoutes(scoped: boolean): AnyElysia {
             current?.clientId === ws.data.query.client &&
             current.sessionId === s.session.id;
           if (current && !resuming && ws.data.query.takeover !== "1") {
+            serverLog(
+              "socket.rejected",
+              {
+                clientRef: diagnosticRef(ws.data.query.client),
+                connectionRef: diagnosticRef(ws.id),
+                workspaceRef: diagnosticRef(workspaceId),
+                reason: "takeover",
+              },
+              "warn",
+            );
             ws.close(4001, "Office opened elsewhere");
             return;
           }
@@ -639,6 +650,15 @@ export function officeRoutes(scoped: boolean): AnyElysia {
           );
           whiteboards.prune();
         } catch (error) {
+          serverLog(
+            "socket.failed",
+            {
+              clientRef: diagnosticRef(ws.data.query.client),
+              connectionRef: diagnosticRef(ws.id),
+              errorKind: errorKind(error),
+            },
+            "error",
+          );
           ws.send({
             type: "error",
             message:
@@ -666,7 +686,15 @@ export function officeRoutes(scoped: boolean): AnyElysia {
         if (!count.rate || Date.now() - count.rate.at > 1000)
           count.rate = { count: 0, at: Date.now() };
         if (++count.rate.count > 40) {
-          ws.close();
+          serverLog(
+            "socket.rate_limited",
+            {
+              clientRef: diagnosticRef(member.clientId),
+              connectionRef: diagnosticRef(ws.id),
+            },
+            "warn",
+          );
+          ws.close(1008, "Message rate exceeded");
           return;
         }
         try {
@@ -698,11 +726,20 @@ export function officeRoutes(scoped: boolean): AnyElysia {
           });
         }
       },
-      close(ws) {
+      close(ws, code) {
         const { office, whiteboards, workspaceId } = ws.data;
         const s = ws.data.identity;
-        if (s && office.members.get(s.user.id)?.connectionId === ws.id)
-          office.remove(s.user.id);
+        const current =
+          !!s && office.members.get(s.user.id)?.connectionId === ws.id;
+        serverLog("socket.close", {
+          clientRef: diagnosticRef(ws.data.query.client),
+          connectionRef: diagnosticRef(ws.id),
+          workspaceRef: diagnosticRef(workspaceId),
+          code,
+          current,
+        });
+        if (s && current)
+          office.remove(s.user.id, undefined, undefined, "socket_closed");
       },
     });
 }
