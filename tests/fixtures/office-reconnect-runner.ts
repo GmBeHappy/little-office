@@ -256,6 +256,13 @@ try {
   );
   await stop?.();
   await pool.end();
+  // PGliteSocketServer.stop() does not await deferred socket-close handlers.
+  // Drain them before closing the WASM database (observable on Linux CI).
+  const deadline = Date.now() + 3000;
+  while (database.getStats().activeConnections > 0) {
+    assert.ok(Date.now() < deadline, "Database sockets did not finish closing");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
   await database.stop();
   await pg.close();
 }
