@@ -818,3 +818,26 @@ test("transport heartbeats preserve liveness without activity or session extensi
   expect(expired.expires).toBe(now + 20000);
   expect(office.members.has("a")).toBe(false);
 });
+
+test("automatic Away is broadcast and clearing status restores manual availability", () => {
+  const { office } = setup();
+  const now = Date.now();
+  const m = office.members.get("a")!;
+  m.activity = now - 300001;
+  office.broadcast();
+  office.tick(0.05, now);
+  expect(m.status).toBe("away");
+  expect(office.dirty).toBe(true);
+  office.handle(
+    "a",
+    Command.parse({ type: "status", status: "available", text: "", icon: "" }),
+    now,
+  );
+  office.tick(0.05, now + 1000);
+  expect(m).toMatchObject({
+    status: "available",
+    manualStatus: "available",
+    statusText: "",
+    statusIcon: "",
+  });
+});

@@ -294,3 +294,25 @@ export const nativeHandoffs = pgTable("native_handoffs", {
   challenge: text("challenge").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
+
+export const attendanceIntervals = pgTable(
+  "workspace_attendance_intervals",
+  {
+    id: uuid("id").primaryKey(),
+    workspaceId: uuid("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    visitId: uuid("visit_id").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }).notNull(),
+    active: boolean("active").notNull(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.workspaceId, t.userId],
+      foreignColumns: [memberships.workspaceId, memberships.userId],
+    }).onDelete("cascade"),
+    index("attendance_workspace_time").on(t.workspaceId, t.endedAt),
+    index("attendance_member_time").on(t.workspaceId, t.userId, t.endedAt),
+    check("attendance_time_order", sql`${t.endedAt} >= ${t.startedAt}`),
+  ],
+);

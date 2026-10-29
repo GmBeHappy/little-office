@@ -1,4 +1,5 @@
 "use client";
+import { AttendanceDashboard } from "./AttendanceDashboard";
 import {
   clientLog,
   diagnosticRef,
@@ -326,6 +327,21 @@ export default function OfficeApp() {
     const client = crypto.randomUUID();
     setDiagnosticClient(client);
     const pageState = () => clientLog("page.state");
+    let lastActivity = 0;
+    const interaction = (event: Event) => {
+      const now = Date.now();
+      if (
+        event.isTrusted &&
+        socket.current?.readyState === WebSocket.OPEN &&
+        now - lastActivity >= 15000
+      ) {
+        lastActivity = now;
+        send({ type: "activity" });
+      }
+    };
+    // A coarse activity signal only; never send keys, text, or pointer positions.
+    for (const event of ["pointerdown", "keydown", "wheel"])
+      document.addEventListener(event, interaction, { passive: true });
     document.addEventListener("visibilitychange", pageState);
     window.addEventListener("online", pageState);
     window.addEventListener("offline", pageState);
@@ -441,6 +457,8 @@ export default function OfficeApp() {
     return () => {
       disposed = true;
       clientLog("socket.dispose", { clientRef: diagnosticRef(client) });
+      for (const event of ["pointerdown", "keydown", "wheel"])
+        document.removeEventListener(event, interaction);
       document.removeEventListener("visibilitychange", pageState);
       window.removeEventListener("online", pageState);
       window.removeEventListener("offline", pageState);
@@ -1734,8 +1752,7 @@ export function Profile({
     defaultValues: {
       name: user.name,
       avatar: user.avatar,
-      status:
-        self?.status || (user.availability as Availability) || "available",
+      status: (user.availability as Availability) || "available",
       statusText: self?.statusText ?? user.statusText ?? "",
       statusIcon: statusIconSchema.parse(
         self?.statusIcon ?? user.statusIcon ?? "",
@@ -1861,6 +1878,23 @@ export function Profile({
                   ))}
                 </div>
               </fieldset>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  form.setValue("status", "available", { shouldDirty: true });
+                  form.setValue("statusText", "", { shouldDirty: true });
+                  form.setValue("statusIcon", "", { shouldDirty: true });
+                }}
+              >
+                <X size={16} />
+                {t("Clear status")}
+              </Button>
+              <p className="muted text-sm">
+                {t(
+                  "Clear status resets your availability, message and icon. Save changes to apply.",
+                )}
+              </p>
               <FormInput
                 name="statusText"
                 label={t("A little status")}
@@ -1981,6 +2015,7 @@ function SettingsPanel({
       | "members"
       | "workspace"
       | "activity"
+      | "attendance"
       | "sso"
     >(["owner", "admin"].includes(user.role) ? initialTab : "audio"),
     [users, setUsers] = useState<AdminUser[]>([]),
@@ -2012,6 +2047,12 @@ function SettingsPanel({
       label: "Display",
       icon: SlidersHorizontal,
       description: "Make the office feel comfortable on your screen.",
+    },
+    {
+      value: "attendance",
+      label: "Attendance",
+      icon: Activity,
+      description: "Office visits and active time.",
     },
     ...(["owner", "admin"].includes(user.role)
       ? [
@@ -2234,6 +2275,7 @@ function SettingsPanel({
               </div>
             </div>
           )}
+          {tab === "attendance" && <AttendanceDashboard />}
           {tab === "activity" && user.role === "owner" && <ActivityLog />}
           {tab === "workspace" && (
             <WorkspaceSettings

@@ -1,3 +1,4 @@
+import { AttendanceTracker } from "./attendance";
 import { advanceMovement } from "../shared/movement";
 import { serverLog, diagnosticRef } from "./diagnostics";
 import type { DiagnosticReason } from "../shared/diagnostics";
@@ -47,6 +48,7 @@ type Member = Person & {
   whiteboardScope?: string;
 };
 export class Office {
+  attendance = new AttendanceTracker();
   habitat = emptyHabitat();
   workspace: WorkspaceSettings = { ...DEFAULT_WORKSPACE, revision: 0 };
   blocks = mapBlocks(getMap(DEFAULT_WORKSPACE.mapId));
@@ -262,6 +264,7 @@ export class Office {
         previousConnectionRef,
         roomRef: diagnosticRef(current.room),
       });
+      this.attendance.observe(user.id, Date.now(), this.activeUntil(current));
       closePrevious(1000, "Connection resumed");
       this.broadcast();
       return current;
@@ -305,6 +308,7 @@ export class Office {
       sharing: false,
     };
     this.members.set(user.id, member);
+    this.attendance.start(user.id, Date.now());
     this.log(member, "office.join");
     this.syncConversation(member);
     serverLog("socket.accepted", {
@@ -405,6 +409,7 @@ export class Office {
       return;
     }
     // A closed transport gets a short retry window, never a new auth lifetime.
+    this.attendance.pause(id, now);
     member.reconnectUntil = now + 15000;
     member.input = { dx: 0, dy: 0, at: 0 };
     member.moving = false;
@@ -423,6 +428,7 @@ export class Office {
     code?: number,
     reason?: string,
     cause: DiagnosticReason = "member_removed",
+    now = Date.now(),
   ) {
     const member = this.members.get(id);
     if (!member) return;
@@ -436,6 +442,10 @@ export class Office {
       ageMs: Date.now() - member.seen,
     });
     this.log(member, "office.leave");
+    this.attendance.leave(
+      id,
+      Math.min(now, member.seen + 35000, member.expires),
+    );
     this.members.delete(id);
     member.close(code, reason);
     if (member.conversation) this.rotate(member.conversation, cause);
@@ -801,6 +811,15 @@ export class Office {
     }
     this.dirty = true;
   }
+  activeUntil(m: Member) {
+    const meeting =
+      m.conversation &&
+      m.conversation !== "floor" &&
+      this.audience(m.id).length > 0;
+    return m.sharing || this.whiteboardActive(m) || meeting
+      ? Infinity
+      : m.activity + 300000;
+  }
   tick(dt: number, now = Date.now()) {
     for (const m of [...this.members.values()]) {
       if (
@@ -817,6 +836,7 @@ export class Office {
             : m.reconnectUntil
               ? "reconnect_timeout"
               : "heartbeat_timeout",
+          now,
         );
         continue;
       }
@@ -830,8 +850,10 @@ export class Office {
         !this.whiteboardActive(m) &&
         (!m.conversation || m.conversation === "floor") &&
         m.manualStatus === "available"
-      )
+      ) {
+        if (m.status !== "away") this.dirty = true;
         m.status = "away";
+      }
       if (
         m.pose === "fish" &&
         m.fishing &&
@@ -841,6 +863,8 @@ export class Office {
         m.fishing = undefined;
         this.dirty = true;
       }
+      if (!m.reconnectUntil)
+        this.attendance.observe(m.id, now, this.activeUntil(m));
       const { dx, dy, at } = m.input;
       const moving = now - at < 300 && !!(dx || dy);
       if (moving !== m.moving) this.dirty = true;
