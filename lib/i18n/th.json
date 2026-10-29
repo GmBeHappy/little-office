@@ -1,4 +1,7 @@
 {
+  "Round-trip latency to the office server": "เวลารับส่งข้อมูลไปกลับกับเซิร์ฟเวอร์สำนักงาน",
+  "Measuring connection latency": "กำลังวัดความหน่วงการเชื่อมต่อ",
+  "Ping: {ms} ms": "ปิง: {ms} ms",
   "Download connection diagnostics": "ดาวน์โหลดข้อมูลวิเคราะห์การเชื่อมต่อ",
   " · presenting": " · กำลังนำเสนอ",
   " · you": " · คุณ",

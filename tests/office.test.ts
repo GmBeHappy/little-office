@@ -22,6 +22,34 @@ function setup() {
   return { office, events, retired };
 }
 describe("office behavior", () => {
+  test("legacy idle movement keeps liveness without forcing full-office snapshots", () => {
+    const { office } = setup();
+    const member = office.members.get("a")!,
+      now = member.seen + 1000;
+    office.broadcast();
+    for (let seq = 1; seq <= 12; seq++)
+      office.handle("a", { type: "move", dx: 0, dy: 0, seq }, now + seq * 80);
+    expect(office.dirty).toBe(false);
+    expect(member.seq).toBe(12);
+    expect(member.seen).toBe(now + 960);
+    office.handle("a", { type: "move", dx: 1, dy: 0, seq: 13 }, now + 1040);
+    expect(office.dirty).toBe(true);
+    office.broadcast();
+    office.handle("a", { type: "move", dx: 0, dy: 0, seq: 14 }, now + 1060);
+    expect(office.dirty).toBe(true); // A real stop still acknowledges immediately.
+  });
+  test("ping echoes only the nonce to its sender without changing human activity", () => {
+    const { office, events } = setup();
+    const member = office.members.get("a")!;
+    const activity = member.activity;
+    for (const messages of Object.values(events)) messages.length = 0;
+    office.handle("a", { type: "ping", nonce: 42 }, activity + 1000);
+    expect(events.a).toEqual([{ type: "pong", nonce: 42 }]);
+    expect(events.b).toEqual([]);
+    expect(member.activity).toBe(activity);
+    office.handle("a", { type: "ping" }, activity + 2000);
+    expect(events.a).toHaveLength(1); // Old clients still send heartbeat-only ping.
+  });
   test("status icons reach other people and survive reconnecting", () => {
     const { office, events } = setup();
     office.handle(

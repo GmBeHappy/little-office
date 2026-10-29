@@ -203,6 +203,7 @@ export default function OfficeApp() {
   };
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null),
     [connection, setConnection] = useState("Connecting"),
+    [pingMs, setPingMs] = useState<number | null>(null),
     [notice, setNotice] = useState("");
   const [panel, setPanel] = useState<"people" | "rooms">("people"),
     [search, setSearch] = useState(""),
@@ -368,9 +369,22 @@ export default function OfficeApp() {
     document.addEventListener("visibilitychange", pageState);
     window.addEventListener("online", pageState);
     window.addEventListener("offline", pageState);
+    let pingNonce = 0;
+    let pendingPing: { nonce: number; started: number } | undefined;
+    let pingTimeout: ReturnType<typeof setTimeout> | undefined;
+    function probeLatency() {
+      if (socket.current?.readyState !== WebSocket.OPEN || pendingPing) return;
+      pendingPing = { nonce: ++pingNonce, started: performance.now() };
+      send({ type: "ping", nonce: pendingPing.nonce });
+      pingTimeout = setTimeout(() => {
+        pendingPing = undefined;
+        setPingMs(null);
+      }, 5000);
+    }
     function connect() {
       if (disposed) return;
       setConnection("Connecting");
+      setPingMs(null);
       clientLog("socket.connect", { attempt });
       const ws = new WebSocket(
         `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${base}/office?client=${client}${takeover ? "&takeover=1" : ""}`,
@@ -382,12 +396,27 @@ export default function OfficeApp() {
         takeover = false;
         clientLog("socket.open");
         setConnection("Connected");
+        probeLatency();
       };
       ws.onmessage = (event) => {
         if (disposed || socket.current !== ws) return;
         const message = JSON.parse(event.data);
         if (message.type === "snapshot") setSnapshot(message);
-        else if (message.type === "error" || message.type === "notice") {
+        else if (message.type === "pong") {
+          if (pendingPing && message.nonce === pendingPing.nonce) {
+            const durationMs = Math.round(
+              performance.now() - pendingPing.started,
+            );
+            clearTimeout(pingTimeout);
+            pendingPing = undefined;
+            setPingMs(durationMs);
+            clientLog(
+              "socket.latency",
+              { durationMs },
+              durationMs >= 250 ? "warn" : "info",
+            );
+          }
+        } else if (message.type === "error" || message.type === "notice") {
           if (message.type === "error") mediaRef.current.cancelShare();
           notify(message.message);
         } else if (message.type === "wave") {
@@ -442,6 +471,9 @@ export default function OfficeApp() {
           "warn",
         );
         setConnection("Reconnecting");
+        pendingPing = undefined;
+        clearTimeout(pingTimeout);
+        setPingMs(null);
         setSnapshot(null);
         setInvites([]);
         setJumps({});
@@ -470,7 +502,7 @@ export default function OfficeApp() {
       };
     }
     connect();
-    const ping = setInterval(() => send({ type: "ping" }), 10000);
+    const ping = setInterval(probeLatency, 10000);
     return () => {
       disposed = true;
       clientLog("socket.dispose", { clientRef: diagnosticRef(client) });
@@ -480,6 +512,8 @@ export default function OfficeApp() {
       window.removeEventListener("online", pageState);
       window.removeEventListener("offline", pageState);
       clearInterval(ping);
+      clearTimeout(pingTimeout);
+      setPingMs(null);
       clearTimeout(timer);
       socket.current?.close();
       socket.current = null;
@@ -621,6 +655,19 @@ export default function OfficeApp() {
           >
             <i />
             {t(connection)}
+            {connection === "Connected" && (
+              <span
+                className={`connection-ping${pingMs !== null && pingMs >= 250 ? " slow" : ""}`}
+                title={t("Round-trip latency to the office server")}
+                aria-label={
+                  pingMs === null
+                    ? t("Measuring connection latency")
+                    : t("Ping: {ms} ms", { ms: pingMs })
+                }
+              >
+                {pingMs === null ? "— ms" : `${pingMs} ms`}
+              </span>
+            )}
           </span>
           <span className="header-divider" />
           <LanguageToggle />

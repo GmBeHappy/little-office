@@ -147,28 +147,9 @@ export default function PixelMap(props: Props) {
       lastAmbient = -Infinity;
       ambientStill?: boolean;
       keys = new Set<string>();
-      seq = 0;
-      lastInput = 0;
-      lastDx = 0;
-      lastDy = 0;
-      intentSeq = 0;
       localMovement = new LocalMovement();
       movementBlocks = mapBlocks(getMap(props.mapId));
       movementZones = mapZones(getMap(props.mapId));
-      sendMovement(dx: number, dy: number, time: number) {
-        const state = live.current;
-        const changed = dx !== this.lastDx || dy !== this.lastDy;
-        if (!changed && (!(dx || dy) || time - this.lastInput < 80)) return;
-        this.seq = Math.max(
-          this.seq,
-          state.people.find((p) => p.id === state.self)?.seq || 0,
-        );
-        state.send({ type: "move", dx, dy, seq: ++this.seq });
-        if (changed) this.intentSeq = this.seq;
-        this.lastDx = dx;
-        this.lastDy = dy;
-        this.lastInput = time;
-      }
       // Farm mini-games are per-scene state; changing maps starts a fresh day.
       farm?: {
         eggs: Map<number, number>;
@@ -226,7 +207,7 @@ export default function PixelMap(props: Props) {
       stopTouch() {
         if (this.touch) {
           this.touch = undefined;
-          this.sendMovement(0, 0, performance.now());
+          this.localMovement.stop(live.current.send);
         }
         joystick.hidden = true;
       }
@@ -748,7 +729,7 @@ export default function PixelMap(props: Props) {
         const blur = () => {
           this.keys.clear();
           this.stopTouch();
-          this.sendMovement(0, 0, performance.now());
+          this.localMovement.stop(live.current.send);
         };
         const visibility = () => {
           if (document.hidden) blur();
@@ -859,7 +840,7 @@ export default function PixelMap(props: Props) {
           ? this.touch.dy
           : (this.keys.has("KeyS") || this.keys.has("ArrowDown") ? 1 : 0) -
             (this.keys.has("KeyW") || this.keys.has("ArrowUp") ? 1 : 0);
-        this.sendMovement(dx, dy, time);
+
         const ids = new Set(state.people.map((p) => p.id));
         for (const [id, a] of this.avatars)
           if (!ids.has(id)) {
@@ -867,6 +848,7 @@ export default function PixelMap(props: Props) {
             a.bubble.remove();
             this.avatars.delete(id);
           }
+        if (!ids.has(state.self)) this.localMovement = new LocalMovement();
         for (const authoritative of state.people) {
           const local = authoritative.id === state.self;
           const p = local
@@ -874,7 +856,6 @@ export default function PixelMap(props: Props) {
                 authoritative,
                 dx,
                 dy,
-                this.intentSeq,
                 delta / 1000,
                 time,
                 {
@@ -883,6 +864,7 @@ export default function PixelMap(props: Props) {
                   locks: state.locks || {},
                   people: state.people,
                 },
+                state.send,
               )
             : authoritative;
           let a = this.avatars.get(p.id);

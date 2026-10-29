@@ -32,6 +32,7 @@ type Member = Person & {
   send: (event: unknown) => void;
   close: (code?: number, reason?: string) => void;
   input: { dx: number; dy: number; at: number };
+  timedMovement?: { at: number; credit: number };
   seen: number;
   activity: number;
   manualStatus: Person["status"];
@@ -257,6 +258,7 @@ export class Office {
         whiteboardScope: undefined,
         heartbeat,
         lastPing: 0,
+        timedMovement: undefined,
         input: { dx: 0, dy: 0, at: 0 },
         moving: false,
       });
@@ -525,7 +527,11 @@ export class Office {
     const m = this.members.get(id);
     if (!m) return;
     m.seen = now;
-    if (command.type === "ping") return;
+    if (command.type === "ping") {
+      if (command.nonce !== undefined)
+        m.send({ type: "pong", nonce: command.nonce });
+      return;
+    }
     if (
       command.type !== "microphone" &&
       (command.type !== "move" || command.dx || command.dy)
@@ -613,9 +619,57 @@ export class Office {
       }
       case "move":
         if (command.seq > m.seq) {
+          const idleHeartbeat =
+            command.steps === undefined &&
+            !command.dx &&
+            !command.dy &&
+            !m.input.dx &&
+            !m.input.dy &&
+            !m.moving;
+          if (command.steps !== undefined) {
+            const budget = m.timedMovement ?? { at: now, credit: 0.2 };
+            // Allow delayed batches to catch up, but never trust client durations
+            // to grant unbounded speed. Credit is in seconds of server wall time.
+            budget.credit = Math.min(
+              1,
+              budget.credit + Math.max(0, now - budget.at) / 1000,
+            );
+            budget.at = now;
+            const movementWorld = {
+              blocks: this.blocks,
+              zones: this.zones,
+              locks: this.locks,
+              people: [...this.members.values()],
+            };
+            for (const requested of command.steps) {
+              const dt = Math.min(requested, budget.credit);
+              Object.assign(
+                m,
+                advanceMovement(m, command.dx, command.dy, dt, movementWorld),
+              );
+              budget.credit -= dt;
+            }
+            m.timedMovement = budget;
+            if (command.dx || command.dy)
+              m.direction =
+                command.dx < 0
+                  ? "left"
+                  : command.dx > 0
+                    ? "right"
+                    : command.dy < 0
+                      ? "up"
+                      : "down";
+            this.syncConversation(m);
+          } else if (m.timedMovement) {
+            // A connection cannot alternate protocols to bypass its time budget.
+            return;
+          }
           m.seq = command.seq;
           if (command.dx || command.dy) m.pose = "stand";
           m.input = { dx: command.dx, dy: command.dy, at: now };
+          // Older native clients send zero movement every 80 ms. Keep their
+          // liveness/sequence current without broadcasting a whole idle office.
+          if (idleHeartbeat) return;
         }
         break;
       case "status":
@@ -871,7 +925,7 @@ export class Office {
       const moving = now - at < 300 && !!(dx || dy);
       if (moving !== m.moving) this.dirty = true;
       m.moving = moving;
-      if (!m.moving) continue;
+      if (!m.moving || m.timedMovement) continue;
       Object.assign(
         m,
         advanceMovement(m, dx, dy, dt, {

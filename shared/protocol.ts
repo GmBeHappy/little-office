@@ -36,6 +36,12 @@ export const Command = z.discriminatedUnion("type", [
     dx: z.number().int().min(-1).max(1),
     dy: z.number().int().min(-1).max(1),
     seq: z.number().int().nonnegative(),
+    // Optional for older web/native clients. Seconds per rendered input frame.
+    steps: z
+      .array(z.number().min(0).max(0.1))
+      .max(32)
+      .refine((steps) => steps.reduce((sum, dt) => sum + dt, 0) <= 0.2)
+      .optional(),
   }),
   z.object({
     type: z.literal("status"),
@@ -69,7 +75,10 @@ export const Command = z.discriminatedUnion("type", [
     zone: z.enum(["studio", "library"]),
     locked: z.boolean(),
   }),
-  z.object({ type: z.literal("ping") }),
+  z.object({
+    type: z.literal("ping"),
+    nonce: z.number().int().nonnegative().safe().optional(),
+  }),
   z.object({ type: z.literal("activity") }),
 ]);
 export type Command = z.infer<typeof Command>;
