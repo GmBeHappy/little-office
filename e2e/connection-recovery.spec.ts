@@ -74,7 +74,7 @@ for (const failure of ["network", "server", "unauthorized"] as const) {
       );
     });
     await page.goto("/office");
-    await expect(page.locator(".connection")).toHaveText("Connected");
+    await expect(page.locator(".connection")).toContainText("Connected");
     failed = true;
     await sockets[0].close({
       code: 1001,
@@ -88,11 +88,11 @@ for (const failure of ["network", "server", "unauthorized"] as const) {
       return;
     }
     await expect.poll(() => sockets.length).toBe(2);
-    await expect(page.locator(".connection")).toHaveText("Connected");
+    await expect(page.locator(".connection")).toContainText("Connected");
     const beforeFocus = checks;
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect.poll(() => checks).toBeGreaterThan(beforeFocus);
-    await expect(page.locator(".connection")).toHaveText("Connected");
+    await expect(page.locator(".connection")).toContainText("Connected");
     await expect(page.getByLabel("Username", { exact: true })).toHaveCount(0);
   });
 }

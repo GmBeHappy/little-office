@@ -14,11 +14,11 @@ const office = new Office();
 let movementCommands = 0;
 let lastMovement = { dx: 0, dy: 0 };
 const pending = new Set<ReturnType<typeof setTimeout>>();
-function delayed(run: () => void) {
+function delayed(run: () => void, delay = 150) {
   const timer = setTimeout(() => {
     pending.delete(timer);
     run();
-  }, 150);
+  }, delay);
   pending.add(timer);
 }
 const server = Bun.serve({
@@ -55,7 +55,10 @@ const server = Bun.serve({
         movementCommands++;
         lastMovement = command;
       }
-      delayed(() => office.handle("self", command));
+      delayed(
+        () => office.handle("self", command),
+        command.type === "move" && !command.dx && !command.dy ? 450 : 150,
+      );
     },
     close() {},
   },
@@ -76,7 +79,7 @@ try {
   await page.waitForFunction(() => !!Reflect.get(window, "movementProbe")?.());
   const read = () =>
     page.evaluate(() => Reflect.get(window, "movementProbe")());
-  await page.waitForTimeout(200);
+  await page.waitForTimeout(1300);
   assert.equal(
     movementCommands,
     0,
@@ -113,6 +116,14 @@ try {
   );
   await page.waitForTimeout(600);
   const settled = await read();
+  const correction = Math.hypot(settled.x - stopped.x, settled.y - stopped.y);
+  console.log(
+    JSON.stringify({ phase: "delayed-stop-ack", correction, stopDelayMs: 450 }),
+  );
+  assert.ok(
+    correction < 1,
+    "A delayed stop must not warp the local avatar after release",
+  );
   assert.ok(
     Math.hypot(settled.x - settled.server.x, settled.y - settled.server.y) < 4,
     "Prediction must settle back to the authoritative position",

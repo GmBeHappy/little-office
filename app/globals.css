@@ -188,6 +188,15 @@
     @apply flex items-center gap-[7px] text-[11px];
     color: #98947e;
   }
+  .connection-ping {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    padding-left: 7px;
+    border-left: 1px solid var(--line);
+  }
+  .connection-ping.slow {
+    color: #95662f;
+  }
   .connection i {
     @apply w-[6px] h-[6px] rounded-[50%];
     background: #c2af6d;

@@ -94,10 +94,18 @@ for (const control of ["keyboard", "button"] as const)
       const readY = () =>
         bubble.evaluate((el) => Number((el as HTMLElement).dataset.worldY));
       const ground = await readY();
-      const jump = () =>
-        control === "keyboard"
-          ? page.keyboard.press("Space")
-          : page.getByRole("button", { name: "Jump", exact: true }).click();
+      const jump = async (repeated = false) => {
+        if (control === "keyboard") {
+          await page.keyboard.press("Space");
+          if (repeated) await page.keyboard.press("Space");
+        } else {
+          // One actionability wait, then two actual clicks during the cooldown.
+          // Two separate click() calls can wait for the jumping UI to settle.
+          await page
+            .getByRole("button", { name: "Jump", exact: true })
+            .click({ clickCount: repeated ? 2 : 1 });
+        }
+      };
       const peerGround = await peer.evaluate((el) =>
         Number((el as HTMLElement).dataset.worldY),
       );
@@ -143,8 +151,7 @@ for (const control of ["keyboard", "button"] as const)
         },
         { control, ground },
       );
-      await jump();
-      await jump();
+      await jump(true);
       expect(
         commands,
         "Repeated input during cooldown must not send another jump",
