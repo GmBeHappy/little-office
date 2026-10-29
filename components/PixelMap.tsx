@@ -982,7 +982,15 @@ export default function PixelMap(props: Props) {
             ? p.y
             : Phaser.Math.Linear(a.container.y, p.y, Math.min(1, delta / 65));
           a.container.setDepth(1000 + p.y);
-          const pose = p.pose || "stand";
+          const jumpStart = state.jumps[p.id];
+          const elapsed =
+            jumpStart === undefined
+              ? JUMP_DURATION
+              : performance.now() - jumpStart;
+          const pose =
+            elapsed >= 0 && elapsed < JUMP_DURATION
+              ? "stand"
+              : p.pose || "stand";
           if (a.pose !== pose) {
             a.pose = pose;
             a.poseSince = time;
@@ -1017,11 +1025,6 @@ export default function PixelMap(props: Props) {
                 ? push
                 : 0
             : 0;
-          const jumpStart = state.jumps[p.id];
-          const elapsed =
-            jumpStart === undefined
-              ? JUMP_DURATION
-              : performance.now() - jumpStart;
           const airborne = elapsed >= 0 && elapsed < 520;
           const height = airborne
             ? 28 * 4 * (elapsed / 520) * (1 - elapsed / 520)
