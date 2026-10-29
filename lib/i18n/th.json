@@ -353,6 +353,8 @@
   "Failed to fetch": "เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ",
   "NetworkError when attempting to fetch resource.": "เชื่อมต่อเครือข่ายไม่สำเร็จ",
   "Open camera grid": "เปิดมุมมองกล้องแบบตาราง",
+  "Hide shared screens": "ซ่อนหน้าจอที่แชร์",
+  "Show shared screens ({count})": "แสดงหน้าจอที่แชร์ ({count})",
   "Expand shared screen": "ขยายหน้าจอที่แชร์",
   "Expanded video": "มุมมองวิดีโอแบบขยาย",
   "Back to map": "กลับแผนที่",
