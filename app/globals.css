@@ -1409,14 +1409,29 @@
     @apply w-[100%] h-[100%] object-cover;
   }
   .screen-tile {
-    @apply w-[75%] max-h-[400px];
-    aspect-ratio: 16/10;
+    width: min(100%, 320px);
+    flex-shrink: 0;
+    aspect-ratio: 16/9;
   }
   .screen-tile video {
     @apply object-contain;
   }
   .with-screen {
     @apply flex-wrap items-start;
+  }
+  .screen-preview-controls {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+    pointer-events: none;
+  }
+  .screen-preview-toggle {
+    pointer-events: auto;
+    gap: 6px;
+    min-height: 36px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    box-shadow: 0 2px 9px #37403133;
   }
   .with-screen .video-tile:not(.screen-tile) {
     @apply w-[110px];
@@ -2188,9 +2203,14 @@
   .immersive-office.panel-open .video-strip {
     @apply right-[324px];
   }
-  .immersive-office .screen-tile {
-    width: min(85%, 1000px);
-    max-height: calc(100dvh - 340px);
+  .immersive-office .video-strip.with-screen {
+    left: auto;
+    width: min(320px, calc(100% - 128px));
+    max-height: min(360px, calc(100dvh - 320px));
+    justify-content: flex-end;
+  }
+  .immersive-office.panel-open .video-strip.with-screen {
+    width: min(320px, calc(100% - 428px));
   }
   .immersive-office .media-error {
     @apply absolute bottom-[158px] left-[50%] z-[25] pointer-events-auto;
@@ -2348,9 +2368,14 @@
       @apply top-[305px] left-[8px] right-[8px];
       max-height: calc(100dvh - 340px);
     }
-    .immersive-office .screen-tile {
-      @apply w-[100%];
-      max-height: calc(100dvh - 365px);
+    .immersive-office .video-strip.with-screen,
+    .immersive-office.panel-open .video-strip.with-screen {
+      top: auto;
+      bottom: 140px;
+      left: auto;
+      right: 8px;
+      width: min(260px, calc(100% - 16px));
+      max-height: min(240px, calc(100dvh - 280px));
     }
   }
 

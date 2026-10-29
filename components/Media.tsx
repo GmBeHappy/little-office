@@ -9,6 +9,8 @@ import {
   ArrowLeft,
   BarChart3,
   Grid2X2,
+  Eye,
+  EyeOff,
   Maximize2,
   Minimize2,
   Monitor,
@@ -723,6 +725,7 @@ export function MediaTracks({
   const { t } = useI18n();
   const [view, setView] = useState<"grid" | "screen" | null>(null);
   const [screenId, setScreenId] = useState("");
+  const [screensHidden, setScreensHidden] = useState(false);
   const [pinnedScreenId, setPinnedScreenId] = useState("");
   const [fullscreen, setFullscreen] = useState(false);
   const [chromeHidden, setChromeHidden] = useState(false);
@@ -790,7 +793,11 @@ export function MediaTracks({
   }
   useEffect(() => {
     closeView();
+    setScreensHidden(false);
   }, [room]);
+  useEffect(() => {
+    if (!screens.length) setScreensHidden(false);
+  }, [screens.length]);
   useEffect(() => {
     if (view === "screen" && !screen) setView(cameras.length ? "grid" : null);
     else if (view === "grid" && !cameras.length)
@@ -856,6 +863,7 @@ export function MediaTracks({
     }
   }
   function openScreen(id: string) {
+    setScreensHidden(false);
     setScreenId(id);
     setView("screen");
   }
@@ -958,7 +966,26 @@ export function MediaTracks({
       </div>
       {!expanded && !!(screens.length || cameras.length) && (
         <div className={`video-strip ${screens.length ? "with-screen" : ""}`}>
-          {[...screens, ...cameras].map((item) => tile(item, true))}
+          {!!screens.length && (
+            <div className="screen-preview-controls">
+              <Button
+                variant="secondary"
+                className="screen-preview-toggle"
+                aria-expanded={!screensHidden}
+                onClick={() => setScreensHidden((hidden) => !hidden)}
+              >
+                {screensHidden ? <Eye size={16} /> : <EyeOff size={16} />}
+                {screensHidden
+                  ? t("Show shared screens ({count})", {
+                      count: screens.length,
+                    })
+                  : t("Hide shared screens")}
+              </Button>
+            </div>
+          )}
+          {[...(screensHidden ? [] : screens), ...cameras].map((item) =>
+            tile(item, true),
+          )}
         </div>
       )}
       {expanded &&
@@ -1064,6 +1091,19 @@ export function MediaTracks({
                     <Maximize2 size={19} />
                   )}
                 </Button>
+                {view === "screen" && (
+                  <Button
+                    variant="plain"
+                    className="media-view-button"
+                    onClick={() => {
+                      setScreensHidden(true);
+                      closeView();
+                    }}
+                  >
+                    <EyeOff size={18} />
+                    <span>{t("Hide shared screens")}</span>
+                  </Button>
+                )}
                 {!chromeHidden && chromeToggle}
               </div>
             </header>

@@ -130,12 +130,60 @@ test("camera grid and expanded sharing preserve audio, support fullscreen, and r
       .poll(() => b.evaluate(() => !!document.fullscreenElement))
       .toBe(false);
     await expect(b.locator(".pixel-map canvas")).toBeVisible();
+    await a.getByRole("button", { name: "Share screen", exact: true }).click();
+    await expect(b.locator(".screen-tile video")).toBeVisible();
+    for (const page of [a, b]) {
+      await expect(page.locator(".media-expanded")).toHaveCount(0);
+      const preview = await page
+        .locator(".video-strip .screen-tile")
+        .boundingBox();
+      expect(preview!.width).toBeLessThanOrEqual(320);
+      expect(preview!.height).toBeLessThanOrEqual(185);
+      await page
+        .getByRole("button", { name: "Hide shared screens", exact: true })
+        .click();
+      await expect(page.locator(".video-strip .screen-tile")).toHaveCount(0);
+      await expect(page.locator(".pixel-map canvas")).toBeVisible();
+      await page
+        .getByRole("button", { name: "Show shared screens (1)", exact: true })
+        .click();
+      await expect(
+        page.locator(".video-strip .screen-tile video"),
+      ).toBeVisible();
+    }
+    await expect(
+      a.getByRole("button", { name: "Stop sharing", exact: true }),
+    ).toBeVisible();
+    await b.screenshot({ path: "test-results/compact-share-desktop.png" });
+    await b.setViewportSize({ width: 390, height: 844 });
+    const mobilePreview = await b
+      .locator(".video-strip .screen-tile")
+      .boundingBox();
+    expect(mobilePreview!.width).toBeLessThanOrEqual(260);
+    expect(mobilePreview!.height).toBeLessThanOrEqual(150);
+    expect(
+      await b.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await b.screenshot({ path: "test-results/compact-share-mobile.png" });
+    await b.setViewportSize({ width: 1440, height: 960 });
+    await b
+      .getByRole("button", { name: "Expand shared screen", exact: true })
+      .click();
+    await expect(expanded).toBeVisible();
+    await expanded
+      .getByRole("button", { name: "Hide shared screens", exact: true })
+      .click();
+    await expect(expanded).toHaveCount(0);
+    await expect(b.locator(".video-strip .screen-tile")).toHaveCount(0);
+    await b
+      .getByRole("button", { name: "Show shared screens (1)", exact: true })
+      .click();
     await b
       .getByRole("button", { name: "เปลี่ยนเป็นภาษาไทย", exact: true })
       .click();
-    await a.getByRole("button", { name: "Share screen", exact: true }).click();
-    await expect(b.locator(".screen-tile video")).toBeVisible();
-    await b.getByRole("button", { name: "Share screen", exact: true }).click();
+    await b.getByRole("button", { name: "แชร์หน้าจอ", exact: true }).click();
     await expect(a.locator(".screen-tile video")).toHaveCount(2);
     const sharingEvents = async (action: string) => {
       const response = await a.request.get(
@@ -157,28 +205,30 @@ test("camera grid and expanded sharing preserve audio, support fullscreen, and r
       .click();
     await expect(expanded.getByRole("heading")).toHaveText("หน้าจอของ Robin");
     await expect(
-      expanded.getByRole("button", { name: "Pin screen", exact: true }),
+      expanded.getByRole("button", { name: "ปักหมุดหน้าจอ", exact: true }),
     ).toBeVisible();
     await expanded
-      .getByRole("button", { name: "Pin screen", exact: true })
+      .getByRole("button", { name: "ปักหมุดหน้าจอ", exact: true })
       .click();
     await expect(
-      expanded.getByRole("button", { name: "Unpin screen", exact: true }),
+      expanded.getByRole("button", { name: "เลิกปักหมุดหน้าจอ", exact: true }),
     ).toBeVisible();
     await expanded
-      .getByRole("button", { name: "Hide media controls", exact: true })
+      .getByRole("button", { name: "ซ่อนปุ่มควบคุมสื่อ", exact: true })
       .click();
     await expect(
-      expanded.getByRole("button", { name: "Back to map", exact: true }),
+      expanded.getByRole("button", { name: "กลับแผนที่", exact: true }),
     ).toBeHidden();
     await expanded
-      .getByRole("button", { name: "Show media controls", exact: true })
+      .getByRole("button", { name: "แสดงปุ่มควบคุมสื่อ", exact: true })
       .click();
     await expect(expanded.locator(".media-spotlight video")).toHaveCSS(
       "object-fit",
       "contain",
     );
-    await expect(expanded.locator(".media-camera-rail video")).toHaveCount(2);
+    await expect(
+      expanded.locator(".media-camera-rail > .video-tile video"),
+    ).toHaveCount(2);
     await expect
       .poll(() =>
         expanded
@@ -211,7 +261,7 @@ test("camera grid and expanded sharing preserve audio, support fullscreen, and r
       .getByRole("button", { name: "หน้าจอที่แชร์", exact: true })
       .click();
     await a.getByRole("button", { name: "Stop sharing", exact: true }).click();
-    await b.getByRole("button", { name: "Stop sharing", exact: true }).click();
+    await b.getByRole("button", { name: "หยุดแชร์", exact: true }).click();
     await expect
       .poll(async () => (await sharingEvents("screen.stop")).length)
       .toBe(1);
