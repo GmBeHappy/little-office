@@ -71,7 +71,7 @@ for (const previous of ["upstream-main", "early-status-bubbles"] as const) {
             "SELECT count(*)::integer AS count FROM drizzle.__drizzle_migrations",
           )
         ).rows[0].count,
-      ).toBe(previous === "upstream-main" ? 6 : 7);
+      ).toBe(previous === "upstream-main" ? 7 : 8);
     } finally {
       await pg.close();
     }
@@ -105,7 +105,7 @@ test("Drizzle creates a fresh database and applies the adoption baseline only on
     const rows = await pg.query(
       "SELECT count(*)::integer AS count FROM drizzle.__drizzle_migrations",
     );
-    expect(rows.rows).toEqual([{ count: 6 }]);
+    expect(rows.rows).toEqual([{ count: 7 }]);
     // A fresh install retains the same database-enforced unique keys and delete cascades.
     const constraints = await pg.query<{ name: string }>(
       `SELECT conname AS name FROM pg_constraint WHERE conname IN ('user_username_key','session_token_key','account_userId_fkey','session_userId_fkey') ORDER BY conname`,

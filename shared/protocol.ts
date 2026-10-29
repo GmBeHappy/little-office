@@ -70,5 +70,6 @@ export const Command = z.discriminatedUnion("type", [
     locked: z.boolean(),
   }),
   z.object({ type: z.literal("ping") }),
+  z.object({ type: z.literal("activity") }),
 ]);
 export type Command = z.infer<typeof Command>;

@@ -1,3 +1,4 @@
+import { attendanceReport } from "./attendance-report";
 import { serverLog, diagnosticRef, errorKind } from "./diagnostics";
 import {
   sameRequestOrigin,
@@ -442,6 +443,26 @@ export function officeRoutes(scoped: boolean): AnyElysia {
         );
       },
       { params: t.Object({ id: t.String({ format: "uuid" }) }) },
+    )
+    .get(
+      "/attendance",
+      async ({ workspaceId, office, identity, query, set }) => {
+        const session = requireSession(identity);
+        set.headers["cache-control"] = "no-store";
+        return attendanceReport(
+          workspaceId,
+          office,
+          session.user,
+          query.from,
+          query.to,
+        );
+      },
+      {
+        query: t.Object({
+          from: t.String({ maxLength: 40 }),
+          to: t.String({ maxLength: 40 }),
+        }),
+      },
     )
     .get(
       "/admin/activity",

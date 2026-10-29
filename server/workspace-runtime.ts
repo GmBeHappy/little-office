@@ -1,3 +1,4 @@
+import { persistAttendance } from "./attendance-report";
 import { serverLog, diagnosticRef, errorKind } from "./diagnostics";
 import { and, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { db, workspaceSettings } from "./db";
@@ -160,6 +161,25 @@ export function startRuntimeTimers() {
       for (const { whiteboards } of runtimes.values()) whiteboards.prune();
     }, 1000),
   ];
+  let recording = false;
+  timers.push(
+    setInterval(async () => {
+      if (recording) return;
+      recording = true;
+      try {
+        for (const { workspaceId, office } of runtimes.values())
+          await persistAttendance(workspaceId, office);
+      } catch (error) {
+        serverLog(
+          "attendance.persist_failed",
+          { errorKind: errorKind(error) },
+          "error",
+        );
+      } finally {
+        recording = false;
+      }
+    }, 15000),
+  );
   let checking = false,
     rotating = false;
   timers.push(
