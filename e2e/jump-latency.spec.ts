@@ -166,7 +166,9 @@ for (const control of ["keyboard", "button"] as const)
       expect(
         await page.evaluate(() => Reflect.get(window, "jumpResponseMs")),
       ).toBeLessThan(150);
-      await expect.poll(() => echoes).toBe(1);
+      await expect
+        .poll(() => echoes, { intervals: [20], timeout: 2000 })
+        .toBe(1);
       await expect
         .poll(
           async () =>
@@ -174,6 +176,7 @@ for (const control of ["keyboard", "button"] as const)
             (await peer.evaluate((el) =>
               Number((el as HTMLElement).dataset.worldY),
             )),
+          { intervals: [20], timeout: 2000 },
         )
         .toBeGreaterThan(3);
       expect(
