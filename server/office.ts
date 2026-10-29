@@ -619,6 +619,13 @@ export class Office {
       }
       case "move":
         if (command.seq > m.seq) {
+          const idleHeartbeat =
+            command.steps === undefined &&
+            !command.dx &&
+            !command.dy &&
+            !m.input.dx &&
+            !m.input.dy &&
+            !m.moving;
           if (command.steps !== undefined) {
             const budget = m.timedMovement ?? { at: now, credit: 0.2 };
             // Allow delayed batches to catch up, but never trust client durations
@@ -660,6 +667,9 @@ export class Office {
           m.seq = command.seq;
           if (command.dx || command.dy) m.pose = "stand";
           m.input = { dx: command.dx, dy: command.dy, at: now };
+          // Older native clients send zero movement every 80 ms. Keep their
+          // liveness/sequence current without broadcasting a whole idle office.
+          if (idleHeartbeat) return;
         }
         break;
       case "status":
