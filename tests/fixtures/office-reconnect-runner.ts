@@ -213,15 +213,56 @@ try {
       `PASS: ${path} resumes same tab and session; other tabs, sessions and displaced retries stay blocked`,
     );
   }
+  {
+    const client = crypto.randomUUID();
+    const first = await connect(`takeover=1&client=${client}`);
+    const peer = office.add(
+      { id: "retry-peer", name: "Peer", role: "member" },
+      "peer-session",
+      Date.now() + 3600000,
+      () => {},
+      () => {},
+    );
+    const room = peer.room;
+    await new Promise<void>((resolve) => {
+      first.socket.addEventListener("close", () => resolve(), { once: true });
+      first.socket.close(1001, "Transient transport loss");
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(
+      peer.room,
+      room,
+      "A transient socket closure must not disconnect everyone before the same tab can retry",
+    );
+    assert.ok(
+      office.members.has(user.id),
+      "Keep authenticated presence briefly while reconnecting",
+    );
+    const resumed = await connect(`client=${client}`);
+    assert.equal(resumed.outcome, "snapshot");
+    assert.equal(office.members.get(user.id)!.room, room);
+    office.remove(peer.id);
+  }
+  {
+    const quiet = await connect(`takeover=1&client=${crypto.randomUUID()}`);
+    const member = office.members.get(user.id)!;
+    // Model a background page whose JS heartbeat is throttled, while its
+    // WebSocket transport still responds to protocol ping frames normally.
+    member.seen = Date.now() - 34950;
+    office.tick(0.05);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    office.tick(0.05);
+    assert.equal(quiet.socket.readyState, WebSocket.OPEN);
+    assert.ok(
+      office.members.has(user.id),
+      "A responsive transport must not time out solely because page JavaScript is throttled",
+    );
+  }
   if (process.env.OFFICE_RECONNECT_SOAK === "1") {
     const { startRuntimeTimers } =
       await import("../../server/workspace-runtime");
     const stopTimers = startRuntimeTimers();
     const idle = await connect(`takeover=1&client=${crypto.randomUUID()}`);
-    const heartbeat = setInterval(
-      () => idle.socket.send(JSON.stringify({ type: "ping" })),
-      10000,
-    );
     try {
       await new Promise<void>((resolve, reject) => {
         const timer = setTimeout(resolve, 150000);
@@ -236,10 +277,9 @@ try {
       });
       assert.ok(office.members.has(user.id));
       console.log(
-        "PASS: idle office remains connected for 150 seconds with normal 10-second heartbeats and runtime session checks",
+        "PASS: idle office remains connected for 150 seconds without application heartbeats, using transport pongs and runtime session checks",
       );
     } finally {
-      clearInterval(heartbeat);
       stopTimers();
     }
   }

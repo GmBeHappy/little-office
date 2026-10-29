@@ -695,3 +695,126 @@ test("same authenticated client rebinds transport without retiring shared media 
   expect(retired).toContain(before.room);
   expect(peer.room).not.toBe(before.room);
 });
+
+test("a stop transition is broadcast even without a stream of idle movement commands", () => {
+  const { office } = setup();
+  const now = Date.now();
+  office.handle("a", { type: "move", dx: 0, dy: 1, seq: 1 }, now);
+  office.tick(0.05, now + 50);
+  office.broadcast();
+  office.handle("a", { type: "move", dx: 0, dy: 0, seq: 2 }, now + 60);
+  office.broadcast(); // A broadcast may run between input receipt and the next simulation tick.
+  office.tick(0.05, now + 100);
+  expect(office.members.get("a")?.moving).toBe(false);
+  expect(office.dirty).toBe(true);
+});
+
+test("reconnect grace stops movement, expires, and never delays session revocation", () => {
+  const retired: string[] = [];
+  const office = new Office((room) => retired.push(room));
+  const now = Date.now();
+  const a = office.add(
+    { id: "a", name: "A", role: "member" },
+    "session",
+    now + 3600000,
+    () => {},
+    () => {},
+    "connection",
+    "client",
+  );
+  const b = office.add(
+    { id: "b", name: "B", role: "member" },
+    "peer",
+    now + 3600000,
+    () => {},
+    () => {},
+  );
+  const room = b.room;
+  office.handle("a", { type: "move", dx: 0, dy: 1, seq: 1 }, now);
+  office.detach("a", "stale-connection", now);
+  expect(a.reconnectUntil).toBeUndefined();
+  office.detach("a", "connection", now);
+  expect(a.input.dx).toBe(0);
+  expect(a.input.dy).toBe(0);
+  office.tick(0.05, now + 14999);
+  expect(office.members.has("a")).toBe(true);
+  expect(b.room).toBe(room);
+  office.tick(0.05, now + 15000);
+  expect(office.members.has("a")).toBe(false);
+  expect(retired).toContain(room);
+  office.add(
+    { id: "a", name: "A", role: "member" },
+    "session",
+    now + 3600000,
+    () => {},
+    () => {},
+    "new-connection",
+    "client",
+  );
+  office.detach("a", "new-connection", now);
+  office.revokeSession("session");
+  expect(office.members.has("a")).toBe(false);
+  office.add(
+    { id: "a", name: "A", role: "member" },
+    "session",
+    now + 3600000,
+    () => {},
+    () => {},
+    "third-connection",
+    "client",
+  );
+  office.detach("a", "third-connection", now);
+  const resumed = office.add(
+    { id: "a", name: "A", role: "member" },
+    "session",
+    now + 3600000,
+    () => {},
+    () => {},
+    "fourth-connection",
+    "client",
+  );
+  expect(resumed.reconnectUntil).toBeUndefined();
+  office.tick(0.05, now + 15001);
+  expect(office.members.has("a")).toBe(true);
+});
+
+test("transport heartbeats preserve liveness without activity or session extension", () => {
+  const office = new Office();
+  const now = Date.now();
+  const member = office.add(
+    { id: "a", name: "A", role: "member" },
+    "session",
+    now + 60000,
+    () => {},
+    () => {},
+    "current",
+    "client",
+  );
+  member.seen = now - 34000;
+  member.activity = now - 301000;
+  office.acknowledgeHeartbeat("a", "stale", now);
+  expect(member.seen).toBe(now - 34000);
+  office.acknowledgeHeartbeat("a", "current", now);
+  expect(member.seen).toBe(now);
+  office.tick(0.05, now);
+  expect(member.status).toBe("away");
+  expect(member.activity).toBe(now - 301000);
+  office.detach("a", "current", now);
+  office.acknowledgeHeartbeat("a", "current", now + 10000);
+  expect(member.seen).toBe(now);
+  office.tick(0.05, now + 15000);
+  expect(office.members.has("a")).toBe(false);
+  const expired = office.add(
+    { id: "a", name: "A", role: "member" },
+    "session",
+    now + 20000,
+    () => {},
+    () => {},
+    "next",
+    "client",
+  );
+  office.acknowledgeHeartbeat("a", "next", now + 21000);
+  office.tick(0.05, now + 21000);
+  expect(expired.expires).toBe(now + 20000);
+  expect(office.members.has("a")).toBe(false);
+});

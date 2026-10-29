@@ -1,3 +1,4 @@
+import { advanceMovement } from "../shared/movement";
 import { serverLog, diagnosticRef } from "./diagnostics";
 import type { DiagnosticReason } from "../shared/diagnostics";
 import { emptyHabitat, habitatTarget } from "../shared/habitats";
@@ -37,6 +38,10 @@ type Member = Person & {
   sessionId: string;
   connectionId: string;
   clientId?: string;
+  reconnectUntil?: number;
+  heartbeat: () => void;
+  lastPing: number;
+  lastLatencyLog: number;
   expires: number;
   sharing: boolean;
   whiteboardScope?: string;
@@ -226,6 +231,7 @@ export class Office {
     close: Member["close"],
     connectionId = crypto.randomUUID(),
     clientId?: string,
+    heartbeat: () => void = () => {},
   ) {
     const current = this.members.get(user.id);
     if (
@@ -244,6 +250,9 @@ export class Office {
         expires,
         role: user.role,
         seen: Date.now(),
+        reconnectUntil: undefined,
+        heartbeat,
+        lastPing: 0,
         input: { dx: 0, dy: 0, at: 0 },
         moving: false,
       });
@@ -289,6 +298,9 @@ export class Office {
       sessionId,
       connectionId,
       clientId,
+      heartbeat,
+      lastPing: 0,
+      lastLatencyLog: 0,
       expires,
       sharing: false,
     };
@@ -352,6 +364,59 @@ export class Office {
       m,
       m.zone !== "floor" ? `zone:${m.zone}` : m.status !== "dnd" ? "floor" : "",
     );
+  }
+  acknowledgeHeartbeat(id: string, connectionId: string, now = Date.now()) {
+    const member = this.members.get(id);
+    if (
+      !member ||
+      member.connectionId !== connectionId ||
+      member.reconnectUntil
+    )
+      return;
+    member.seen = now;
+    // Transport pongs establish liveness, never human activity/availability.
+    const durationMs = now - member.lastPing;
+    if (
+      member.lastPing &&
+      (durationMs >= 250 || now - member.lastLatencyLog >= 60000)
+    ) {
+      serverLog(
+        "socket.latency",
+        {
+          clientRef: diagnosticRef(member.clientId),
+          connectionRef: diagnosticRef(connectionId),
+          durationMs,
+        },
+        durationMs >= 250 ? "warn" : "info",
+      );
+      member.lastLatencyLog = now;
+    }
+  }
+  detach(id: string, connectionId: string, now = Date.now()) {
+    const member = this.members.get(id);
+    if (
+      !member ||
+      member.connectionId !== connectionId ||
+      member.reconnectUntil
+    )
+      return;
+    if (!member.clientId) {
+      this.remove(id, undefined, undefined, "socket_closed");
+      return;
+    }
+    // A closed transport gets a short retry window, never a new auth lifetime.
+    member.reconnectUntil = now + 15000;
+    member.input = { dx: 0, dy: 0, at: 0 };
+    member.moving = false;
+    member.send = () => {};
+    member.close = () => {};
+    serverLog("socket.detached", {
+      clientRef: diagnosticRef(member.clientId),
+      connectionRef: diagnosticRef(connectionId),
+      roomRef: diagnosticRef(member.room),
+      durationMs: 15000,
+    });
+    this.dirty = true;
   }
   remove(
     id: string,
@@ -738,14 +803,26 @@ export class Office {
   }
   tick(dt: number, now = Date.now()) {
     for (const m of [...this.members.values()]) {
-      if (now > m.expires || now - m.seen > 35000) {
+      if (
+        now > m.expires ||
+        (m.reconnectUntil && now >= m.reconnectUntil) ||
+        now - m.seen > 35000
+      ) {
         this.remove(
           m.id,
           undefined,
           undefined,
-          now > m.expires ? "session_expired" : "heartbeat_timeout",
+          now > m.expires
+            ? "session_expired"
+            : m.reconnectUntil
+              ? "reconnect_timeout"
+              : "heartbeat_timeout",
         );
         continue;
+      }
+      if (!m.reconnectUntil && now - m.lastPing >= 10000) {
+        m.lastPing = now;
+        m.heartbeat();
       }
       if (
         now - m.activity > 300000 &&
@@ -765,28 +842,20 @@ export class Office {
         this.dirty = true;
       }
       const { dx, dy, at } = m.input;
-      m.moving = now - at < 300 && !!(dx || dy);
+      const moving = now - at < 300 && !!(dx || dy);
+      if (moving !== m.moving) this.dirty = true;
+      m.moving = moving;
       if (!m.moving) continue;
-      const scale = (160 * Math.min(dt, 0.1)) / Math.max(1, Math.hypot(dx, dy));
-      let x = m.x + dx * scale,
-        y = m.y + dy * scale;
-      if (!walkable(x, m.y, this.blocks)) x = m.x;
-      if (!walkable(x, y, this.blocks)) y = m.y;
-      const zone = zoneAt(x, y, this.zones);
-      if (
-        zone !== m.zone &&
-        zone !== "floor" &&
-        (this.locks[zone] ||
-          [...this.members.values()].filter((p) => p.zone === zone).length >=
-            (zone === "studio" ? 8 : 6))
-      ) {
-        x = m.x;
-        y = m.y;
-      }
+      Object.assign(
+        m,
+        advanceMovement(m, dx, dy, dt, {
+          blocks: this.blocks,
+          zones: this.zones,
+          locks: this.locks,
+          people: [...this.members.values()],
+        }),
+      );
       m.direction = dx < 0 ? "left" : dx > 0 ? "right" : dy < 0 ? "up" : "down";
-      m.x = x;
-      m.y = y;
-      m.zone = zoneAt(x, y, this.zones);
       this.syncConversation(m);
       this.dirty = true;
     }
