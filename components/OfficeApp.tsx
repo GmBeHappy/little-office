@@ -280,10 +280,33 @@ export default function OfficeApp() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
-  const send = useCallback((command: Command) => {
-    if (socket.current?.readyState === WebSocket.OPEN)
-      socket.current.send(JSON.stringify(command));
+  const lastLocalJump = useRef(-Infinity);
+  const animateJump = useCallback((id: string) => {
+    const now = performance.now();
+    setJumps((previous) => ({
+      ...Object.fromEntries(
+        Object.entries(previous).filter(
+          ([, start]) => now - start < JUMP_DURATION,
+        ),
+      ),
+      [id]: now,
+    }));
   }, []);
+  const send = useCallback(
+    (command: Command) => {
+      if (socket.current?.readyState !== WebSocket.OPEN) return;
+      if (command.type === "jump" && user?.id) {
+        const now = performance.now();
+        if (now - lastLocalJump.current < JUMP_DURATION) return;
+        lastLocalJump.current = now;
+        // Predict the cosmetic reaction locally; the server still owns its cooldown
+        // and broadcasts the accepted jump to other participants.
+        animateJump(user.id);
+      }
+      socket.current.send(JSON.stringify(command));
+    },
+    [user?.id, animateJump],
+  );
   const self = snapshot?.people.find((p) => p.id === user?.id);
   const selfStatus = self ? personStatus(self) : null;
   const reportScreenView = useCallback(
@@ -380,15 +403,9 @@ export default function OfficeApp() {
             [message.from]: { emoji: message.emoji, until: now + 3000 },
           }));
         } else if (message.type === "jump") {
-          const now = performance.now();
-          setJumps((previous) => ({
-            ...Object.fromEntries(
-              Object.entries(previous).filter(
-                ([, start]) => now - start < JUMP_DURATION,
-              ),
-            ),
-            [message.from]: now,
-          }));
+          // The local jump already started at input time. Replaying its echo
+          // would restart the animation, especially on high-latency links.
+          if (message.from !== user?.id) animateJump(message.from);
         } else if (message.type === "nudge-animation") {
           const now = performance.now();
           setNudges((previous) => ({
@@ -474,6 +491,7 @@ export default function OfficeApp() {
     user?.mustChangePassword,
     notify,
     send,
+    animateJump,
     refresh,
   ]);
   const wasSharing = useRef(false);
