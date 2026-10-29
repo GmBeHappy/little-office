@@ -647,6 +647,9 @@ export function officeRoutes(scoped: boolean): AnyElysia {
             (code, reason) => ws.close(code, reason),
             ws.id,
             ws.data.query.client,
+            () => {
+              if (ws.raw.readyState === 1) ws.ping();
+            },
           );
           whiteboards.prune();
         } catch (error) {
@@ -674,7 +677,8 @@ export function officeRoutes(scoped: boolean): AnyElysia {
         const s = ws.data.identity;
         if (!s) return;
         const member = office.members.get(s.user.id);
-        if (!member || member.connectionId !== ws.id) return;
+        if (!member || member.connectionId !== ws.id || member.reconnectUntil)
+          return;
         const result = Command.safeParse(raw);
         if (!result.success) {
           ws.send({ type: "error", message: "Invalid office message." });
@@ -726,6 +730,12 @@ export function officeRoutes(scoped: boolean): AnyElysia {
           });
         }
       },
+      pong(ws) {
+        // Elysia 1.4 delivers raw Bun sockets for control frames, unlike messages.
+        const id = ws.id ?? (ws.data as typeof ws.data & { id?: string }).id;
+        const s = ws.data.identity;
+        if (s && id) ws.data.office.acknowledgeHeartbeat(s.user.id, id);
+      },
       close(ws, code) {
         const { office, whiteboards, workspaceId } = ws.data;
         const s = ws.data.identity;
@@ -738,8 +748,10 @@ export function officeRoutes(scoped: boolean): AnyElysia {
           code,
           current,
         });
-        if (s && current)
-          office.remove(s.user.id, undefined, undefined, "socket_closed");
+        if (s && current) {
+          if (code === 1001 || code === 1006) office.detach(s.user.id, ws.id);
+          else office.remove(s.user.id, undefined, undefined, "socket_closed");
+        }
       },
     });
 }

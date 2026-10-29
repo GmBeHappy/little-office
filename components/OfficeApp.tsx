@@ -255,8 +255,10 @@ export default function OfficeApp() {
       try {
         const me = await api<{ user: User; operator: boolean }>("/me");
         setUser({ ...me.user, operator: me.operator });
-      } catch {
-        setUser(null);
+      } catch (error) {
+        // A failed network request is not evidence that the session expired.
+        if (error instanceof APIError && [401, 403].includes(error.status))
+          setUser(null);
       }
     } catch (e) {
       if (e instanceof APIError && e.status === 401 && base !== "/api")
@@ -418,16 +420,19 @@ export default function OfficeApp() {
         }
         try {
           await api("/me");
-          if (!disposed && socket.current === ws) {
-            const delay = Math.min(1000 * 2 ** attempt++, 10000);
-            clientLog("socket.retry", { attempt, durationMs: delay });
-            timer = setTimeout(connect, delay);
-          }
         } catch (error) {
           if (disposed || socket.current !== ws) return;
           clientLog("socket.failed", { errorKind: errorKind(error) }, "error");
-          setUser(null);
-          setConnection("Disconnected");
+          if (error instanceof APIError && [401, 403].includes(error.status)) {
+            setUser(null);
+            setConnection("Disconnected");
+            return;
+          }
+        }
+        if (!disposed && socket.current === ws) {
+          const delay = Math.min(1000 * 2 ** attempt++, 10000);
+          clientLog("socket.retry", { attempt, durationMs: delay });
+          timer = setTimeout(connect, delay);
         }
       };
     }
@@ -767,6 +772,7 @@ export default function OfficeApp() {
                 effectsEnabled={mapEffectsEnabled}
                 nameTags={nameTags}
                 people={people}
+                locks={snapshot?.locks}
                 self={user.id}
                 speaking={media.speaking}
                 waves={waves}

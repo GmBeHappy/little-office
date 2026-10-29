@@ -1,10 +1,17 @@
 "use client";
+import { LocalMovement } from "@/lib/local-movement";
 import { nameTagColors, type NameTagPreferences } from "@/lib/name-tags";
 import { useI18n } from "@/lib/i18n";
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import { WORLD, JUMP_DURATION, type Person } from "@/shared/world";
-import { drawOfficeMap, getMap, mapZones, type MapId } from "@/shared/maps";
+import {
+  drawOfficeMap,
+  getMap,
+  mapZones,
+  mapBlocks,
+  type MapId,
+} from "@/shared/maps";
 import { drawFishing, fishingPhase } from "@/shared/fishing";
 import { drawMapEffects, type MapEffect } from "@/shared/map-effects";
 import {
@@ -43,6 +50,7 @@ type Props = {
   effectsEnabled: boolean;
   nameTags: NameTagPreferences;
   people: Person[];
+  locks?: Record<string, boolean>;
   self: string;
   speaking: string[];
   waves: Record<string, number>;
@@ -141,6 +149,26 @@ export default function PixelMap(props: Props) {
       keys = new Set<string>();
       seq = 0;
       lastInput = 0;
+      lastDx = 0;
+      lastDy = 0;
+      intentSeq = 0;
+      localMovement = new LocalMovement();
+      movementBlocks = mapBlocks(getMap(props.mapId));
+      movementZones = mapZones(getMap(props.mapId));
+      sendMovement(dx: number, dy: number, time: number) {
+        const state = live.current;
+        const changed = dx !== this.lastDx || dy !== this.lastDy;
+        if (!changed && (!(dx || dy) || time - this.lastInput < 80)) return;
+        this.seq = Math.max(
+          this.seq,
+          state.people.find((p) => p.id === state.self)?.seq || 0,
+        );
+        state.send({ type: "move", dx, dy, seq: ++this.seq });
+        if (changed) this.intentSeq = this.seq;
+        this.lastDx = dx;
+        this.lastDy = dy;
+        this.lastInput = time;
+      }
       // Farm mini-games are per-scene state; changing maps starts a fresh day.
       farm?: {
         eggs: Map<number, number>;
@@ -198,12 +226,7 @@ export default function PixelMap(props: Props) {
       stopTouch() {
         if (this.touch) {
           this.touch = undefined;
-          const state = live.current;
-          this.seq = Math.max(
-            this.seq,
-            state.people.find((p) => p.id === state.self)?.seq || 0,
-          );
-          state.send({ type: "move", dx: 0, dy: 0, seq: ++this.seq });
+          this.sendMovement(0, 0, performance.now());
         }
         joystick.hidden = true;
       }
@@ -725,6 +748,7 @@ export default function PixelMap(props: Props) {
         const blur = () => {
           this.keys.clear();
           this.stopTouch();
+          this.sendMovement(0, 0, performance.now());
         };
         const visibility = () => {
           if (document.hidden) blur();
@@ -827,22 +851,15 @@ export default function PixelMap(props: Props) {
           this.keys.clear();
           this.stopTouch();
         }
-        if (time - this.lastInput > 80) {
-          const dx = this.touch
-            ? this.touch.dx
-            : (this.keys.has("KeyD") || this.keys.has("ArrowRight") ? 1 : 0) -
-              (this.keys.has("KeyA") || this.keys.has("ArrowLeft") ? 1 : 0);
-          const dy = this.touch
-            ? this.touch.dy
-            : (this.keys.has("KeyS") || this.keys.has("ArrowDown") ? 1 : 0) -
-              (this.keys.has("KeyW") || this.keys.has("ArrowUp") ? 1 : 0);
-          this.seq = Math.max(
-            this.seq,
-            state.people.find((person) => person.id === state.self)?.seq || 0,
-          );
-          state.send({ type: "move", dx, dy, seq: ++this.seq });
-          this.lastInput = time;
-        }
+        const dx = this.touch
+          ? this.touch.dx
+          : (this.keys.has("KeyD") || this.keys.has("ArrowRight") ? 1 : 0) -
+            (this.keys.has("KeyA") || this.keys.has("ArrowLeft") ? 1 : 0);
+        const dy = this.touch
+          ? this.touch.dy
+          : (this.keys.has("KeyS") || this.keys.has("ArrowDown") ? 1 : 0) -
+            (this.keys.has("KeyW") || this.keys.has("ArrowUp") ? 1 : 0);
+        this.sendMovement(dx, dy, time);
         const ids = new Set(state.people.map((p) => p.id));
         for (const [id, a] of this.avatars)
           if (!ids.has(id)) {
@@ -850,7 +867,24 @@ export default function PixelMap(props: Props) {
             a.bubble.remove();
             this.avatars.delete(id);
           }
-        for (const p of state.people) {
+        for (const authoritative of state.people) {
+          const local = authoritative.id === state.self;
+          const p = local
+            ? this.localMovement.step(
+                authoritative,
+                dx,
+                dy,
+                this.intentSeq,
+                delta / 1000,
+                time,
+                {
+                  blocks: this.movementBlocks,
+                  zones: this.movementZones,
+                  locks: state.locks || {},
+                  people: state.people,
+                },
+              )
+            : authoritative;
           let a = this.avatars.get(p.id);
           if (!a) {
             const bubble = document.createElement("button");
@@ -941,16 +975,12 @@ export default function PixelMap(props: Props) {
             };
             this.avatars.set(p.id, a);
           }
-          a.container.x = Phaser.Math.Linear(
-            a.container.x,
-            p.x,
-            Math.min(1, delta / 65),
-          );
-          a.container.y = Phaser.Math.Linear(
-            a.container.y,
-            p.y,
-            Math.min(1, delta / 65),
-          );
+          a.container.x = local
+            ? p.x
+            : Phaser.Math.Linear(a.container.x, p.x, Math.min(1, delta / 65));
+          a.container.y = local
+            ? p.y
+            : Phaser.Math.Linear(a.container.y, p.y, Math.min(1, delta / 65));
           a.container.setDepth(1000 + p.y);
           const pose = p.pose || "stand";
           if (a.pose !== pose) {
