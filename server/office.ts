@@ -253,6 +253,8 @@ export class Office {
         role: user.role,
         seen: Date.now(),
         reconnectUntil: undefined,
+        // Board peers belong to the old office connection and are pruned on resume.
+        whiteboardScope: undefined,
         heartbeat,
         lastPing: 0,
         input: { dx: 0, dy: 0, at: 0 },
