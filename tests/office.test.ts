@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Office } from "../server/office";
 import type { ActivityEvent } from "../shared/activity";
 import { Command } from "../shared/protocol";
+import { boardScope } from "../shared/whiteboard";
 import { JUMP_DURATION } from "../shared/world";
 import { walkable, WORLD, zoneAt, canNudge } from "../shared/world";
 import { MAPS, getMap, mapBlocks, mapDesks, mapZones } from "../shared/maps";
@@ -840,4 +841,35 @@ test("automatic Away is broadcast and clearing status restores manual availabili
     statusText: "",
     statusIcon: "",
   });
+});
+
+test("resuming the office clears old whiteboard presence without letting stale closes clear a new board", () => {
+  const office = new Office(() => {});
+  const user = { id: "a", name: "A", role: "member" };
+  const join = (connection: string) =>
+    office.add(
+      user,
+      "session",
+      Date.now() + 3600000,
+      () => {},
+      () => {},
+      connection,
+      "same-client",
+    );
+  const member = join("old-connection");
+  const scope = boardScope(office.workspace.mapId, member);
+  office.setWhiteboard(user.id, "old-connection", scope);
+  expect(office.people()[0].whiteboard).toBe(true);
+  expect(office.activeUntil(member)).toBe(Infinity);
+
+  expect(join("new-connection")).toBe(member);
+  office.setWhiteboard(user.id, "old-connection");
+  expect(office.people()[0].whiteboard).toBe(false);
+  expect(office.activeUntil(member)).toBe(member.activity + 300000);
+
+  office.setWhiteboard(user.id, "new-connection", scope);
+  office.setWhiteboard(user.id, "old-connection");
+  expect(office.people()[0].whiteboard).toBe(true);
+  office.setWhiteboard(user.id, "new-connection");
+  expect(office.people()[0].whiteboard).toBe(false);
 });
