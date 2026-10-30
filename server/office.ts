@@ -900,16 +900,8 @@ export class Office {
         m.lastPing = now;
         m.heartbeat();
       }
-      if (
-        now - m.activity > 300000 &&
-        !m.sharing &&
-        !this.whiteboardActive(m) &&
-        (!m.conversation || m.conversation === "floor") &&
-        m.manualStatus === "available"
-      ) {
-        if (m.status !== "away") this.dirty = true;
-        m.status = "away";
-      }
+      // Availability is the member's choice, including while working in another
+      // app. In-office activity is measured separately by activeUntil below.
       if (
         m.pose === "fish" &&
         m.fishing &&
