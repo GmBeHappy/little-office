@@ -12,4 +12,4 @@ Persistence uses stable interval IDs and monotonic end updates, so retrying cann
 
 Checks: `bun test tests/attendance.test.ts tests/office.test.ts tests/migrations.test.ts`; browser checks `APP_URL=http://127.0.0.1:3917 bunx playwright test e2e/attendance-dashboard.spec.ts e2e/status-reset.spec.ts`. Browser fixtures use synthetic data; API regressions use isolated PGlite and actual authorization routes.
 
-The status editor uses persisted manual availability rather than copying automatic Away into the form. Clear status resets availability, text and icon together when saved; automatic Away transitions now mark presence dirty for broadcasting.
+Availability stays at the member’s chosen Available, Busy, Do not disturb, or Away status while the connection is alive. Switching windows, minimizing the browser, or receiving no office input does not automatically mark them Away. Attendance active/idle time remains based on the signals above. A lost connection or expired session still removes online presence. Clear status resets availability, text and icon together when saved.

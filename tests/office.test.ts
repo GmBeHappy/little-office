@@ -218,13 +218,13 @@ describe("office behavior", () => {
     office.handle("a", { type: "microphone", room: a.room, enabled: true });
     expect(a.microphone).toBe(true);
   });
-  test("speaking refreshes activity and returns an automatically away member to their manual status", () => {
+  test("speaking refreshes activity without changing chosen availability", () => {
     const { office } = setup();
     const member = office.members.get("a")!;
     const now = Date.now();
     member.activity = now - 300001;
     office.tick(0.05, now);
-    expect(member.status).toBe("away");
+    expect(member.status).toBe("available");
     office.handle(
       "a",
       { type: "microphone", room: member.room, enabled: true, speaking: true },
@@ -575,14 +575,15 @@ describe("office behavior", () => {
       expect(replacement.room).not.toBe(old.room);
     }
   });
-  test("idle movement frames do not prevent auto-away and expired sessions are removed", () => {
+  test("idle movement does not count as activity and expired sessions are removed", () => {
     const { office } = setup();
     const m = office.members.get("a")!,
       now = Date.now();
     m.activity = now - 300001;
     office.handle("a", { type: "move", dx: 0, dy: 0, seq: 1 }, now);
     office.tick(0.05, now);
-    expect(m.status).toBe("away");
+    expect(m.status).toBe("available");
+    expect(m.activity).toBe(now - 300001);
     m.expires = now - 1;
     office.tick(0.05, now);
     expect(office.members.has("a")).toBe(false);
@@ -826,7 +827,7 @@ test("transport heartbeats preserve liveness without activity or session extensi
   office.acknowledgeHeartbeat("a", "current", now);
   expect(member.seen).toBe(now);
   office.tick(0.05, now);
-  expect(member.status).toBe("away");
+  expect(member.status).toBe("available");
   expect(member.activity).toBe(now - 301000);
   office.detach("a", "current", now);
   office.acknowledgeHeartbeat("a", "current", now + 10000);
@@ -848,12 +849,16 @@ test("transport heartbeats preserve liveness without activity or session extensi
   expect(office.members.has("a")).toBe(false);
 });
 
-test("automatic Away is broadcast and clearing status restores manual availability", () => {
+test("manual Away is broadcast and clearing status restores availability", () => {
   const { office } = setup();
   const now = Date.now();
   const m = office.members.get("a")!;
-  m.activity = now - 300001;
   office.broadcast();
+  office.handle(
+    "a",
+    { type: "status", status: "away", text: "Lunch", icon: "" },
+    now,
+  );
   office.tick(0.05, now);
   expect(m.status).toBe("away");
   expect(office.dirty).toBe(true);
@@ -900,4 +905,31 @@ test("resuming the office clears old whiteboard presence without letting stale c
   expect(office.people()[0].whiteboard).toBe(true);
   office.setWhiteboard(user.id, "new-connection");
   expect(office.people()[0].whiteboard).toBe(false);
+});
+
+test("background connections keep chosen availability without fabricating attendance activity", () => {
+  for (const status of ["available", "busy", "dnd", "away"] as const) {
+    const office = new Office();
+    const member = office.add(
+      { id: "a", name: "A", role: "member" },
+      "session",
+      Date.now() + 3600000,
+      () => {},
+      () => {},
+    );
+    const started = member.activity;
+    office.handle("a", { type: "status", status, text: "", icon: "" }, started);
+    const lastActivity = member.activity;
+    for (let elapsed = 10000; elapsed <= 600000; elapsed += 10000) {
+      const now = started + elapsed;
+      office.acknowledgeHeartbeat("a", member.connectionId, now);
+      office.tick(0.05, now);
+      expect(office.members.has("a")).toBe(true);
+      expect(member.status).toBe(status);
+      expect(member.activity).toBe(lastActivity);
+    }
+    expect(office.activeUntil(member)).toBe(lastActivity + 300000);
+    office.tick(0.05, member.seen + 35001);
+    expect(office.members.has("a")).toBe(false);
+  }
 });
