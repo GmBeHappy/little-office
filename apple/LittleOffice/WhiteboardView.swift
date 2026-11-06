@@ -65,6 +65,7 @@ struct WhiteboardPanel: View {
   typealias PlatformViewRepresentable = UIViewRepresentable
 #endif
 struct WhiteboardView: PlatformViewRepresentable {
+  @Environment(\.locale) private var locale
   let api: OfficeAPI
   let workspaceId: String
   let download: BoardDownload
@@ -84,6 +85,11 @@ struct WhiteboardView: PlatformViewRepresentable {
     let configuration = WKWebViewConfiguration()
     configuration.websiteDataStore = .nonPersistent()
     configuration.userContentController.add(context.coordinator, name: "whiteboardClose")
+    // The embedded office page reads its language before mounting the Excalidraw editor.
+    let language = locale.language.languageCode?.identifier == "th" ? "th" : "en"
+    configuration.userContentController.addUserScript(
+      WKUserScript(source: "try { localStorage.setItem('office-language', '\(language)') } catch {}",
+                   injectionTime: .atDocumentStart, forMainFrameOnly: true))
     configuration.userContentController.addUserScript(
       WKUserScript(
         source:

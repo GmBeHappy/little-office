@@ -14,6 +14,21 @@ final class OfficeScene: SKScene {
   var nameTagOpacity = 85.0
   var speaking = Set<String>()
   var inputEnabled = true { didSet { if !inputEnabled { stopInput() } } }
+  var usesThaiFont = false {
+    didSet {
+      guard oldValue != usesThaiFont else { return }
+      for figure in figures.values { styleLabels(figure) }
+      for case let label as SKLabelNode in labels.children { label.fontName = mapFont }
+      farmHud.fontName = mapFont
+    }
+  }
+  private var mapFont: String { usesThaiFont ? OfficeThaiFont.bold : "Menlo-Bold" }
+  private func styleLabels(_ figure: Figure) {
+    figure.nameLabel.fontName = usesThaiFont ? OfficeThaiFont.bold : "Helvetica-Bold"
+    figure.statusLabel.fontName = usesThaiFont ? OfficeThaiFont.regular : "Helvetica"
+    figure.reaction.fontName = figure.nameLabel.fontName
+    figure.nameLabel.text = nil  // Recalculate the nameplate width with the selected font.
+  }
   private var revision = -1
   private var mapId = ""
   private var animation: MapAnimation?
@@ -135,7 +150,7 @@ final class OfficeScene: SKScene {
       background = node
       labels.removeAllChildren()
       for label in manifest.labels {
-        let node = SKLabelNode(fontNamed: "Menlo-Bold")
+        let node = SKLabelNode(fontNamed: mapFont)
         node.text = label.text
         node.fontSize = label.size
         node.fontColor = color(
@@ -152,6 +167,7 @@ final class OfficeScene: SKScene {
     }
     for person in people where figures[person.id] == nil {
       let figure = Figure()
+      styleLabels(figure)
       figure.position = CGPoint(x: person.x, y: worldSize.height - person.y)
       figures[person.id] = figure
       addChild(figure)

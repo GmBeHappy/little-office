@@ -35,7 +35,8 @@ public struct Appearance: Equatable {
   public var hair: Int
   public var hat: Int
   public var clothes: Int
-  public static let presets = ["sage", "plum", "coral", "blue", "gold", "rose"]
+  public static let presets = ["sage", "blue", "coral", "gold", "plum"]
+  public static let presetNames = ["sage": "Scout", "blue": "Maker", "coral": "Artist", "gold": "Explorer", "plum": "Stargazer"]
   public init(_ value: String) {
     let presets = [
       "sage": [1, 3, 0, 0], "blue": [3, 0, 2, 3], "coral": [2, 2, 0, 1], "gold": [2, 0, 1, 2],

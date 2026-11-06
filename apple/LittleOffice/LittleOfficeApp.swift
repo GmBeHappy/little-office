@@ -1,3 +1,4 @@
+import CoreText
 import LittleOfficeKit
 import SwiftUI
 
@@ -7,9 +8,17 @@ struct LittleOfficeApp: App {
   @AppStorage("officeLanguage") private var language =
     Locale.current.language.languageCode?.identifier == "th" ? "th" : "en"
   @Environment(\.scenePhase) private var phase
+  init() {
+    for weight in [400, 500, 600, 700] {
+      if let url = Bundle.main.url(forResource: String(weight), withExtension: "ttf", subdirectory: "ibm-plex-sans-thai") {
+        CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+      }
+    }
+  }
   var body: some Scene {
     WindowGroup {
       RootView(model: model)
+        .officeFont(.body)
         .environment(\.locale, Locale(identifier: language))
         .frame(minWidth: 340, minHeight: 500)
         .onChange(of: phase) { _, value in

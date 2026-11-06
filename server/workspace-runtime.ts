@@ -1,3 +1,4 @@
+import { recordNotification } from "./notifications";
 import { persistAttendance } from "./attendance-report";
 import { serverLog, diagnosticRef, errorKind } from "./diagnostics";
 import { and, eq, gt, inArray, or, sql } from "drizzle-orm";
@@ -44,6 +45,24 @@ export function runtimeFor(workspaceId: string) {
             .catch(() => console.error("Could not persist office activity."));
         },
         `${config.mediaNamespace}-${workspaceId}`,
+        (recipient, kind, actorName) => {
+          void recordNotification(workspaceId, recipient, kind, actorName)
+            .then(() =>
+              office.members
+                .get(recipient)
+                ?.send({ type: "notifications-changed" }),
+            )
+            .catch((error) =>
+              serverLog(
+                "notifications.persist_failed",
+                {
+                  workspaceRef: diagnosticRef(workspaceId),
+                  errorKind: errorKind(error),
+                },
+                "error",
+              ),
+            );
+        },
       );
       office.configureWorkspace(settings);
       const runtime = {

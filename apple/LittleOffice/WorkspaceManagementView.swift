@@ -140,7 +140,7 @@ struct WorkspaceManagementView: View {
               }
               if let url = URL(string: link), !link.isEmpty {
                 ShareLink("Share invitation", item: url)
-                Text(link).font(.caption).textSelection(.enabled)
+                Text(link).officeFont(.caption).textSelection(.enabled)
               }
             }
           }
@@ -162,7 +162,7 @@ struct WorkspaceManagementView: View {
               HStack {
                 VStack(alignment: .leading) {
                   Text(member.name + (member.approved ? "" : " · Removed"))
-                  Text(member.email).font(.caption).foregroundStyle(.secondary)
+                  Text(member.email).officeFont(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 if detail.role == "owner" {

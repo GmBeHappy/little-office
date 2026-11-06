@@ -235,13 +235,15 @@ export function nativeMap(id: string) {
   if (!maps.has(id)) maps.set(id, buildMap(id));
   return maps.get(id)!;
 }
-export function nativeAvatar(id: string) {
+export function nativeAvatar(id: string, preview = false) {
   if (!isAvatar(id)) throw new Error("Unknown appearance.");
   const frames: Record<string, Rect[]> = {};
+  const poses = preview ? (["stand"] as const) : (["stand", "sit", "sleep", "fish"] as const);
+  const strides = preview ? [0] : [0, 4, 0, -4, 3];
   for (const direction of ["up", "down", "left", "right"] as const)
-    for (const pose of ["stand", "sit", "sleep", "fish"] as const)
+    for (const pose of poses)
       // Match PixelMap: four 110 ms walking frames, then the airborne stride.
-      for (const [frame, stride] of [0, 4, 0, -4, 3].entries()) {
+      for (const [frame, stride] of strides.entries()) {
         const rectangles: Rect[] = [];
         drawCharacter(
           id,

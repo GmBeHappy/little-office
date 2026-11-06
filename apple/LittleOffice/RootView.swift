@@ -18,6 +18,7 @@ struct OfficeView: View {
   @ObservedObject private var media: OfficeMedia
   let leave: () -> Void
   @State private var scene = OfficeScene(size: CGSize(width: 1120, height: 720))
+  @State private var showingInbox = false
   @State private var managing = false
   @State private var profile = false
   @State private var display = false
@@ -33,6 +34,7 @@ struct OfficeView: View {
   @State private var interactionPrompt = ""
   @State private var interactionEnabled = true
   @FocusState private var searchFocused: Bool
+  @Environment(\.locale) private var locale
   @Environment(\.accessibilityReduceMotion) private var reducedMotion
   @Environment(\.scenePhase) private var scenePhase
 
@@ -72,7 +74,7 @@ struct OfficeView: View {
               Label(
                 media.connected ? "Nearby voice" : "Connecting audio…", systemImage: "headphones"
               )
-              .font(.caption.weight(.medium)).padding(10).glassEffect()
+              .officeFont(.caption, weight: .medium).padding(10).glassEffect()
               if !media.videos.isEmpty { MediaPanel(media: media, compact: compact) }
               Spacer(minLength: 0)
             }
@@ -91,7 +93,7 @@ struct OfficeView: View {
           #if os(macOS)
             if !compact {
               Text("W A S D / arrows: move · Space: jump · Z: nudge · 1: sit · 2: sleep · 3: fish")
-                .font(.caption2).padding(.horizontal, 10).padding(.vertical, 5)
+                .officeFont(.caption2).padding(.horizontal, 10).padding(.vertical, 5)
                 .background(.regularMaterial, in: .capsule)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -109,18 +111,28 @@ struct OfficeView: View {
       }
     }
   }
+  private var board: some View {
+    NavigationStack {
+      WhiteboardPanel(api: office.api, workspaceId: office.workspace.id) {
+        office.showingBoard = false
+      }
+      .navigationTitle("Whiteboard")
+      #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+      #endif
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(.background)
+  }
   private var panels: some View {
     layout
-      .sheet(isPresented: $office.showingBoard) {
-        NavigationStack {
-          WhiteboardPanel(api: office.api, workspaceId: office.workspace.id) {
-            office.showingBoard = false
-          }
-          .frame(minWidth: 340, maxWidth: .infinity, minHeight: 400, maxHeight: .infinity)
-          .navigationTitle("Whiteboard")
-
-        }.frame(minWidth: 340, minHeight: 500)
-      }
+      #if os(iOS)
+        .fullScreenCover(isPresented: $office.showingBoard) { board }
+      #else
+        .disabled(office.showingBoard)
+        .accessibilityHidden(office.showingBoard)
+        .overlay { if office.showingBoard { board } }
+      #endif
       .sheet(isPresented: $profile) { ProfileSettings(office: office) }
       .sheet(isPresented: $display) { DisplaySettings() }
       .sheet(isPresented: $mediaSettings) { MediaSettings(media: media) }
@@ -170,6 +182,7 @@ struct OfficeView: View {
           panelOpen = true
         }
         scene.reducedMotion = reducedMotion || !mapMotion
+        scene.usesThaiFont = locale.language.languageCode?.identifier == "th"
         scene.nameTagSize = nameTagSize
         scene.nameTagOpacity = nameTagOpacity
         updateInput()
@@ -193,6 +206,7 @@ struct OfficeView: View {
       .onReceive(office.resetInput) { scene.stopInput() }
       .onChange(of: reducedMotion) { _, value in scene.reducedMotion = value || !mapMotion }
       .onChange(of: mapMotion) { _, value in scene.reducedMotion = reducedMotion || !value }
+      .onChange(of: locale) { _, value in scene.usesThaiFont = value.language.languageCode?.identifier == "th" }
       .onChange(of: nameTagSize) { _, value in scene.nameTagSize = value }
       .onChange(of: nameTagOpacity) { _, value in scene.nameTagOpacity = value }
       .onReceive(media.$speaking) { scene.speaking = $0 }
@@ -210,7 +224,7 @@ struct OfficeView: View {
   }
   private var inputAllowed: Bool {
     !office.showingBoard && !office.showingEmotePicker && !managing && !profile && !display
-      && !mediaSettings && !media.choosingScreen && !searchFocused
+      && !showingInbox && !mediaSettings && !media.choosingScreen && !searchFocused
       && scenePhase == .active
   }
   private func step(_ dx: Int, _ dy: Int) {
@@ -232,13 +246,13 @@ struct OfficeView: View {
     HStack(spacing: compact ? 10 : 18) {
       Button(action: leave) {
         Label("littleoffice✦", systemImage: "square.grid.2x2.fill")
-          .font(compact ? .subheadline.bold() : .title3.bold())
+          .officeFont(compact ? .subheadline : .title3, weight: .bold)
       }.help("Switch workspace").accessibilityLabel("Switch workspace")
       if !compact {
         Divider().frame(height: 24)
-        Text(LocalizedStringKey(title)).font(.subheadline).lineLimit(1)
+        Text(LocalizedStringKey(title)).officeFont(.subheadline).lineLimit(1)
       }
-      Label(zoneName, systemImage: "leaf").font(.caption.weight(.semibold)).lineLimit(1)
+      Label(zoneName, systemImage: "leaf").officeFont(.caption, weight: .semibold).lineLimit(1)
       Spacer(minLength: 0)
       HStack(spacing: 5) {
         Image(systemName: "circle.fill").imageScale(.small)
@@ -247,10 +261,11 @@ struct OfficeView: View {
           Text(verbatim: office.pingMilliseconds.map { "\($0) ms" } ?? "— ms").monospacedDigit()
         }
       }
-      .font(.caption).foregroundStyle(office.connected ? Color.green : Color.secondary)
+      .officeFont(.caption).foregroundStyle(office.connected ? Color.green : Color.secondary)
       .fixedSize().accessibilityElement(children: .ignore)
       .accessibilityLabel(office.connected ? Text("Connected") : Text("Disconnected"))
       .accessibilityValue(Text(verbatim: office.pingMilliseconds.map { "\($0) ms" } ?? ""))
+      InboxButton(inbox: office.inbox) { showingInbox = true }
       Button {
         profile = true
       } label: {
@@ -287,8 +302,8 @@ struct OfficeView: View {
   ) -> some View {
     Button(action: action) {
       VStack(spacing: 5) {
-        Image(systemName: icon).font(.system(size: 18))
-        Text(LocalizedStringKey(title)).font(.system(size: 9, weight: .medium))
+        Image(systemName: icon).officeFont(.body, size: 18)
+        Text(LocalizedStringKey(title)).officeFont(.body, size: 9, weight: .medium)
       }.frame(maxWidth: .infinity).frame(height: 48)
         .background(
           selected ? Color.accentColor.opacity(0.15) : .clear, in: .rect(cornerRadius: 12)
@@ -315,7 +330,7 @@ struct OfficeView: View {
           if panel == "People" {
             TextField("Find your people", text: $search).textFieldStyle(.roundedBorder).focused(
               $searchFocused)
-            Text("IN THE OFFICE").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            Text("IN THE OFFICE").officeFont(.caption2, weight: .semibold).foregroundStyle(.secondary)
             ForEach(
               (office.snapshot?.people ?? []).filter {
                 search.isEmpty || $0.name.localizedCaseInsensitiveContains(search)
@@ -325,11 +340,11 @@ struct OfficeView: View {
                 NativeAvatar(person: person, avatars: office.avatars).frame(width: 32, height: 38)
                 VStack(alignment: .leading, spacing: 3) {
                   Text(person.name + (person.id == office.snapshot?.selfId ? " (you)" : ""))
-                    .font(.callout.weight(.medium))
+                    .officeFont(.callout, weight: .medium)
                   Text(
                     "\(person.presence.icon) \(person.presence.text.isEmpty ? person.presence.label : person.presence.text)"
                   )
-                  .font(.caption).foregroundStyle(.secondary)
+                  .officeFont(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
                 if person.id != office.snapshot?.selfId {
@@ -351,7 +366,7 @@ struct OfficeView: View {
             }
             Divider()
           }
-          Text("A SPACE FOR EVERY MOMENT").font(.caption2.weight(.semibold)).foregroundStyle(
+          Text("A SPACE FOR EVERY MOMENT").officeFont(.caption2, weight: .semibold).foregroundStyle(
             .secondary)
           ForEach((office.manifest?.zones ?? []).filter { panel == "Rooms" || $0.id != "floor" }) {
             zone in
@@ -360,17 +375,17 @@ struct OfficeView: View {
             } label: {
               HStack(spacing: 10) {
                 Image(systemName: zone.id == "floor" ? "leaf" : "door.left.hand.open")
-                  .font(.title2).frame(width: 36)
+                  .officeFont(.title2).frame(width: 36)
                 VStack(alignment: .leading, spacing: 4) {
-                  Text(zone.name).font(.callout.weight(.medium))
+                  Text(zone.name).officeFont(.callout, weight: .medium)
                   Text(
                     "\(office.snapshot?.people.filter { $0.zone == zone.id }.count ?? 0) here"
                       + (office.snapshot?.locks[zone.id] == true ? " · Locked" : "")
                   )
-                  .font(.caption).foregroundStyle(.secondary)
+                  .officeFont(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(.caption)
+                Image(systemName: "chevron.right").officeFont(.caption)
               }.padding(12).frame(maxWidth: .infinity)
                 .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 12))
                 .contentShape(Rectangle())
@@ -412,7 +427,7 @@ struct OfficeView: View {
         Text(media.error).foregroundStyle(.red)
         Button("Retry media") { media.retry() }
       }
-    }.font(.caption).padding(
+    }.officeFont(.caption).padding(
       office.invitations.isEmpty && office.notice.isEmpty && office.error.isEmpty
         && media.error.isEmpty ? 0 : 12
     )
@@ -466,14 +481,14 @@ private struct OfficeDock: View {
           }
         } label: {
           if compact {
-            Image(systemName: "person.crop.circle").font(.title2)
+            Image(systemName: "person.crop.circle").officeFont(.title2)
           } else {
-            Text(office.snapshot?.me?.name ?? "You").font(.callout.weight(.semibold))
+            Text(office.snapshot?.me?.name ?? "You").officeFont(.callout, weight: .semibold)
           }
         }.menuStyle(.borderlessButton).accessibilityLabel("Your status")
         if !compact {
           Text(office.snapshot?.me?.status.capitalized ?? "Available")
-            .font(.caption2).foregroundStyle(.secondary)
+            .officeFont(.caption2).foregroundStyle(.secondary)
         }
       }
     }
@@ -519,11 +534,11 @@ private struct OfficeDock: View {
       Button("Leave conversation") { office.send(["type": "leave"]) }
     } label: {
       VStack(spacing: 5) {
-        Image(systemName: "face.smiling").font(.system(size: 20)).frame(width: 36, height: 30)
+        Image(systemName: "face.smiling").officeFont(.body, size: 20).frame(width: 36, height: 30)
         #if os(iOS)
-          Text("Emote").font(.system(size: 9))
+          Text("Emote").officeFont(.body, size: 9)
         #else
-          if !compact { Text("Emote").font(.system(size: 9)) }
+          if !compact { Text("Emote").officeFont(.body, size: 9) }
         #endif
       }.frame(minWidth: 44, minHeight: 44)
     }.menuStyle(.borderlessButton).accessibilityLabel("Emote and actions").disabled(
@@ -535,9 +550,9 @@ private struct OfficeDock: View {
   ) -> some View {
     Button(action: action) {
       VStack(spacing: 5) {
-        Image(systemName: icon).font(.system(size: 20)).frame(width: 36, height: 30)
+        Image(systemName: icon).officeFont(.body, size: 20).frame(width: 36, height: 30)
           .foregroundStyle(active ? Color.accentColor : .primary)
-        if showLabel || !compact { Text(LocalizedStringKey(title)).font(.system(size: 9)) }
+        if showLabel || !compact { Text(LocalizedStringKey(title)).officeFont(.body, size: 9) }
       }.frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
     }.accessibilityLabel(title).help(title)
   }

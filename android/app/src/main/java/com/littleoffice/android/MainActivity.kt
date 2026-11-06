@@ -89,7 +89,10 @@ fun LittleOfficeTheme(content: @Composable () -> Unit) {
 fun OfficeApp(model: OfficeModel) {
     val context = LocalContext.current
     Surface(Modifier.fillMaxSize()) {
-        Column(Modifier.safeDrawingPadding().fillMaxSize()) {
+        val currentOffice = model.office
+        if (currentOffice != null && currentOffice.board) {
+            WhiteboardPage(currentOffice)
+        } else Column(Modifier.safeDrawingPadding().fillMaxSize()) {
             if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (model.error.isNotBlank()) Message(model.error) { model.error = "" }
             val office = model.office
@@ -273,6 +276,7 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
     var settings by remember { mutableStateOf(false) }
     var rooms by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf("") }
+    var notifications by remember(office) { mutableStateOf(false) }
     var emotes by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf(false) }
     var shareOptions by remember { mutableStateOf(false) }
@@ -330,6 +334,7 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
                         )
                     } else OfficeText("Disconnected", style = MaterialTheme.typography.labelSmall)
                 }
+                NotificationBell(office.inbox, office.connected) { notifications = true }
                 var menu by remember { mutableStateOf(false) }
                 Box {
                     TextButton(onClick = { menu = true }) { OfficeText("Menu") }
@@ -477,6 +482,7 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
             }
         }
     }
+    if (notifications) NotificationCenter(office.inbox) { notifications = false }
     if (people)
         AlertDialog(
             onDismissRequest = { people = false },
@@ -602,21 +608,6 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
     if (settings) OfficeSettings(model, office) { settings = false }
     if (rooms) RoomsDialog(office) { rooms = false }
     if (status) StatusDialog(office) { status = false }
-    if (office.board)
-        Dialog(
-            onDismissRequest = { office.closeBoard?.invoke() },
-            properties =
-                androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            Surface(Modifier.fillMaxSize()) {
-                Column(Modifier.safeDrawingPadding()) {
-                    TextButton(onClick = { office.closeBoard?.invoke() }) {
-                        OfficeText("Close whiteboard")
-                    }
-                    Whiteboard(office, Modifier.weight(1f))
-                }
-            }
-        }
     office.invitations.firstOrNull()?.let { invitation ->
         fun respond(accept: Boolean) {
             office.send(

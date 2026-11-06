@@ -36,7 +36,7 @@ struct WorkspaceSecurityView: View {
             }
             Text(
               "Saving changes disables SSO and ends existing SSO sessions. Members need a personal recovery login before the provider identity can change."
-            ).font(.caption)
+            ).officeFont(.caption)
           }
           if let connection = state.connection {
             Section("Verify domain") {
@@ -83,7 +83,7 @@ struct WorkspaceSecurityView: View {
           }
           Text(
             "Sign in in your browser to link your organization login or add a personal recovery login. If a change requires recent authentication, sign in again from the workspace switcher, then retry."
-          ).font(.caption)
+          ).officeFont(.caption)
         }
       } else {
         ProgressView()
@@ -148,7 +148,7 @@ struct WorkspaceActivityView: View {
         VStack(alignment: .leading, spacing: 4) {
           Text(entry.actorName).fontWeight(.medium)
           Text(LocalizedStringKey(activityLabel(entry.action)))
-          if let target = entry.targetName { Text(target).font(.caption) }
+          if let target = entry.targetName { Text(target).officeFont(.caption) }
           if let from = entry.details?["from"], let to = entry.details?["to"],
             entry.action == "member.role"
           {
@@ -156,13 +156,13 @@ struct WorkspaceActivityView: View {
               Text(LocalizedStringKey(from.capitalized))
               Text("→")
               Text(LocalizedStringKey(to.capitalized))
-            }.font(.caption)
+            }.officeFont(.caption)
           }
           if let map = entry.details?["mapId"], let name = mapNames[map] {
-            Text(LocalizedStringKey(name)).font(.caption)
+            Text(LocalizedStringKey(name)).officeFont(.caption)
           }
           if let date = entry.date {
-            Text(date, format: .dateTime.year().month().day().hour().minute()).font(.caption)
+            Text(date, format: .dateTime.year().month().day().hour().minute()).officeFont(.caption)
               .foregroundStyle(.secondary)
           }
         }
@@ -323,7 +323,7 @@ struct OperatorSettingsView: View {
                     user.username ?? "SSO", user.role,
                     user.approved ? "Approved" : "Disabled / pending",
                   ].joined(separator: " · ")
-                ).font(.caption).foregroundStyle(.secondary)
+                ).officeFont(.caption).foregroundStyle(.secondary)
               }
               Spacer()
               Menu("Manage") {
@@ -368,7 +368,7 @@ struct OperatorSettingsView: View {
         NavigationLink("Storage") { StorageSettingsView(api: api) }
         Text(
           "Sensitive changes require a recent personal sign-in. If requested, sign in again from the workspace switcher and retry."
-        ).font(.caption)
+        ).officeFont(.caption)
       } else if busy {
         ProgressView()
       }

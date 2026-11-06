@@ -2376,7 +2376,19 @@
     }
   }
 
+  @media (max-width: 420px) {
+    .immersive-office .header-end {
+      @apply gap-[2px];
+    }
+    .immersive-office .brand {
+      @apply text-[15px] gap-[5px];
+    }
+  }
+
   @media (max-width: 370px) {
+    .immersive-office .topbar .brand > span:last-child {
+      @apply hidden;
+    }
     .immersive-office .header-end > .icon-button:has(.lucide-circle-help) {
       @apply hidden;
     }

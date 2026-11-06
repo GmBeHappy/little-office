@@ -100,6 +100,7 @@ import {
 import { DeviceSelect } from "./DeviceSelect";
 import { ToolbarMenu } from "./ToolbarMenu";
 import { DeviceBar } from "./DeviceBar";
+import NotificationCenter from "./NotificationCenter";
 import { NameTagSettings } from "./NameTagSettings";
 import {
   DEFAULT_NAME_TAGS,
@@ -201,6 +202,7 @@ export default function OfficeApp() {
       /* The preference still applies for this visit. */
     }
   };
+  const [notificationRevision, setNotificationRevision] = useState(0);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null),
     [connection, setConnection] = useState("Connecting"),
     [pingMs, setPingMs] = useState<number | null>(null),
@@ -396,12 +398,15 @@ export default function OfficeApp() {
         takeover = false;
         clientLog("socket.open");
         setConnection("Connected");
+        setNotificationRevision((n) => n + 1);
         probeLatency();
       };
       ws.onmessage = (event) => {
         if (disposed || socket.current !== ws) return;
         const message = JSON.parse(event.data);
-        if (message.type === "snapshot") setSnapshot(message);
+        if (message.type === "notifications-changed")
+          setNotificationRevision((n) => n + 1);
+        else if (message.type === "snapshot") setSnapshot(message);
         else if (message.type === "pong") {
           if (pendingPing && message.nonce === pendingPing.nonce) {
             const durationMs = Math.round(
@@ -671,6 +676,10 @@ export default function OfficeApp() {
           </span>
           <span className="header-divider" />
           <LanguageToggle />
+          <NotificationCenter
+            key={`${base}:${user.id}`}
+            revision={notificationRevision}
+          />
           <Button
             variant="ghost"
             size="icon"

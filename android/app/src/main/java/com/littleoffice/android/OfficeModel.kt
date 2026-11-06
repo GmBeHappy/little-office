@@ -168,6 +168,7 @@ class OfficeSession(
     val workspace: Workspace,
     private val parentScope: CoroutineScope,
 ) {
+    val inbox = WorkspaceInbox(api, workspace.id)
     var snapshot by mutableStateOf<Snapshot?>(null)
     var scene by mutableStateOf<Scene?>(null)
     val avatars = mutableStateMapOf<String, Avatar>()
@@ -379,6 +380,7 @@ class OfficeSession(
                     next.workspace.optJSONObject("features")?.optBoolean("whiteboard", true) ?: true
                 if (!boardEnabled) board = false
                 snapshot = next
+                if (!connected) scope?.let(inbox::connect)
                 connected = true
                 reconnecting = false
                 reconnectAttempt = 0
@@ -409,6 +411,7 @@ class OfficeSession(
                 }
                 animations.keys.retainAll(next.people.map { it.id }.toSet())
             }
+            "notifications-changed" -> inbox.refresh()
             "pong" -> {
                 val started = pendingPing ?: return
                 if (event.optLong("nonce", -1) == started) {
@@ -530,6 +533,7 @@ class OfficeSession(
         board = false
         socket?.close(1000, "Leaving office")
         socket = null
+        inbox.clear()
         scope?.cancel()
         scope = null
         media.stop()

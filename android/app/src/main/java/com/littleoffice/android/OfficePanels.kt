@@ -1,14 +1,11 @@
 package com.littleoffice.android
 
-import android.net.Uri
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -167,46 +164,10 @@ fun OfficeSettings(model: OfficeModel, office: OfficeSession, close: () -> Unit)
 private fun ProfileSettings(model: OfficeModel, office: OfficeSession) {
     val me = office.snapshot?.me
     var name by remember { mutableStateOf(me?.name ?: model.account?.string("name").orEmpty()) }
-    var parts by remember {
-        mutableStateOf(
-            appearanceParts(me?.avatar ?: model.account?.string("avatar", "sage").orEmpty())
-        )
+    var appearance by remember {
+        mutableStateOf(me?.avatar ?: model.account?.string("avatar", "sage") ?: "sage")
     }
-    val appearance = "custom:" + parts.joinToString(":")
-    var preview by remember { mutableStateOf<Avatar?>(null) }
-    var previewError by remember { mutableStateOf("") }
     val scoped = !model.account?.string("workspaceId").isNullOrBlank()
-    LaunchedEffect(appearance) {
-        try {
-            preview =
-                Avatar.parse(
-                    office.api.call(
-                        office.api.path(
-                            office.workspace.id,
-                            "/avatar?appearance=${Uri.encode(appearance)}",
-                        )
-                    )
-                )
-            previewError = ""
-        } catch (cancel: kotlinx.coroutines.CancellationException) {
-            throw cancel
-        } catch (e: Exception) {
-            previewError = e.message.orEmpty()
-        }
-    }
-    Canvas(Modifier.fillMaxWidth().height(150.dp)) {
-        translate(size.width / 2, size.height * 0.8f) {
-            val factor = 3 * density
-            preview?.frames?.get("down-stand-0")?.forEach {
-                drawRect(
-                    Color((it.color or 0xff000000).toInt()),
-                    androidx.compose.ui.geometry.Offset(it.x * factor, it.y * factor),
-                    androidx.compose.ui.geometry.Size(it.w * factor, it.h * factor),
-                )
-            }
-        }
-    }
-    if (previewError.isNotBlank()) OfficeText(previewError)
     if (scoped)
         OfficeText(
             "Sign in with your personal account at https://app.littleoffice.app to change your name or appearance. Workspace SSO can still change status."
@@ -218,80 +179,7 @@ private fun ProfileSettings(model: OfficeModel, office: OfficeSession) {
         enabled = !scoped,
         modifier = Modifier.fillMaxWidth(),
     )
-    val choices =
-        listOf(
-            "Skin" to listOf("Light", "Medium light", "Medium", "Medium deep", "Deep"),
-            "Hair" to
-                listOf(
-                    "Short crop",
-                    "Soft curls",
-                    "Classic bob",
-                    "Spiky hair",
-                    "Ponytail",
-                    "Buzz cut",
-                    "Side part",
-                    "Long waves",
-                    "Twin tails",
-                    "Mohawk",
-                    "Afro",
-                    "Top knot",
-                    "Braids",
-                    "Undercut",
-                    "Shaggy hair",
-                ),
-            "Hat" to
-                listOf(
-                    "No hat",
-                    "Cap",
-                    "Beanie",
-                    "Sun hat",
-                    "Headphones",
-                    "Crown",
-                    "Bucket hat",
-                    "Beret",
-                    "Cowboy hat",
-                    "Wizard hat",
-                    "Party hat",
-                    "Cat ears",
-                    "Flower crown",
-                    "Headband",
-                    "Halo",
-                ),
-            "Outfit" to
-                listOf(
-                    "Forest hoodie",
-                    "Denim overalls",
-                    "Golden jacket",
-                    "Ocean shirt",
-                    "Lilac sweater",
-                    "Red varsity jacket",
-                    "White lab coat",
-                    "Navy suit",
-                    "Sakura kimono",
-                    "Space suit",
-                    "Beach shirt",
-                    "Thai silk shirt",
-                    "Camping vest",
-                    "Black turtleneck",
-                    "Rainbow tee",
-                ),
-        )
-    choices.forEachIndexed { index, (label, values) ->
-        OfficeText(label)
-        Row(
-            Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            values.forEachIndexed { value, title ->
-                FilterChip(
-                    parts[index] == value,
-                    { parts = parts.toMutableList().also { it[index] = value } },
-                    label = { OfficeText(title) },
-                    enabled = !scoped,
-                )
-            }
-        }
-    }
+    AvatarEditor(office, appearance, !scoped) { appearance = it }
     Button(
         enabled = !scoped && !model.busy && name.trim().length in 1..40,
         onClick = {

@@ -78,6 +78,22 @@ fun OfficeText(
 
 private val thai =
     mapOf(
+        "Notifications" to "การแจ้งเตือน",
+        "{count} unread notifications" to "การแจ้งเตือนที่ยังไม่ได้อ่าน {count} รายการ",
+        "Mark all as read" to "ทำเครื่องหมายว่าอ่านทั้งหมดแล้ว",
+        "Read" to "อ่านแล้ว",
+        "Unread" to "ยังไม่ได้อ่าน",
+        "No notifications yet." to "ยังไม่มีการแจ้งเตือน",
+        "Could not load notifications." to "โหลดการแจ้งเตือนไม่สำเร็จ",
+        "Could not mark notifications as read." to "ทำเครื่องหมายว่าอ่านแล้วไม่สำเร็จ",
+        "{name} nudged you" to "{name} สะกิดคุณ",
+        "{name} waved at you" to "{name} โบกมือให้คุณ",
+        "{name} invited you to join them" to "{name} ชวนคุณไปหา",
+        "{name} invited you to a private call" to "{name} ชวนคุณเข้าร่วมสายส่วนตัว",
+        "Notification from {name}" to "การแจ้งเตือนจาก {name}",
+        "Could not load avatar previews." to "โหลดตัวอย่างตัวละครไม่สำเร็จ",
+        "Previous" to "ก่อนหน้า",
+        "Next" to "ถัดไป",
         " · presenting" to " · กำลังนำเสนอ",
         " · you" to " · คุณ",
         "(you)" to "(คุณ)",

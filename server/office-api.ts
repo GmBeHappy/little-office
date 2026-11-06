@@ -1,3 +1,4 @@
+import { notificationPage, markNotificationsRead } from "./notifications";
 import { attendanceReport } from "./attendance-report";
 import { serverLog, diagnosticRef, errorKind } from "./diagnostics";
 import {
@@ -39,23 +40,66 @@ import { workspaceSession, manageWorkspace } from "./workspace-access";
 import { requireSession, requireWorkspaceManager } from "./session-guards";
 import { runtimeFor, runtimes } from "./workspace-runtime";
 export function officeRoutes(scoped: boolean): AnyElysia {
-  return new Elysia({
+  const app = new Elysia({
     prefix: scoped ? "/api/workspaces/:workspaceId" : "/api",
     name: scoped ? "workspace-office" : "legacy-office",
-  })
-    .derive(async ({ request }) => {
-      const workspaceId = scoped
-        ? new URL(request.url).pathname.split("/")[3]
-        : DEFAULT_WORKSPACE_ID;
-      const raw = await sessionFor(request.headers);
-      const publicPath =
-        !scoped &&
-        ["/api/config", "/api/me"].includes(new URL(request.url).pathname);
-      const identity = publicPath
-        ? raw
-        : await workspaceSession(raw, workspaceId);
-      return { identity, ...(await runtimeFor(workspaceId)) };
-    })
+  }).derive(async ({ request }) => {
+    const workspaceId = scoped
+      ? new URL(request.url).pathname.split("/")[3]
+      : DEFAULT_WORKSPACE_ID;
+    const raw = await sessionFor(request.headers);
+    const publicPath =
+      !scoped &&
+      ["/api/config", "/api/me"].includes(new URL(request.url).pathname);
+    const identity = publicPath
+      ? raw
+      : await workspaceSession(raw, workspaceId);
+    return { identity, ...(await runtimeFor(workspaceId)) };
+  });
+  app
+    .get(
+      "/notifications",
+      ({ identity, workspaceId, query, set }) => {
+        set.headers["cache-control"] = "private, no-store";
+        return notificationPage(
+          workspaceId,
+          requireSession(identity).user.id,
+          query.before,
+        );
+      },
+      {
+        query: t.Object({
+          before: t.Optional(
+            t.Numeric({ minimum: 1, maximum: 2147483647, multipleOf: 1 }),
+          ),
+        }),
+      },
+    )
+    .post(
+      "/notifications/read-all",
+      async ({ identity, workspaceId, office }) => {
+        const id = requireSession(identity).user.id;
+        await markNotificationsRead(workspaceId, id);
+        office.members.get(id)?.send({ type: "notifications-changed" });
+        return { ok: true };
+      },
+    )
+    .post(
+      "/notifications/:id/read",
+      async ({ identity, workspaceId, office, params }) => {
+        const userId = requireSession(identity).user.id;
+        await markNotificationsRead(workspaceId, userId, params.id);
+        office.members.get(userId)?.send({ type: "notifications-changed" });
+        return { ok: true };
+      },
+      {
+        params: t.Object({
+          workspaceId: t.Optional(t.String()),
+          id: t.Numeric({ minimum: 1, maximum: 2147483647, multipleOf: 1 }),
+        }),
+      },
+    );
+  return app
     .get("/config", async ({ office, workspaceId }) => ({
       ...(await settings()),
       workspace: office.workspace,
@@ -72,7 +116,9 @@ export function officeRoutes(scoped: boolean): AnyElysia {
       ...nativeMap(office.workspace.mapId),
       revision: office.workspace.revision,
     }))
-    .get("/avatar", ({ query }) => nativeAvatar(query.appearance || "sage"))
+    .get("/avatar", ({ query }) =>
+      nativeAvatar(query.appearance || "sage", query.preview === "1"),
+    )
     .get("/whiteboard/context", ({ office, identity }) => {
       const member = identity && office.members.get(identity.user.id);
       if (!member || member.sessionId !== identity!.session.id)

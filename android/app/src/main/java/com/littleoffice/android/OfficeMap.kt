@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
@@ -34,6 +35,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Person) -> Unit) {
     val actions = rememberCoroutineScope()
+    val context = LocalContext.current
+    val labelTypeface = remember(context) { context.resources.getFont(R.font.office_sans_700) }
     val scene = office.scene
     val world = remember(office, scene?.mapId, scene?.revision) { scene?.let { NativeWorld(it) } }
     val worldStart = remember(world) { SystemClock.elapsedRealtime().toDouble() }
@@ -42,7 +45,7 @@ fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Per
         onDispose { if (office.world === world) office.world = null }
     }
     val map =
-        remember(scene) {
+        remember(scene, labelTypeface) {
             scene?.let { value ->
                 Bitmap.createBitmap(
                         value.width.toInt(),
@@ -61,11 +64,7 @@ fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Per
                             }
                         paint.isAntiAlias = true
                         paint.textAlign = Paint.Align.CENTER
-                        paint.typeface =
-                            android.graphics.Typeface.create(
-                                "sans-serif",
-                                android.graphics.Typeface.BOLD,
-                            )
+                        paint.typeface = labelTypeface
                         value.labels.forEach { l ->
                             paint.textSize = l.getDouble("size").toFloat()
                             paint.color =
@@ -95,11 +94,10 @@ fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Per
         }
     }
     val positions = remember(office) { mutableMapOf<String, Offset>() }
-    val paint = remember {
+    val paint = remember(labelTypeface) {
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textAlign = Paint.Align.CENTER
-            typeface =
-                android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+            typeface = labelTypeface
         }
     }
     val density = LocalDensity.current.density
