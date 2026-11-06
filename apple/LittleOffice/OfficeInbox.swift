@@ -73,15 +73,16 @@ struct InboxButton: View {
   let open: () -> Void
   var body: some View {
     Button(action: open) {
-      Image(systemName: "bell").frame(minWidth: 30, minHeight: 36)
+      Image(systemName: "bell").frame(minWidth: 36, minHeight: 44)
         .overlay(alignment: .topTrailing) {
           if inbox.unreadCount > 0 {
             Text(verbatim: inbox.unreadCount > 99 ? "99+" : "\(inbox.unreadCount)")
               .officeFont(.caption2, weight: .bold).monospacedDigit().foregroundStyle(.white)
               .padding(.horizontal, 3).frame(minWidth: 16, minHeight: 16)
-              .background(.red, in: Capsule()).offset(x: 4)
+              .background(.red, in: Capsule()).offset(x: 4).allowsHitTesting(false)
           }
         }
+        .contentShape(Rectangle())
     }
     .accessibilityLabel("Notifications").accessibilityValue(Text("\(inbox.unreadCount) unread"))
   }

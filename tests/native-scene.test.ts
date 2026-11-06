@@ -37,6 +37,12 @@ test("editor previews contain only the standing frame for each direction", () =>
   const id = "custom:2:4:8:13";
   const preview = nativeAvatar(id, true);
   const full = nativeAvatar(id);
-  expect(Object.keys(preview.frames).sort()).toEqual(["down-stand-0", "left-stand-0", "right-stand-0", "up-stand-0"]);
-  for (const key of Object.keys(preview.frames)) expect(preview.frames[key]).toEqual(full.frames[key]);
+  expect(Object.keys(preview.frames).sort()).toEqual([
+    "down-stand-0",
+    "left-stand-0",
+    "right-stand-0",
+    "up-stand-0",
+  ]);
+  for (const key of Object.keys(preview.frames))
+    expect(preview.frames[key]).toEqual(full.frames[key]);
 });

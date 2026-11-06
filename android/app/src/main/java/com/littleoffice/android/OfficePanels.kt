@@ -6,6 +6,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -168,10 +169,16 @@ private fun ProfileSettings(model: OfficeModel, office: OfficeSession) {
         mutableStateOf(me?.avatar ?: model.account?.string("avatar", "sage") ?: "sage")
     }
     val scoped = !model.account?.string("workspaceId").isNullOrBlank()
-    if (scoped)
-        OfficeText(
-            "Sign in with your personal account at https://app.littleoffice.app to change your name or appearance. Workspace SSO can still change status."
-        )
+    if (scoped) {
+        val links = LocalUriHandler.current
+        val profileURL = android.net.Uri.parse(office.api.origin).buildUpon()
+            .appendPath("profile").appendQueryParameter("workspace", office.workspace.id).build()
+        OfficeText("Sign in with your personal account to edit your name and appearance.")
+        TextButton(onClick = {
+            runCatching { links.openUri(profileURL.toString()) }
+                .onFailure { office.notice = "Could not open the personal profile." }
+        }) { OfficeText("Open personal profile") }
+    }
     OutlinedTextField(
         name,
         { name = it.take(40) },

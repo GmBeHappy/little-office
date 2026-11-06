@@ -266,6 +266,7 @@ struct OfficeView: View {
       .accessibilityLabel(office.connected ? Text("Connected") : Text("Disconnected"))
       .accessibilityValue(Text(verbatim: office.pingMilliseconds.map { "\($0) ms" } ?? ""))
       InboxButton(inbox: office.inbox) { showingInbox = true }
+        .sheet(isPresented: $showingInbox) { InboxPanel(inbox: office.inbox) }
       Button {
         profile = true
       } label: {

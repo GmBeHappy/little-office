@@ -238,7 +238,9 @@ export function nativeMap(id: string) {
 export function nativeAvatar(id: string, preview = false) {
   if (!isAvatar(id)) throw new Error("Unknown appearance.");
   const frames: Record<string, Rect[]> = {};
-  const poses = preview ? (["stand"] as const) : (["stand", "sit", "sleep", "fish"] as const);
+  const poses = preview
+    ? (["stand"] as const)
+    : (["stand", "sit", "sleep", "fish"] as const);
   const strides = preview ? [0] : [0, 4, 0, -4, 3];
   for (const direction of ["up", "down", "left", "right"] as const)
     for (const pose of poses)

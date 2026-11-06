@@ -1,8 +1,10 @@
 import SwiftUI
 
 extension View {
-  func officeFont(_ style: Font.TextStyle, size: CGFloat? = nil, weight: Font.Weight = .regular,
-                  design: Font.Design = .default) -> some View {
+  func officeFont(
+    _ style: Font.TextStyle, size: CGFloat? = nil, weight: Font.Weight = .regular,
+    design: Font.Design = .default
+  ) -> some View {
     modifier(OfficeFont(style: style, size: size, weight: weight, design: design))
   }
 }

@@ -13,7 +13,11 @@ struct AvatarEditor: View {
   private var appearance: Appearance { Appearance(avatar) }
 
   private enum Category: String, CaseIterable {
-    case skin = "Skin tone", hair = "Hair", hat = "Hat", clothes = "Clothes", presets = "Presets"
+    case skin = "Skin tone"
+    case hair = "Hair"
+    case hat = "Hat"
+    case clothes = "Clothes"
+    case presets = "Presets"
   }
 
   var body: some View {
@@ -23,7 +27,9 @@ struct AvatarEditor: View {
         .frame(maxWidth: .infinity)
         .background(sage.opacity(0.09), in: RoundedRectangle(cornerRadius: 14))
       HStack {
-        Button("Rotate preview", systemImage: "rotate.right") { facing = (facing + 1) % directions.count }
+        Button("Rotate preview", systemImage: "rotate.right") {
+          facing = (facing + 1) % directions.count
+        }
         if editable {
           Button("Randomize", systemImage: "dice") {
             var next = appearance
@@ -40,7 +46,9 @@ struct AvatarEditor: View {
         ScrollView(.horizontal) {
           HStack(spacing: 6) {
             ForEach(Category.allCases, id: \.self) { tab in
-              Button { category = tab } label: {
+              Button {
+                category = tab
+              } label: {
                 Text(LocalizedStringKey(tab.rawValue)).officeFont(.caption, weight: .semibold)
                   .padding(.horizontal, 12).frame(minHeight: 38)
                   .background(category == tab ? sage.opacity(0.22) : .clear, in: Capsule())
@@ -57,7 +65,9 @@ struct AvatarEditor: View {
         case .presets:
           LazyVGrid(columns: [GridItem(.adaptive(minimum: 74))]) {
             ForEach(Appearance.presets, id: \.self) { id in
-              choice(id, title: Appearance.presetNames[id] ?? id.capitalized, selected: avatar == id) { avatar = id }
+              choice(
+                id, title: Appearance.presetNames[id] ?? id.capitalized, selected: avatar == id
+              ) { avatar = id }
             }
           }
         }
@@ -76,9 +86,17 @@ struct AvatarEditor: View {
           avatar = next.id
         } label: {
           Circle()
-            .fill(Color(red: Double(rgb >> 16) / 255, green: Double((rgb >> 8) & 255) / 255, blue: Double(rgb & 255) / 255))
+            .fill(
+              Color(
+                red: Double(rgb >> 16) / 255, green: Double((rgb >> 8) & 255) / 255,
+                blue: Double(rgb & 255) / 255)
+            )
             .frame(width: 32, height: 32)
-            .overlay { if appearance.skin == i { Image(systemName: "checkmark").foregroundStyle(.primary) } }
+            .overlay {
+              if appearance.skin == i {
+                Image(systemName: "checkmark").foregroundStyle(i < 2 ? Color.black : Color.white)
+              }
+            }
             .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
         }
         .accessibilityLabel(Text(LocalizedStringKey(Appearance.skins[i])))
@@ -96,8 +114,12 @@ struct AvatarEditor: View {
       avatar = next.id
     }
     return HStack(spacing: 3) {
-      Button { select(indices[0]) } label: { Image(systemName: "chevron.left").frame(width: 30, height: 48) }
-        .accessibilityLabel("Previous option")
+      Button {
+        select(indices[0])
+      } label: {
+        Image(systemName: "chevron.left").frame(width: 44, height: 48)
+      }
+      .accessibilityLabel("Previous option")
       ForEach(indices, id: \.self) { i in
         var candidate: Appearance {
           var result = appearance
@@ -107,26 +129,35 @@ struct AvatarEditor: View {
         }
         choice(candidate.id, title: options[i], selected: selected == i) { select(i) }
       }
-      Button { select(indices[2]) } label: { Image(systemName: "chevron.right").frame(width: 30, height: 48) }
-        .accessibilityLabel("Next option")
+      Button {
+        select(indices[2])
+      } label: {
+        Image(systemName: "chevron.right").frame(width: 44, height: 48)
+      }
+      .accessibilityLabel("Next option")
     }
   }
 
-  private func choice(_ id: String, title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+  private func choice(_ id: String, title: String, selected: Bool, action: @escaping () -> Void)
+    -> some View
+  {
     Button(action: action) {
       VStack(spacing: 2) {
         thumbnail(id).frame(width: 54, height: 60)
-        Text(LocalizedStringKey(title)).officeFont(.caption2).lineLimit(2).multilineTextAlignment(.center)
+        Text(LocalizedStringKey(title)).officeFont(.caption2).lineLimit(2).multilineTextAlignment(
+          .center)
       }
       .frame(maxWidth: .infinity, minHeight: 88)
       .background(sage.opacity(selected ? 0.2 : 0.06), in: RoundedRectangle(cornerRadius: 10))
       .overlay(alignment: .topTrailing) {
         if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(sage).padding(3) }
       }
-    }.accessibilityLabel(Text(LocalizedStringKey(title))).accessibilityAddTraits(selected ? .isSelected : [])
+    }.accessibilityLabel(Text(LocalizedStringKey(title))).accessibilityAddTraits(
+      selected ? .isSelected : [])
   }
 
-  private func thumbnail(_ id: String, direction: String = "down", retry: Bool = false) -> some View {
+  private func thumbnail(_ id: String, direction: String = "down", retry: Bool = false) -> some View
+  {
     AvatarThumbnail(office: office, cache: cache, id: id, direction: direction, allowRetry: retry)
   }
 }
@@ -171,11 +202,17 @@ private struct AvatarThumbnail: View {
 
   var body: some View {
     Group {
-      if let rects = frames["\(direction)-stand-0"] { AvatarPreview(rectangles: rects) }
-      else if failed {
-        if allowRetry { Button("Retry preview") { attempt += 1 } }
-        else { Image(systemName: "exclamationmark.triangle").accessibilityLabel("Preview unavailable") }
-      } else { ProgressView().controlSize(.small) }
+      if let rects = frames["\(direction)-stand-0"] {
+        AvatarPreview(rectangles: rects)
+      } else if failed {
+        if allowRetry {
+          Button("Retry preview") { attempt += 1 }
+        } else {
+          Image(systemName: "exclamationmark.triangle").accessibilityLabel("Preview unavailable")
+        }
+      } else {
+        ProgressView().controlSize(.small)
+      }
     }
     .task(id: "\(id)/\(attempt)") {
       frames = [:]
