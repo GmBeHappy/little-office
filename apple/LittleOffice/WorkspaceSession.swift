@@ -21,6 +21,7 @@ final class WorkspaceSession: ObservableObject, Identifiable {
   @Published var profile: ProfileResponse?
   @Published var showingBoard = false
   @Published var showingEmotePicker = false
+  let inbox: OfficeInbox
   let media = OfficeMedia()
   let effects = PassthroughSubject<OfficeEffect, Never>()
   let resetInput = PassthroughSubject<Void, Never>()
@@ -38,6 +39,7 @@ final class WorkspaceSession: ObservableObject, Identifiable {
   init(workspace: Workspace, api: OfficeAPI) {
     self.workspace = workspace
     self.api = api
+    inbox = OfficeInbox(workspaceId: workspace.id, api: api)
   }
   func connect(takeover: Bool = false) {
     guard receiver == nil else { return }
@@ -131,6 +133,7 @@ final class WorkspaceSession: ObservableObject, Identifiable {
       if !connected {
         connected = true
         startPing()
+        Task { await inbox.load() }
       }
       retryDelay = 2
       invitations.removeAll { $0.expires <= Date().timeIntervalSince1970 * 1000 }
@@ -151,6 +154,7 @@ final class WorkspaceSession: ObservableObject, Identifiable {
           } catch { self.error = error.localizedDescription }
         }
       }
+    case "notifications-changed": Task { await inbox.load() }
     case "pong":
       guard let pendingPing, event["nonce"] as? Int == pendingPing.nonce else { return }
       self.pendingPing = nil

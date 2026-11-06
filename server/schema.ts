@@ -14,6 +14,7 @@ import {
   primaryKey,
 } from "drizzle-orm/pg-core";
 import { DEFAULT_WORKSPACE_ID, type WorkspaceRole } from "../shared/workspaces";
+import type { NotificationKind } from "../shared/notifications";
 import type { BoardElement } from "../shared/whiteboard";
 import type { WorkspaceSettings } from "../shared/maps";
 
@@ -314,5 +315,34 @@ export const attendanceIntervals = pgTable(
     index("attendance_workspace_time").on(t.workspaceId, t.endedAt),
     index("attendance_member_time").on(t.workspaceId, t.userId, t.endedAt),
     check("attendance_time_order", sql`${t.endedAt} >= ${t.startedAt}`),
+  ],
+);
+
+export const notifications = pgTable(
+  "workspace_notifications",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    workspaceId: uuid("workspace_id").notNull(),
+    recipient: text("recipient").notNull(),
+    kind: text("kind").$type<NotificationKind>().notNull(),
+    actorName: text("actor_name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.workspaceId, t.recipient],
+      foreignColumns: [memberships.workspaceId, memberships.userId],
+    }).onDelete("cascade"),
+    index("notifications_member_id").on(
+      t.workspaceId,
+      t.recipient,
+      t.id.desc(),
+    ),
+    index("notifications_unread")
+      .on(t.workspaceId, t.recipient)
+      .where(sql`${t.readAt} IS NULL`),
   ],
 );

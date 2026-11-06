@@ -19,13 +19,11 @@ struct ProfileSettings: View {
   @Environment(\.dismiss) private var dismiss
   @State private var name = ""
   @State private var avatar = "sage"
-  @State private var appearance = Appearance("sage")
-  @State private var direction = "down"
-  @State private var preview: AvatarManifest?
   @State private var status = "available"
   @State private var statusText = ""
   @State private var statusIcon = ""
   @State private var personal = false
+  @State private var loaded = false
   @State private var busy = false
   @State private var error = ""
   var body: some View {
@@ -33,32 +31,16 @@ struct ProfileSettings: View {
       Form {
         Section("Profile") {
           TextField("Your name", text: $name).disabled(!personal)
-          if let rectangles = preview?.frames["\(direction)-stand-0"] {
-            AvatarPreview(rectangles: rectangles).frame(width: 108, height: 120).frame(
-              maxWidth: .infinity)
-          }
-          Picker("Face", selection: $direction) {
-            ForEach(["down", "left", "up", "right"], id: \.self) { Text($0.capitalized).tag($0) }
-          }.pickerStyle(.segmented)
-          Picker("Preset", selection: $avatar) {
-            ForEach(Appearance.presets, id: \.self) { Text($0.capitalized).tag($0) }
-            if avatar.hasPrefix("custom:") { Text("Custom").tag(avatar) }
-          }.disabled(!personal)
-          Group {
-            choice("Skin", values: Appearance.skins, selection: $appearance.skin)
-            choice("Hair", values: Appearance.hairStyles, selection: $appearance.hair)
-            choice("Hat", values: Appearance.hats, selection: $appearance.hat)
-            choice("Outfit", values: Appearance.outfits, selection: $appearance.clothes)
-            Button("Randomize avatar") {
-              appearance.skin = Int.random(in: 0...4)
-              appearance.hair = Int.random(in: 0...14)
-              appearance.hat = Int.random(in: 0...14)
-              appearance.clothes = Int.random(in: 0...14)
+        }
+        Section("Appearance") {
+          if loaded {
+            AvatarEditor(office: office, avatar: $avatar, editable: personal)
+            if !personal {
+              Text("Sign in with your personal account to change your name or avatar.").officeFont(.caption)
+              Link("Open personal profile", destination: office.api.origin.appendingPathComponent("profile")
+                .appending(queryItems: [URLQueryItem(name: "workspace", value: office.workspace.id)]))
             }
-          }.disabled(!personal)
-          if !personal {
-            Text("Sign in with your personal account to change your name or avatar.").font(.caption)
-          }
+          } else if error.isEmpty { ProgressView() }
         }
         Section("Status") {
           Picker("Availability", selection: $status) {
@@ -95,27 +77,13 @@ struct ProfileSettings: View {
               office.api.workspacePath(office.workspace.id, "/me"))
             name = response.user.name
             avatar = response.user.avatar
-            appearance = Appearance(avatar)
             status = response.user.availability
             statusText = response.user.statusText
             statusIcon = response.user.statusIcon ?? ""
+            loaded = true
           } catch { self.error = error.localizedDescription }
         }
-        .task(id: avatar) {
-          do {
-            preview = try await office.api.call(
-              office.api.workspacePath(office.workspace.id, "/avatar?appearance=\(avatar)"))
-          } catch { if !Task.isCancelled { self.error = error.localizedDescription } }
-        }
-        .onChange(of: avatar) { _, value in appearance = Appearance(value) }
-        .onChange(of: appearance) { _, value in if Appearance(avatar) != value { avatar = value.id }
-        }
     }.frame(minWidth: 340, minHeight: 520)
-  }
-  private func choice(_ label: String, values: [String], selection: Binding<Int>) -> some View {
-    Picker(label, selection: selection) {
-      ForEach(Array(values.enumerated()), id: \.offset) { index, name in Text(name).tag(index) }
-    }
   }
   private func save() async {
     busy = true
@@ -163,7 +131,7 @@ struct DisplaySettings: View {
           Slider(value: $opacity, in: 0...100, step: 1) { Text("Name tag opacity") }
           Text("Name tag opacity: \(Int(opacity))%")
           Toggle("Animate map", isOn: $motion)
-          Text("System Reduce Motion also reduces animation.").font(.caption)
+          Text("System Reduce Motion also reduces animation.").officeFont(.caption)
           Picker("Language", selection: $language) {
             Text("English").tag("en")
             Text("ไทย").tag("th")

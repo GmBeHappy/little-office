@@ -34,7 +34,7 @@ struct WelcomeView: View {
             HStack(spacing: 6) {
               Image(systemName: "leaf")
               Text("Made for being together.")
-            }.font(.caption).foregroundStyle(OfficeBrand.forest.opacity(0.55))
+            }.officeFont(.caption).foregroundStyle(OfficeBrand.forest.opacity(0.55))
               .frame(maxWidth: .infinity).padding(.top, 4)
           }.padding(wide ? 48 : 24).frame(maxWidth: 1180)
             .frame(maxWidth: .infinity)
@@ -66,14 +66,14 @@ struct WelcomeView: View {
         }.foregroundStyle(OfficeBrand.sage).frame(width: 23, height: 23).accessibilityHidden(true)
         (Text("little").fontWeight(.bold) + Text("office").fontWeight(.regular)
           + Text(" ✦").foregroundColor(OfficeBrand.sage))
-          .font(.system(size: 23, design: .rounded)).accessibilityLabel("Little Office")
+          .officeFont(.body, size: 23, design: .rounded).accessibilityLabel("Little Office")
       }
       Spacer(minLength: 10)
       Menu {
         Button("English") { language = "en" }
         Button("ไทย") { language = "th" }
       } label: {
-        Text(language == "th" ? "ไทย" : "EN").font(.caption.weight(.semibold)).padding(3)
+        Text(language == "th" ? "ไทย" : "EN").officeFont(.caption, weight: .semibold).padding(3)
       }
       .buttonStyle(.glass).accessibilityLabel("Language")
       if model.account != nil {
@@ -86,7 +86,7 @@ struct WelcomeView: View {
             Task { await model.logout() }
           }
         } label: {
-          Image(systemName: "person.crop.circle").font(.title2)
+          Image(systemName: "person.crop.circle").officeFont(.title2)
         }.buttonStyle(.glass)
           .accessibilityLabel("Account")
       }
@@ -94,32 +94,32 @@ struct WelcomeView: View {
   }
   private func welcomeStory(wide: Bool) -> some View {
     VStack(alignment: .leading, spacing: wide ? 22 : 14) {
-      Text("YOUR PEOPLE. YOUR PLACE.").font(.system(size: 10, weight: .bold, design: .monospaced))
+      Text("YOUR PEOPLE. YOUR PLACE.").officeFont(.body, size: 10, weight: .bold, design: .monospaced)
         .tracking(2).foregroundStyle(OfficeBrand.sage)
       VStack(alignment: .leading, spacing: 0) {
         Text("A little closer.")
         Text("Even from afar.").foregroundStyle(OfficeBrand.sage)
-      }.font(.system(size: wide ? 49 : 34, weight: .semibold, design: .rounded))
+      }.officeFont(.body, size: wide ? 49 : 34, weight: .semibold, design: .rounded)
         .fixedSize(horizontal: false, vertical: true)
       Text("A cozy corner of the internet to do good work, together.")
-        .font(.system(size: 15)).foregroundStyle(OfficeBrand.forest.opacity(0.72))
+        .officeFont(.body, size: 15).foregroundStyle(OfficeBrand.forest.opacity(0.72))
         .fixedSize(horizontal: false, vertical: true)
       WorldPreview(compact: !wide)
       if wide {
         Text("Walk over. Say hello. Make yourself at home.")
-          .font(.caption).foregroundStyle(OfficeBrand.forest.opacity(0.6))
+          .officeFont(.caption).foregroundStyle(OfficeBrand.forest.opacity(0.6))
       }
     }
   }
   private var connectionCard: some View {
     VStack(alignment: .leading, spacing: 22) {
       Label(connectionName, systemImage: "building.2")
-        .font(.caption.weight(.semibold)).padding(.horizontal, 12).padding(.vertical, 8)
+        .officeFont(.caption, weight: .semibold).padding(.horizontal, 12).padding(.vertical, 8)
         .background(OfficeBrand.sage.opacity(0.09), in: Capsule())
       VStack(alignment: .leading, spacing: 9) {
-        Text("Welcome in.").font(.system(size: 31, weight: .semibold, design: .rounded))
+        Text("Welcome in.").officeFont(.body, size: 31, weight: .semibold, design: .rounded)
         Text("Your people are just a few steps away.")
-          .font(.subheadline).foregroundStyle(OfficeBrand.forest.opacity(0.65))
+          .officeFont(.subheadline).foregroundStyle(OfficeBrand.forest.opacity(0.65))
       }
       Button {
         model.signIn()
@@ -132,9 +132,9 @@ struct WelcomeView: View {
         }
         .padding(.vertical, 7).foregroundStyle(.white)
       }.buttonStyle(.glassProminent).controlSize(.large).disabled(model.busy)
-      if model.busy { ProgressView("Opening sign-in…").font(.caption).frame(maxWidth: .infinity) }
+      if model.busy { ProgressView("Opening sign-in…").officeFont(.caption).frame(maxWidth: .infinity) }
       Text("Sign in securely in your browser, then come right back here.")
-        .font(.caption).foregroundStyle(OfficeBrand.forest.opacity(0.6)).fixedSize(
+        .officeFont(.caption).foregroundStyle(OfficeBrand.forest.opacity(0.6)).fixedSize(
           horizontal: false, vertical: true)
       Rectangle().fill(OfficeBrand.sage.opacity(0.13)).frame(height: 1)
       Button {
@@ -145,11 +145,11 @@ struct WelcomeView: View {
           Spacer()
           Image(systemName: "arrow.up.right")
         }
-        .font(.subheadline.weight(.medium))
+        .officeFont(.subheadline, weight: .medium)
       }.buttonStyle(.plain)
       if model.serverAddress != "https://app.littleoffice.app" {
         Text(URL(string: model.serverAddress)?.host ?? model.serverAddress)
-          .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+          .officeFont(.caption, design: .monospaced).foregroundStyle(.secondary).textSelection(.enabled)
       }
       failure
     }.padding(28).background(OfficeBrand.cream.opacity(0.8), in: RoundedRectangle(cornerRadius: 28))
@@ -164,7 +164,7 @@ struct WelcomeView: View {
   private var failure: some View {
     Group {
       if !model.error.isEmpty {
-        Label(model.error, systemImage: "exclamationmark.circle").font(.caption)
+        Label(model.error, systemImage: "exclamationmark.circle").officeFont(.caption)
           .foregroundStyle(.red).textSelection(.enabled)
       }
     }
@@ -173,10 +173,10 @@ struct WelcomeView: View {
     VStack(alignment: .leading, spacing: 28) {
       HStack(alignment: .center, spacing: 28) {
         VStack(alignment: .leading, spacing: 10) {
-          Text("YOUR LITTLE WORLD").font(.system(size: 10, weight: .bold, design: .monospaced))
+          Text("YOUR LITTLE WORLD").officeFont(.body, size: 10, weight: .bold, design: .monospaced)
             .tracking(2).foregroundStyle(OfficeBrand.sage)
           Text("Hello, \(account.name).")
-            .font(.system(size: wide ? 42 : 30, weight: .semibold, design: .rounded))
+            .officeFont(.body, size: wide ? 42 : 30, weight: .semibold, design: .rounded)
           Text("Where shall we spend the day?").foregroundStyle(OfficeBrand.forest.opacity(0.65))
         }.frame(maxWidth: .infinity, alignment: .leading)
         if wide { WorldPreview(compact: true).frame(width: 280) }
@@ -184,9 +184,9 @@ struct WelcomeView: View {
       failure
       if model.workspaces.isEmpty {
         VStack(alignment: .leading, spacing: 14) {
-          Image(systemName: "door.left.hand.open").font(.largeTitle).foregroundStyle(
+          Image(systemName: "door.left.hand.open").officeFont(.largeTitle).foregroundStyle(
             OfficeBrand.sage)
-          Text("Make yourself at home.").font(.title2.weight(.semibold))
+          Text("Make yourself at home.").officeFont(.title2, weight: .semibold)
           Text("Create a workspace or accept an invitation to get started.").foregroundStyle(
             .secondary)
           Button("Create or join a workspace") { creating = true }.buttonStyle(.glassProminent)
@@ -205,20 +205,17 @@ struct WelcomeView: View {
                   contentMode: .fill
                 )
                 .frame(height: 125).clipped().overlay(alignment: .topLeading) {
-                  Text(LocalizedStringKey(workspace.role.capitalized)).font(
-                    .caption.weight(.semibold)
-                  )
+                  Text(LocalizedStringKey(workspace.role.capitalized)).officeFont(.caption, weight: .semibold)
                   .padding(.horizontal, 11).padding(.vertical, 7).glassEffect().padding(14)
                 }
                 VStack(alignment: .leading, spacing: 12) {
-                  Text(workspace.name).font(.system(size: 22, weight: .semibold, design: .rounded))
+                  Text(workspace.name).officeFont(.body, size: 22, weight: .semibold, design: .rounded)
                     .lineLimit(2)
                   HStack {
-                    Text(workspace.slug).font(.caption).foregroundStyle(
+                    Text(workspace.slug).officeFont(.caption).foregroundStyle(
                       OfficeBrand.forest.opacity(0.6))
                     Spacer()
-                    Label("Enter office", systemImage: "arrow.right").font(
-                      .caption.weight(.semibold))
+                    Label("Enter office", systemImage: "arrow.right").officeFont(.caption, weight: .semibold)
                   }
                 }.padding(22)
               }.frame(maxWidth: .infinity, alignment: .leading)
@@ -249,7 +246,7 @@ private struct WorldPreview: View {
             Circle().fill(OfficeBrand.sage.opacity(0.3)).frame(width: 6, height: 6)
           }
           Spacer()
-          Text("A place to work together").font(.system(size: 10, weight: .medium))
+          Text("A place to work together").officeFont(.body, size: 10, weight: .medium)
           Spacer()
         }.padding(.horizontal, 15).padding(.vertical, 12)
       }
@@ -257,7 +254,7 @@ private struct WorldPreview: View {
         .frame(height: compact ? 110 : 250).clipped()
       if !compact {
         Label("Good company. A little more focus.", systemImage: "circle.fill")
-          .font(.system(size: 11)).foregroundStyle(OfficeBrand.sage).padding(12)
+          .officeFont(.body, size: 11).foregroundStyle(OfficeBrand.sage).padding(12)
       }
     }.background(OfficeBrand.cream).clipShape(RoundedRectangle(cornerRadius: 20))
       .overlay(RoundedRectangle(cornerRadius: 20).stroke(OfficeBrand.sage.opacity(0.15)))
@@ -277,21 +274,21 @@ private struct ConnectionAddressView: View {
   var body: some View {
     NavigationStack {
       VStack(alignment: .leading, spacing: 22) {
-        Label("YOUR WORKSPACE", systemImage: "building.2").font(.caption.weight(.semibold))
+        Label("YOUR WORKSPACE", systemImage: "building.2").officeFont(.caption, weight: .semibold)
           .foregroundStyle(OfficeBrand.sage)
-        Text("Find your people.").font(.system(size: 30, weight: .semibold, design: .rounded))
+        Text("Find your people.").officeFont(.body, size: 30, weight: .semibold, design: .rounded)
         Text("Use the workspace name or address from your invitation.").foregroundStyle(.secondary)
         HStack {
           TextField("gmtech", text: $address).autocorrectionDisabled()
-          Text(".littleoffice.app").font(.caption).foregroundStyle(.secondary)
+          Text(".littleoffice.app").officeFont(.caption).foregroundStyle(.secondary)
         }.padding(16).background(.white.opacity(0.65), in: RoundedRectangle(cornerRadius: 15))
         DisclosureGroup("Use another server", isExpanded: $advanced) {
           TextField("https://office.example.com", text: $customAddress).textFieldStyle(
             .roundedBorder
           )
           .autocorrectionDisabled().padding(.top, 12)
-        }.font(.subheadline)
-        if !error.isEmpty { Text(LocalizedStringKey(error)).font(.caption).foregroundStyle(.red) }
+        }.officeFont(.subheadline)
+        if !error.isEmpty { Text(LocalizedStringKey(error)).officeFont(.caption).foregroundStyle(.red) }
         Button {
           checking = true
           Task {
@@ -321,7 +318,7 @@ private struct ConnectionAddressView: View {
           model.error = ""
           dismiss()
         }
-        .font(.subheadline).frame(maxWidth: .infinity)
+        .officeFont(.subheadline).frame(maxWidth: .infinity)
         Spacer(minLength: 0)
       }.disabled(checking || model.busy).padding(28).background(OfficeBrand.cream).foregroundStyle(
         OfficeBrand.forest

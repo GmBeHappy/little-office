@@ -1058,5 +1058,19 @@
   "Choose a valid date range of up to 31 days.": "เลือกช่วงวันที่ให้ถูกต้อง โดยไม่เกิน 31 วัน",
   "Active": "มีการใช้งาน",
   "Idle": "ไม่มีการใช้งาน",
-  "Offline": "ออฟไลน์"
+  "Offline": "ออฟไลน์",
+  "Notifications": "การแจ้งเตือน",
+  "Notifications, {count} unread": "การแจ้งเตือน ยังไม่ได้อ่าน {count} รายการ",
+  "Mark all as read": "ทำเครื่องหมายว่าอ่านทั้งหมด",
+  "Mark as read": "ทำเครื่องหมายว่าอ่านแล้ว",
+  "Mark as read: {message}": "ทำเครื่องหมายว่าอ่านแล้ว: {message}",
+  "Couldn’t load notifications.": "โหลดการแจ้งเตือนไม่สำเร็จ",
+  "Couldn’t mark notifications as read.": "ทำเครื่องหมายว่าอ่านแล้วไม่สำเร็จ",
+  "Loading notifications…": "กำลังโหลดการแจ้งเตือน…",
+  "No notifications yet.": "ยังไม่มีการแจ้งเตือน",
+  "Load older notifications": "โหลดการแจ้งเตือนก่อนหน้า",
+  "{name} nudged you.": "{name} สะกิดคุณ",
+  "{name} invited you to join them.": "{name} เรียกคุณไปหา",
+  "{name} called you.": "{name} โทรหาคุณ",
+  "{name} waved at you.": "{name} โบกมือให้คุณ"
 }

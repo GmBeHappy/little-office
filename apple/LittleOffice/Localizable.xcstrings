@@ -1,6 +1,176 @@
 {
   "sourceLanguage": "en",
   "strings": {
+      "Previous option": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "ตัวเลือกก่อนหน้า"
+            }
+          }
+        }
+      },
+      "Next option": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "ตัวเลือกถัดไป"
+            }
+          }
+        }
+      },
+      "Retry preview": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "ลองโหลดตัวอย่างอีกครั้ง"
+            }
+          }
+        }
+      },
+      "Preview unavailable": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "โหลดตัวอย่างไม่ได้"
+            }
+          }
+        }
+      },
+      "Open personal profile": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "เปิดโปรไฟล์ส่วนตัว"
+            }
+          }
+        }
+      },
+      "Notifications": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "การแจ้งเตือน"
+            }
+          }
+        }
+      },
+      "%lld unread": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "ยังไม่ได้อ่าน %lld รายการ"
+            }
+          }
+        }
+      },
+      "Read": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "อ่านแล้ว"
+            }
+          }
+        }
+      },
+      "Unread": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "ยังไม่ได้อ่าน"
+            }
+          }
+        }
+      },
+      "No notifications yet": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "ยังไม่มีการแจ้งเตือน"
+            }
+          }
+        }
+      },
+      "Mark all read": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "ทำเครื่องหมายว่าอ่านทั้งหมด"
+            }
+          }
+        }
+      },
+      "Load more": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "โหลดเพิ่มเติม"
+            }
+          }
+        }
+      },
+      "%@ nudged you": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "%@ สะกิดคุณ"
+            }
+          }
+        }
+      },
+      "%@ summoned you": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "%@ เรียกคุณไปหา"
+            }
+          }
+        }
+      },
+      "%@ invited you to a call": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "%@ เชิญคุณเข้าร่วมสาย"
+            }
+          }
+        }
+      },
+      "%@ waved at you": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "%@ โบกมือให้คุณ"
+            }
+          }
+        }
+      },
+      "Try again": {
+        "localizations": {
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "ลองอีกครั้ง"
+            }
+          }
+        }
+      },
     " · presenting": {
       "localizations": {
         "th": {

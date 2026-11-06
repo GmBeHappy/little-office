@@ -111,7 +111,11 @@ try {
     app.handle(
       new Request(origin + path, {
         method,
-        headers: { origin, cookie, "content-type": "application/json" },
+        headers: {
+          origin,
+          cookie,
+          ...(body ? { "content-type": "application/json" } : {}),
+        },
         body: body ? JSON.stringify(body) : undefined,
       }),
     );
@@ -216,6 +220,8 @@ try {
       .connectedMs,
     60 * 60000,
   );
+  const { verifyInbox } = await import("./notification-check");
+  await verifyInbox(office, workspaceId, other, owner, admin, request);
   await pool.query(
     "DELETE FROM workspace_memberships WHERE workspace_id=$1 AND user_id=$2",
     [workspaceId, member.id],

@@ -3,6 +3,7 @@ package com.littleoffice.android
 import android.annotation.SuppressLint
 import android.net.Uri
 import android.webkit.*
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -11,6 +12,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebViewCompat
@@ -20,6 +25,32 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+
+@Composable
+fun WhiteboardPage(office: OfficeSession) {
+    val view = LocalView.current
+    val activity = androidx.activity.compose.LocalActivity.current
+    DisposableEffect(activity, view) {
+        val controller = activity?.let { WindowCompat.getInsetsController(it.window, view) }
+        val bars = WindowInsetsCompat.Type.systemBars()
+        val before = androidx.core.view.ViewCompat.getRootWindowInsets(view)
+        val behavior = controller?.systemBarsBehavior
+        controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller?.hide(bars)
+        onDispose {
+            if (before?.isVisible(WindowInsetsCompat.Type.statusBars()) != false)
+                controller?.show(WindowInsetsCompat.Type.statusBars())
+            if (before?.isVisible(WindowInsetsCompat.Type.navigationBars()) != false)
+                controller?.show(WindowInsetsCompat.Type.navigationBars())
+            if (behavior != null) controller?.systemBarsBehavior = behavior
+        }
+    }
+    BackHandler { office.closeBoard?.invoke() }
+    Column(Modifier.fillMaxSize().displayCutoutPadding().imePadding()) {
+        TextButton(onClick = { office.closeBoard?.invoke() }) { OfficeText("Close whiteboard") }
+        Whiteboard(office, Modifier.fillMaxWidth().weight(1f))
+    }
+}
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -48,6 +79,7 @@ fun Whiteboard(office: OfficeSession, modifier: Modifier = Modifier) {
                 }
         }
     val origin = office.api.origin
+    val language = if (officeLocale().language == "th") "th" else "en"
     val page = "$origin/w/${office.workspace.id}/whiteboard"
     val credential = office.api.credential ?: return
     var pendingFile by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
@@ -91,6 +123,13 @@ fun Whiteboard(office: OfficeSession, modifier: Modifier = Modifier) {
                     webView = this
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
+                    if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                        WebViewCompat.addDocumentStartJavaScript(
+                            this,
+                            "try { localStorage.setItem('office-language', '$language'); } catch {}",
+                            setOf(origin),
+                        )
+                    }
                     settings.allowFileAccess = false
                     settings.allowContentAccess = true
                     settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW

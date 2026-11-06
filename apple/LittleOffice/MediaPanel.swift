@@ -17,7 +17,7 @@ struct MediaPanel: View {
         if media.selectedVideo != nil {
           Button("Unpin", systemImage: "pin.slash") { media.selectVideo(nil) }
         }
-      }.font(.caption).buttonStyle(.borderless)
+      }.officeFont(.caption).buttonStyle(.borderless)
       if let selected = media.videos.first(where: { $0.id == media.selectedVideo }) {
         tile(selected).onTapGesture { expanded = true }
           .frame(height: compact ? 160 : 250)
@@ -72,7 +72,7 @@ struct MediaPanel: View {
           media.selectVideo(video)
           expanded = true
         }.labelStyle(.iconOnly)
-      }.font(.caption)
+      }.officeFont(.caption)
     }.padding(6).background(.regularMaterial, in: .rect(cornerRadius: 16))
       .accessibilityLabel("\(video.name), \(video.screen ? "screen share" : "camera")")
   }
@@ -100,13 +100,13 @@ struct MediaSettings: View {
           }
           .disabled(media.sharing || media.broadcastPending || media.changingCamera)
           if media.sharing || media.broadcastPending {
-            Text("Stop sharing to change screen quality.").font(.caption)
+            Text("Stop sharing to change screen quality.").officeFont(.caption)
           }
           Toggle("Include app audio in screen sharing", isOn: $media.shareAppAudio)
             .disabled(!media.microphone || media.sharing || media.broadcastPending)
           Text(
             "App audio is mixed with your enabled microphone. Choose before starting a share; muting the microphone also mutes app audio."
-          ).font(.caption)
+          ).officeFont(.caption)
           Picker("Camera", selection: $media.cameraDeviceId) {
             Text("Default").tag("")
             ForEach(media.cameraDevices, id: \.uniqueID) { Text($0.localizedName).tag($0.uniqueID) }

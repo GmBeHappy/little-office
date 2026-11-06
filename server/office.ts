@@ -1,3 +1,4 @@
+import type { NotificationKind } from "../shared/notifications";
 import { AttendanceTracker } from "./attendance";
 import { advanceMovement } from "../shared/movement";
 import { serverLog, diagnosticRef } from "./diagnostics";
@@ -118,6 +119,11 @@ export class Office {
     ) => Promise<void> = async () => {},
     private record: (event: ActivityEvent) => void = () => {},
     private roomPrefix = "office",
+    private notify: (
+      recipient: string,
+      kind: NotificationKind,
+      actorName: string,
+    ) => void = () => {},
   ) {}
   log(member: Member, action: ActivityEvent["action"], target?: Member) {
     this.record({
@@ -702,6 +708,7 @@ export class Office {
         if (target.status === "dnd")
           throw new Error("They have Do not disturb enabled.");
         this.log(m, "nudge", target);
+        this.notify(target.id, "nudge", m.name);
         target.send({ type: "nudge", from: id, name: m.name });
         m.send({ type: "nudge-sent", to: target.id });
         for (const person of this.members.values())
@@ -721,6 +728,7 @@ export class Office {
         if (now < (this.cooldowns.get(key) || 0))
           throw new Error("Give them a moment before waving again.");
         this.cooldowns.set(key, now + 5000);
+        if (target.id !== id) this.notify(target.id, "wave", m.name);
         for (const p of this.members.values())
           p.send({
             type: "wave",
@@ -757,6 +765,7 @@ export class Office {
           expires: now + 30000,
         };
         this.invites.set(invite.id, invite);
+        this.notify(target.id, invite.kind, m.name);
         target.send({ type: "invitation", invitation: invite });
         m.send({
           type: "notice",
