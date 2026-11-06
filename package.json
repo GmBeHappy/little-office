@@ -22,6 +22,8 @@
   },
   "dependencies": {
     "@excalidraw/excalidraw": "0.18.1",
+    "@firebase/app": "0.15.0",
+    "@firebase/messaging": "0.13.0",
     "@hookform/resolvers": "5.9.1",
     "@radix-ui/react-dialog": "1.1.23",
     "@radix-ui/react-label": "2.1.15",
@@ -35,6 +37,7 @@
     "drizzle-orm": "0.45.2",
     "elysia": "1.4.30",
     "emoji-picker-react": "4.20.2",
+    "google-auth-library": "^11.3.3",
     "jose": "6.2.12",
     "livekit-client": "2.22.2",
     "livekit-server-sdk": "2.18.0",

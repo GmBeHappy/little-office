@@ -1072,5 +1072,14 @@
   "{name} nudged you.": "{name} สะกิดคุณ",
   "{name} invited you to join them.": "{name} เรียกคุณไปหา",
   "{name} called you.": "{name} โทรหาคุณ",
-  "{name} waved at you.": "{name} โบกมือให้คุณ"
+  "{name} waved at you.": "{name} โบกมือให้คุณ",
+  "System notifications": "การแจ้งเตือนของระบบ",
+  "Turn on": "เปิด",
+  "Turn off": "ปิด",
+  "This browser does not support system notifications.": "เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือนของระบบ",
+  "On iPhone or iPad, add this workspace to your Home Screen and open it there.": "บน iPhone หรือ iPad ให้เพิ่มพื้นที่ทำงานนี้ไปยังหน้าจอโฮม แล้วเปิดจากหน้าจอโฮม",
+  "System notifications are unavailable on this server.": "เซิร์ฟเวอร์นี้ยังไม่พร้อมส่งการแจ้งเตือนของระบบ",
+  "Allow notifications in your browser settings.": "อนุญาตการแจ้งเตือนในการตั้งค่าเบราว์เซอร์",
+  "Couldn’t load system notification settings.": "โหลดการตั้งค่าการแจ้งเตือนของระบบไม่สำเร็จ",
+  "Couldn’t change system notifications. Try again.": "เปลี่ยนการตั้งค่าการแจ้งเตือนไม่สำเร็จ โปรดลองอีกครั้ง"
 }

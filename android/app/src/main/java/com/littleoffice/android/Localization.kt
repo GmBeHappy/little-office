@@ -44,6 +44,7 @@ fun LanguagePicker() {
                         .edit()
                         .putString("language", value)
                         .apply()
+                    OfficePush.schedule(context)
                 },
                 label = { Text(label) },
             )
@@ -81,6 +82,11 @@ private val thai =
         "Open personal profile" to "เปิดโปรไฟล์ส่วนตัว",
         "Sign in with your personal account to edit your name and appearance." to "เข้าสู่ระบบด้วยบัญชีส่วนตัวเพื่อแก้ไขชื่อและรูปลักษณ์",
         "Could not open the personal profile." to "เปิดโปรไฟล์ส่วนตัวไม่สำเร็จ",
+        "System notifications" to "การแจ้งเตือนบนอุปกรณ์",
+        "Allow notifications in Android Settings." to "อนุญาตการแจ้งเตือนในการตั้งค่า Android",
+        "Open notification settings" to "เปิดการตั้งค่าการแจ้งเตือน",
+        "System notifications are unavailable." to "ยังไม่สามารถเปิดการแจ้งเตือนบนอุปกรณ์ได้",
+        "Could not update system notifications. Try again." to "อัปเดตการแจ้งเตือนบนอุปกรณ์ไม่ได้ โปรดลองอีกครั้ง",
         "Notifications" to "การแจ้งเตือน",
         "{count} unread notifications" to "การแจ้งเตือนที่ยังไม่ได้อ่าน {count} รายการ",
         "Mark all as read" to "ทำเครื่องหมายว่าอ่านทั้งหมดแล้ว",

@@ -8,6 +8,7 @@ export const diagnosticEvents = [
   "socket.dispose",
   "attendance.persist_failed",
   "notifications.persist_failed",
+  "push.delivery_failed",
   "socket.accepted",
   "socket.resumed",
   "socket.detached",

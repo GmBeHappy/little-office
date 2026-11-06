@@ -12,12 +12,15 @@ final class AppModel: NSObject, ObservableObject, ASWebAuthenticationPresentatio
   @Published var workspaces: [Workspace] = []
   @Published var office: WorkspaceSession?
   @Published var error = ""
-  @Published var busy = true
+  @Published var busy = true {
+    didSet { if !busy { Task { await openPushInbox() } } }
+  }
   private(set) var api: OfficeAPI?
   private var browser: ASWebAuthenticationSession?
   private var selection = UUID()
   override init() {
     super.init()
+    OfficePush.shared.onTap = { [weak self] in Task { await self?.openPushInbox() } }
     Task { await restore() }
   }
   func restore() async {
@@ -38,6 +41,7 @@ final class AppModel: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     api = client
     self.account = account
     self.workspaces = workspaces
+    OfficePush.shared.attach(api: client, user: account.id, workspaces: workspaces)
     UserDefaults.standard.set(client.origin.absoluteString, forKey: "serverAddress")
   }
   func refresh() async {
@@ -116,6 +120,12 @@ final class AppModel: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     let workspace: Detail
     struct Detail: Decodable { let name: String }
   }
+  private func openPushInbox() async {
+    guard !busy, account != nil, let id = OfficePush.shared.takeTap(),
+      let workspace = workspaces.first(where: { $0.id == id }) else { return }
+    if office?.workspace.id != id { await select(workspace) }
+    if office?.workspace.id == id { office?.showingInbox = true }
+  }
   func select(_ workspace: Workspace) async {
     guard let api, !busy else { return }
     let generation = UUID()
@@ -127,6 +137,7 @@ final class AppModel: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     let next = WorkspaceSession(workspace: workspace, api: api)
     office = next
     next.connect()
+    await OfficePush.shared.leaveSubscription(ifSwitchingTo: workspace.id)
   }
   func leave() async {
     selection = UUID()
@@ -139,6 +150,7 @@ final class AppModel: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     busy = true
     defer { busy = false }
     await leave()
+    await OfficePush.shared.logout()
     if let api {
       do {
         let _: [String: Bool] = try await api.call("/api/auth/sign-out", method: "POST", body: [:])

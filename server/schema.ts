@@ -1,3 +1,4 @@
+import type { PushPlatform } from "./push-config";
 import { sql } from "drizzle-orm";
 import {
   pgTable,
@@ -11,6 +12,7 @@ import {
   check,
   foreignKey,
   uuid,
+  uniqueIndex,
   primaryKey,
 } from "drizzle-orm/pg-core";
 import { DEFAULT_WORKSPACE_ID, type WorkspaceRole } from "../shared/workspaces";
@@ -344,5 +346,53 @@ export const notifications = pgTable(
     index("notifications_unread")
       .on(t.workspaceId, t.recipient)
       .where(sql`${t.readAt} IS NULL`),
+  ],
+);
+
+export const pushDevices = pgTable(
+  "workspace_push_devices",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    installationId: uuid("installation_id").notNull(),
+    token: text("token").notNull(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    platform: text("platform").$type<PushPlatform>().notNull(),
+    locale: text("locale").$type<"en" | "th">().notNull(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.workspaceId, t.userId],
+      foreignColumns: [memberships.workspaceId, memberships.userId],
+    }).onDelete("cascade"),
+    uniqueIndex("push_workspace_install").on(t.workspaceId, t.installationId),
+    uniqueIndex("push_workspace_token").on(t.workspaceId, t.token),
+    index("push_recipient").on(t.workspaceId, t.userId),
+  ],
+);
+export const pushJobs = pgTable(
+  "workspace_push_jobs",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    notificationId: integer("notification_id")
+      .notNull()
+      .references(() => notifications.id, { onDelete: "cascade" }),
+    deviceId: uuid("device_id")
+      .notNull()
+      .references(() => pushDevices.id, { onDelete: "cascade" }),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    attempts: integer("attempts").notNull().default(0),
+    availableAt: timestamp("available_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("push_jobs_available").on(t.availableAt, t.id),
+    uniqueIndex("push_jobs_once").on(t.notificationId, t.deviceId),
   ],
 );

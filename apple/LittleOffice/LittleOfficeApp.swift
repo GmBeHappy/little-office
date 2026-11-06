@@ -4,6 +4,11 @@ import SwiftUI
 
 @main
 struct LittleOfficeApp: App {
+  #if os(macOS)
+    @NSApplicationDelegateAdaptor(PushAppDelegate.self) private var pushDelegate
+  #else
+    @UIApplicationDelegateAdaptor(PushAppDelegate.self) private var pushDelegate
+  #endif
   @StateObject private var model = AppModel()
   @AppStorage("officeLanguage") private var language =
     Locale.current.language.languageCode?.identifier == "th" ? "th" : "en"
@@ -27,6 +32,7 @@ struct LittleOfficeApp: App {
           {
             Task { await model.office?.stop() }
           }
+          if value == .active { OfficePush.shared.becameActive() }
           if value == .active, let office = model.office, !office.connected { office.connect() }
         }
     }

@@ -101,6 +101,7 @@ import { DeviceSelect } from "./DeviceSelect";
 import { ToolbarMenu } from "./ToolbarMenu";
 import { DeviceBar } from "./DeviceBar";
 import NotificationCenter from "./NotificationCenter";
+import { clearBrowserPush } from "@/lib/browser-push";
 import { NameTagSettings } from "./NameTagSettings";
 import {
   DEFAULT_NAME_TAGS,
@@ -558,6 +559,7 @@ export default function OfficeApp() {
   async function logout() {
     try {
       await api("/auth/sign-out", {});
+      await clearBrowserPush().catch(() => {});
       setUser(null);
       setSnapshot(null);
     } catch (e) {
@@ -678,6 +680,8 @@ export default function OfficeApp() {
           <LanguageToggle />
           <NotificationCenter
             key={`${base}:${user.id}`}
+            userId={user.id}
+            workspaceId={config?.workspaceId || DEFAULT_WORKSPACE_ID}
             revision={notificationRevision}
           />
           <Button

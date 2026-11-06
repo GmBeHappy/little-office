@@ -1,5 +1,6 @@
 "use client";
 import { Bell, Hand, Pointer, Phone, UserRoundPlus } from "lucide-react";
+import { useBrowserPush, BrowserPushSettings } from "./BrowserPushSettings";
 import { memo, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { useWorkspaceApi } from "@/lib/workspace-api";
@@ -20,10 +21,27 @@ const kinds = {
   { icon: typeof Bell; text: string }
 >;
 
-function NotificationCenter({ revision }: { revision: number }) {
+function NotificationCenter({
+  revision,
+  workspaceId,
+  userId,
+}: {
+  revision: number;
+  workspaceId: string;
+  userId: string;
+}) {
   const { api } = useWorkspaceApi();
   const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
+  const push = useBrowserPush(workspaceId, userId, open);
+  useEffect(() => {
+    const url = new URL(location.href);
+    if (url.searchParams.get("inbox") === "1") {
+      setOpen(true);
+      url.searchParams.delete("inbox");
+      history.replaceState(history.state, "", url);
+    }
+  }, [workspaceId]);
   const [page, setPage] = useState<NotificationPage | null>(null);
   const [depth, setDepth] = useState(1);
   const [refresh, setRefresh] = useState(0);
@@ -138,6 +156,7 @@ function NotificationCenter({ revision }: { revision: number }) {
             </Button>
           )}
         </div>
+        <BrowserPushSettings push={push} />
         <div
           className="min-h-0 overflow-y-auto overscroll-contain"
           aria-busy={loading || saving}

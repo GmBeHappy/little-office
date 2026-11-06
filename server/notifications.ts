@@ -1,6 +1,13 @@
-import { and, count, desc, eq, isNull, lt } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, lt } from "drizzle-orm";
 import { db } from "./db";
-import { notifications as rows } from "./schema";
+import { pushConfigured } from "./push-config";
+import { wakePush } from "./push";
+import {
+  sessions,
+  pushDevices,
+  pushJobs,
+  notifications as rows,
+} from "./schema";
 import type {
   NotificationKind,
   NotificationPage,
@@ -15,7 +22,38 @@ export async function recordNotification(
   kind: NotificationKind,
   actorName: string,
 ) {
-  await db.insert(rows).values({ workspaceId, recipient, kind, actorName });
+  if (!pushConfigured) {
+    await db.insert(rows).values({ workspaceId, recipient, kind, actorName });
+    return;
+  }
+  await db.transaction(async (tx) => {
+    const [notice] = await tx
+      .insert(rows)
+      .values({ workspaceId, recipient, kind, actorName })
+      .returning({ id: rows.id });
+    const devices = await tx
+      .select({ deviceId: pushDevices.id, sessionId: pushDevices.sessionId })
+      .from(pushDevices)
+      .innerJoin(
+        sessions,
+        and(
+          eq(sessions.id, pushDevices.sessionId),
+          gt(sessions.expiresAt, new Date()),
+        ),
+      )
+      .where(
+        and(
+          eq(pushDevices.workspaceId, workspaceId),
+          eq(pushDevices.userId, recipient),
+        ),
+      )
+      .for("share");
+    if (devices.length)
+      await tx
+        .insert(pushJobs)
+        .values(devices.map((d) => ({ ...d, notificationId: notice.id })));
+  });
+  wakePush();
 }
 
 export async function notificationPage(
@@ -45,13 +83,11 @@ export async function notificationPage(
         .select({ value: count() })
         .from(rows)
         .where(and(mine, isNull(rows.readAt)));
-      const items = records
-        .slice(0, limit)
-        .map((r) => ({
-          ...r,
-          createdAt: r.createdAt.toISOString(),
-          readAt: r.readAt?.toISOString() ?? null,
-        }));
+      const items = records.slice(0, limit).map((r) => ({
+        ...r,
+        createdAt: r.createdAt.toISOString(),
+        readAt: r.readAt?.toISOString() ?? null,
+      }));
       return {
         items,
         unreadCount: unread.value,

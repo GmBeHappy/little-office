@@ -21,6 +21,7 @@ final class WorkspaceSession: ObservableObject, Identifiable {
   @Published var profile: ProfileResponse?
   @Published var showingBoard = false
   @Published var showingEmotePicker = false
+  @Published var showingInbox = false
   let inbox: OfficeInbox
   let media = OfficeMedia()
   let effects = PassthroughSubject<OfficeEffect, Never>()

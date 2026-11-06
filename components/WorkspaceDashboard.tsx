@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import styles from "./WorkspaceDashboard.module.css";
 import Brand from "./Brand";
+import { clearBrowserPush } from "@/lib/browser-push";
 import WorkspaceMembers from "./WorkspaceMembers";
 import WorkspaceOIDC, { SaaSSignIn } from "./WorkspaceOIDC";
 type Role = "owner" | "admin" | "member";
@@ -164,6 +165,7 @@ export default function WorkspaceDashboard() {
             onClick={() =>
               run(async () => {
                 await api("/auth/sign-out", "POST", {});
+                await clearBrowserPush().catch(() => {});
                 setUser(null);
                 setDetail(null);
                 setItems([]);

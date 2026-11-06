@@ -103,10 +103,10 @@ class WorkspaceInbox(private val api: OfficeAPI, private val workspaceId: String
 }
 
 @Composable
-fun NotificationBell(inbox: WorkspaceInbox, connected: Boolean, open: () -> Unit) {
+fun NotificationBell(inbox: WorkspaceInbox, open: () -> Unit) {
     val name = officeTranslation("Notifications")
     val unread = officeTranslation("{count} unread notifications").replace("{count}", inbox.unreadCount.toString())
-    IconButton(enabled = connected, onClick = open, modifier = Modifier.semantics { contentDescription = if (inbox.unreadCount > 0) unread else name }) {
+    IconButton(onClick = open, modifier = Modifier.semantics { contentDescription = if (inbox.unreadCount > 0) unread else name }) {
         BadgedBox(badge = {
             if (inbox.unreadCount > 0) Badge(containerColor = Color(0xffba1a1a), contentColor = Color.White) {
                 Text(if (inbox.unreadCount > 99) "99+" else inbox.unreadCount.toString())
@@ -117,7 +117,7 @@ fun NotificationBell(inbox: WorkspaceInbox, connected: Boolean, open: () -> Unit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotificationCenter(inbox: WorkspaceInbox, close: () -> Unit) {
+fun NotificationCenter(inbox: WorkspaceInbox, systemPush: @Composable () -> Unit, close: () -> Unit) {
     val locale = officeLocale()
     val date = remember(locale) { DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
         .withLocale(locale).withZone(ZoneId.systemDefault()) }
@@ -131,6 +131,7 @@ fun NotificationCenter(inbox: WorkspaceInbox, close: () -> Unit) {
                 }
                 TextButton(onClick = close) { OfficeText("Done") }
             }
+            systemPush()
             if (inbox.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (inbox.error.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
                 OfficeText(inbox.error, Modifier.weight(1f))
@@ -167,4 +168,104 @@ fun NotificationCenter(inbox: WorkspaceInbox, close: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+fun SystemPushControl(model: OfficeModel, office: OfficeSession) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val locale = officeLocale().language
+    var ready by remember(office) { mutableStateOf(false) }
+    var enabled by
+        remember(office) { mutableStateOf(OfficePush.enabled(context, office.workspace.id)) }
+    var busy by remember(office) { mutableStateOf(false) }
+    var error by remember(office) { mutableStateOf("") }
+    var denied by remember(office) { mutableStateOf(enabled && !OfficePush.allowed(context)) }
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+        if (OfficePush.allowed(context)) denied = false else if (enabled) denied = true
+    }
+    LaunchedEffect(office) {
+        try {
+            ready =
+                OfficePush.supported(context) &&
+                    office.api
+                        .call(
+                            office.api.path(
+                                office.workspace.id,
+                                "/notifications/push-config?platform=android",
+                            )
+                        )
+                        .optBoolean("enabled")
+            if (!ready && !enabled) error = "System notifications are unavailable."
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (_: Exception) {
+            error = "System notifications are unavailable."
+        }
+    }
+    fun change(on: Boolean) {
+        scope.launch {
+            busy = true
+            error = ""
+            try {
+                OfficePush.setEnabled(
+                    context,
+                    office.api,
+                    model.account?.string("id").orEmpty(),
+                    office.workspace.id,
+                    locale,
+                    on,
+                )
+                denied = false
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (_: Exception) {
+                error = "Could not update system notifications. Try again."
+            } finally {
+                enabled = OfficePush.enabled(context, office.workspace.id)
+                busy = false
+            }
+        }
+    }
+    val permission =
+        androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+        ) { granted ->
+            if (granted && OfficePush.allowed(context)) change(true) else denied = true
+        }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        OfficeText("System notifications", Modifier.weight(1f))
+        Switch(
+            checked = enabled,
+            enabled = !busy && (ready || enabled),
+            onCheckedChange = { on ->
+                if (!on) change(false)
+                else {
+                    OfficePush.channel(context)
+                    if (OfficePush.allowed(context)) change(true)
+                    else if (android.os.Build.VERSION.SDK_INT >= 33)
+                        permission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    else denied = true
+                }
+            },
+        )
+    }
+    if (denied) {
+        OfficeText(
+            "Allow notifications in Android Settings.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        TextButton(
+            onClick = {
+                val intent =
+                    android.content
+                        .Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                context.startActivity(intent)
+            }
+        ) {
+            OfficeText("Open notification settings")
+        }
+    }
+    if (error.isNotBlank()) OfficeText(error, style = MaterialTheme.typography.bodySmall)
 }

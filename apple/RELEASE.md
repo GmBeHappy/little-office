@@ -54,3 +54,11 @@ The extension subclasses LiveKit's `LKSampleHandler`; the main app disables auto
 App and extension marketing/build versions must match. Xcode Cloud's build-number override applies to both targets. Do not ship if the extension signing or provisioning step is incomplete.
 
 The Apple portal App Group `group.dev.littleoffice.app` is assigned to the main app and broadcast extension only. Existing profiles need regeneration through automatic signing. Local parity verification passed 21 Swift tests plus unsigned macOS/iOS simulator builds; physical ReplayKit/media acceptance and a new signed cloud archive remain separate release requirements.
+
+### System notifications (iOS and macOS)
+
+Both targets use Firebase Messaging and APNs under the same bundle identifier, `dev.littleoffice.app`. Only the main app needs Push Notifications enabled on its Apple Developer App ID; the broadcast extension does not. Regenerate automatic development and distribution profiles after enabling the capability. A TestFlight archive must be signed with the production APNs entitlement (iOS: `aps-environment`; macOS: `com.apple.developer.aps-environment`).
+
+Register the matching Apple app in the same Firebase project as the backend. Configure its public Apple app ID, API key, project ID and messaging sender ID on the server for both the `ios` and `macos` push-config responses. The app reads this configuration from the authenticated workspace; no client plist or private key belongs in the repository. In Firebase Console → Project settings → Cloud Messaging → Apple app configuration, connect APNs credentials for the correct Apple team, bundle ID and environment. TestFlight uses production APNs. Review the App Store privacy answers for an account-linked device/installation identifier used only for notifications.
+
+For a delivery check, use a signed build on an enrolled device. Open the bell → **Enable system notifications**, approve the system prompt, and background the app. From a separate test account in the same workspace, trigger a nudge. Verify one system alert, tap it, and check that the app opens that workspace’s inbox with the existing unread item. Repeat after signing out: no new push should reach that installation. Repeat on macOS and on a TestFlight iPhone; an unsigned simulator build does not verify the Firebase → APNs path.

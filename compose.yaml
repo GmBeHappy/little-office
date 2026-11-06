@@ -35,7 +35,10 @@ services:
     pull_policy: ${OFFICE_PULL_POLICY:-always}
     network_mode: host
     env_file: .env
+    volumes:
+      - ${FCM_CONFIG_DIR:-./deploy/fcm}:/run/little-office-fcm:ro
     environment:
+      GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES: ${FCM_ALLOW_EXECUTABLE_CREDENTIALS:-0}
       API_HOST: 127.0.0.1
     command: ["bun", "server/index.ts"]
     depends_on:

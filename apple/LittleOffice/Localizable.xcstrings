@@ -1,6 +1,96 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "On this device": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "บนอุปกรณ์นี้"
+          }
+        }
+      }
+    },
+    "Enable system notifications": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เปิดการแจ้งเตือนของระบบ"
+          }
+        }
+      }
+    },
+    "Turn off system notifications": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ปิดการแจ้งเตือนของระบบ"
+          }
+        }
+      }
+    },
+    "System notifications aren’t configured for this workspace.": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เวิร์กสเปซนี้ยังไม่ได้ตั้งค่าการแจ้งเตือนของระบบ"
+          }
+        }
+      }
+    },
+    "Restart Little Office to connect this notification service.": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เปิด Little Office ใหม่เพื่อเชื่อมต่อบริการแจ้งเตือนนี้"
+          }
+        }
+      }
+    },
+    "Couldn’t connect notifications. Check your connection and try again.": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เชื่อมต่อบริการแจ้งเตือนไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง"
+          }
+        }
+      }
+    },
+    "Allow notifications for Little Office in system settings.": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "อนุญาตการแจ้งเตือนของ Little Office ในการตั้งค่าระบบ"
+          }
+        }
+      }
+    },
+    "Connecting system notifications…": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "กำลังเชื่อมต่อบริการแจ้งเตือน…"
+          }
+        }
+      }
+    },
+    "Couldn’t register this device for notifications. Try again on a signed device build.": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ลงทะเบียนอุปกรณ์เพื่อรับการแจ้งเตือนไม่สำเร็จ กรุณาลองอีกครั้งในแอปที่ลงนามแล้ว"
+          }
+        }
+      }
+    },
       "Previous option": {
         "localizations": {
           "th": {
