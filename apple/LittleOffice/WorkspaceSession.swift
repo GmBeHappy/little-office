@@ -13,6 +13,7 @@ final class WorkspaceSession: ObservableObject, Identifiable {
   @Published var manifest: SceneManifest?
   @Published var avatars: [String: AvatarManifest] = [:]
   @Published var invitations: [Invitation] = []
+  @Published private(set) var pingMilliseconds: Int?
   @Published var connected = false
   @Published var needsTakeover = false
   @Published var error = ""
@@ -26,12 +27,13 @@ final class WorkspaceSession: ObservableObject, Identifiable {
   private var chime: AVAudioPlayer?
   private var socket: URLSessionWebSocketTask?
   private var receiver: Task<Void, Never>?
-  private var pulse: Task<Void, Never>?
   private var reconnect: Task<Void, Never>?
+  private var pingTask: Task<Void, Never>?
+  private var pendingPing: (nonce: Int, started: TimeInterval)?
+  private var nextPingNonce = 0
   private var retryDelay = 2.0
   private var generation = UUID()
-  private var sequence = 0
-  private var direction = (0, 0)
+  private var movement = OfficeMovement()
   private var loadingAvatars = Set<String>()
   init(workspace: Workspace, api: OfficeAPI) {
     self.workspace = workspace
@@ -58,13 +60,6 @@ final class WorkspaceSession: ObservableObject, Identifiable {
         let socket = try api.socket(workspaceId: workspace.id, takeover: takeover)
         self.socket = socket
         socket.resume()
-        pulse = Task { [weak self] in
-          while !Task.isCancelled {
-            try? await Task.sleep(for: .milliseconds(80))
-            guard let self, !Task.isCancelled else { return }
-            if self.connected { self.sendMove() }
-          }
-        }
         while !Task.isCancelled {
           let message = try await socket.receive()
           let data: Data
@@ -82,12 +77,11 @@ final class WorkspaceSession: ObservableObject, Identifiable {
         self.error =
           needsTakeover ? "This workspace is open on another device." : error.localizedDescription
         resetInput.send()
-        direction = (0, 0)
+        movement = OfficeMovement()
+        stopPing()
         connected = false
         showingBoard = false
         snapshot = nil
-        pulse?.cancel()
-        pulse = nil
         socket?.cancel(with: .goingAway, reason: nil)
         self.socket = nil
         await media.stop()
@@ -124,14 +118,20 @@ final class WorkspaceSession: ObservableObject, Identifiable {
               api.workspacePath(workspace.id, "/scene"))
             if nextManifest.revision == self.snapshot?.workspace.revision {
               self.manifest = nextManifest
+              if let current = self.snapshot {
+                self.movement.receive(current, manifest: nextManifest, now: ProcessInfo.processInfo.systemUptime)
+              }
             }
           } catch { self.error = error.localizedDescription }
         }
       }
       if snapshot?.me?.zone != next.me?.zone { showingBoard = false }
-      sequence = max(sequence, next.me?.seq ?? 0)
+      if let manifest { movement.receive(next, manifest: manifest, now: ProcessInfo.processInfo.systemUptime) }
       snapshot = next
-      connected = true
+      if !connected {
+        connected = true
+        startPing()
+      }
       retryDelay = 2
       invitations.removeAll { $0.expires <= Date().timeIntervalSince1970 * 1000 }
       if mediaEnabled {
@@ -151,6 +151,11 @@ final class WorkspaceSession: ObservableObject, Identifiable {
           } catch { self.error = error.localizedDescription }
         }
       }
+    case "pong":
+      guard let pendingPing, event["nonce"] as? Int == pendingPing.nonce else { return }
+      self.pendingPing = nil
+      let elapsed = ProcessInfo.processInfo.systemUptime - pendingPing.started
+      pingMilliseconds = elapsed < 5 ? Int((elapsed * 1000).rounded()) : nil
     case "jump", "emote", "wave", "nudge-animation":
       effects.send(try JSONDecoder().decode(OfficeEffect.self, from: data))
       if event["type"] as? String == "wave", event["to"] as? String == snapshot?.selfId,
@@ -186,6 +191,31 @@ final class WorkspaceSession: ObservableObject, Identifiable {
     default: break
     }
   }
+  private func startPing() {
+    pingTask = Task { [weak self] in
+      while !Task.isCancelled {
+        guard let self, connected else { return }
+        nextPingNonce += 1
+        let nonce = nextPingNonce
+        pendingPing = (nonce, ProcessInfo.processInfo.systemUptime)
+        send(["type": "ping", "nonce": nonce])
+        do {
+          try await Task.sleep(for: .seconds(5))
+          if pendingPing?.nonce == nonce {
+            pendingPing = nil
+            pingMilliseconds = nil
+          }
+          try await Task.sleep(for: .seconds(5))
+        } catch { return }
+      }
+    }
+  }
+  private func stopPing() {
+    pingTask?.cancel()
+    pingTask = nil
+    pendingPing = nil
+    pingMilliseconds = nil
+  }
   func send(_ command: [String: Any]) {
     guard let socket, let data = try? JSONSerialization.data(withJSONObject: command),
       let text = String(data: data, encoding: .utf8)
@@ -193,9 +223,12 @@ final class WorkspaceSession: ObservableObject, Identifiable {
     socket.send(.string(text)) { _ in }
   }
   func move(_ dx: Int, _ dy: Int) {
-    guard direction != (dx, dy) else { return }
-    direction = (dx, dy)
-    sendMove()
+    guard connected else { return }
+    movement.input(dx, dy, now: ProcessInfo.processInfo.systemUptime) { send($0.message) }
+  }
+  func movementFrame(delta: Double, now: Double) -> WalkFrame? {
+    guard connected else { return nil }
+    return movement.frame(delta: delta, now: now) { send($0.message) }
   }
   func perform(_ action: String) {
     guard connected else { return }
@@ -208,11 +241,6 @@ final class WorkspaceSession: ObservableObject, Identifiable {
     default: break
     }
   }
-  private func sendMove() {
-    guard connected else { return }
-    sequence = max(sequence, snapshot?.me?.seq ?? 0) + 1
-    send(["type": "move", "dx": direction.0, "dy": direction.1, "seq": sequence])
-  }
   func respond(_ invitation: Invitation, accept: Bool) {
     send(["type": "respond", "id": invitation.id, "accept": accept])
     invitations.removeAll { $0.id == invitation.id }
@@ -223,15 +251,14 @@ final class WorkspaceSession: ObservableObject, Identifiable {
     reconnect = nil
     resetInput.send()
     chime?.stop()
-    direction = (0, 0)
+    movement = OfficeMovement()
     showingBoard = false
     showingEmotePicker = false
     receiver?.cancel()
     receiver = nil
-    pulse?.cancel()
-    pulse = nil
     socket?.cancel(with: .normalClosure, reason: nil)
     socket = nil
+    stopPing()
     connected = false
     snapshot = nil
     invitations = []

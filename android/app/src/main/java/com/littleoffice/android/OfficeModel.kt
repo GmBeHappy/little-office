@@ -172,6 +172,9 @@ class OfficeSession(
     var scene by mutableStateOf<Scene?>(null)
     val avatars = mutableStateMapOf<String, Avatar>()
     val animations = mutableMapOf<String, AvatarAnimation>()
+    var pingMs by mutableStateOf<Long?>(null)
+        private set
+    private var pendingPing: Long? = null
     var connected by mutableStateOf(false)
     var needsTakeover by mutableStateOf(false)
     var error by mutableStateOf("")
@@ -281,14 +284,20 @@ class OfficeSession(
                             }
                         },
                     )
-                var lastPing = SystemClock.elapsedRealtime()
+                var lastPing: Long? = null
                 while (isActive) {
                     delay(80)
                     if (connected) {
                         sendMove()
-                        if (SystemClock.elapsedRealtime() - lastPing >= 10000) {
-                            send(json("type" to "ping"))
-                            lastPing = SystemClock.elapsedRealtime()
+                        val now = SystemClock.elapsedRealtime()
+                        if (pendingPing?.let { now - it >= 5_000L } == true) {
+                            pendingPing = null
+                            pingMs = null
+                        }
+                        if (lastPing == null || now - lastPing >= 10_000L) {
+                            lastPing = now
+                            pendingPing = now
+                            send(json("type" to "ping", "nonce" to now))
                         }
                     }
                 }
@@ -400,6 +409,13 @@ class OfficeSession(
                 }
                 animations.keys.retainAll(next.people.map { it.id }.toSet())
             }
+            "pong" -> {
+                val started = pendingPing ?: return
+                if (event.optLong("nonce", -1) == started) {
+                    pendingPing = null
+                    pingMs = (now.toLong() - started).takeIf { it in 0L until 5_000L }
+                }
+            }
             "jump" -> animations[event.string("from")]?.jumpStart = now
             "wave" -> animations[event.string("from")]?.waveUntil = now + 2600
             "emote" ->
@@ -509,6 +525,8 @@ class OfficeSession(
         generation++
         direction = 0 to 0
         connected = false
+        pingMs = null
+        pendingPing = null
         board = false
         socket?.close(1000, "Leaving office")
         socket = null

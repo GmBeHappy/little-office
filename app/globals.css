@@ -317,18 +317,6 @@
     inset: 0;
     touch-action: none;
   }
-  .touch-joystick {
-    @apply absolute z-[1] w-[112px] h-[112px] m-[-56px] rounded-[50%] pointer-events-none;
-    border: 2px solid #faf7e9cc;
-    background: #34483455;
-    box-shadow: 0 3px 14px #23342130;
-  }
-  .touch-joystick i {
-    @apply absolute rounded-[50%];
-    inset: 36px;
-    background: #faf7e9e6;
-    box-shadow: 0 2px 8px #23342140;
-  }
   .touch-walk-hint {
     @apply hidden;
   }

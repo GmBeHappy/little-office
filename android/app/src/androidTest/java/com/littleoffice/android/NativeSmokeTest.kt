@@ -56,6 +56,7 @@ class NativeSmokeTest {
             waitFor("Sign-in") { it.account != null && it.workspaces.isNotEmpty() }
             scenario.onActivity { it.model.select(it.model.workspaces.first()) }
             waitFor("Office socket") { it.office?.connected == true }
+            waitFor("Office ping round trip") { it.office?.pingMs != null }
             waitFor("Avatar atlas") { model ->
                 val office = model.office!!
                 val me = office.snapshot!!.me!!

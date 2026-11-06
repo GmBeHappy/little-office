@@ -9711,6 +9711,86 @@
         }
       }
     },
+    "Office map": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "แผนที่สำนักงาน"
+          }
+        }
+      }
+    },
+    "Drag the map to walk. Release to stop.": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ลากบนแผนที่เพื่อเดิน ปล่อยนิ้วเพื่อหยุด"
+          }
+        }
+      }
+    },
+    "Use WASD or arrow keys to walk.": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ใช้ปุ่ม WASD หรือปุ่มลูกศรเพื่อเดิน"
+          }
+        }
+      }
+    },
+    "Move up": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เดินขึ้น"
+          }
+        }
+      }
+    },
+    "Move down": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เดินลง"
+          }
+        }
+      }
+    },
+    "Move left": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เดินไปทางซ้าย"
+          }
+        }
+      }
+    },
+    "Move right": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เดินไปทางขวา"
+          }
+        }
+      }
+    },
+    "WASD / arrow keys: move\nSpace: jump\nZ: nudge nearby\n1: sit · 2: sleep · 3: fish\nTap a teammate to see their actions.\nDrag the map to walk. Release to stop.": {
+      "localizations": {
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WASD / ปุ่มลูกศร: เดิน\nSpace: กระโดด\nZ: สะกิดคนใกล้ตัว\n1: นั่ง · 2: นอน · 3: ตกปลา\nแตะเพื่อนร่วมทีมเพื่อดูสิ่งที่ทำได้\nลากบนแผนที่เพื่อเดิน ปล่อยนิ้วเพื่อหยุด"
+          }
+        }
+      }
+    },
     "Movement controls": {
       "localizations": {
         "th": {

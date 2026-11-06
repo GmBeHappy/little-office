@@ -171,7 +171,7 @@ struct DisplaySettings: View {
         }
         Section("Help & shortcuts") {
           Text(
-            "WASD / arrow keys: move\nSpace: jump\nZ: nudge nearby\n1: sit · 2: sleep · 3: fish\nTap a teammate to see their actions.\nOn iPhone, drag the map or use movement controls to walk."
+            "WASD / arrow keys: move\nSpace: jump\nZ: nudge nearby\n1: sit · 2: sleep · 3: fish\nTap a teammate to see their actions.\nDrag the map to walk. Release to stop."
           )
         }
       }.formStyle(.grouped).navigationTitle("Display & help").toolbar {
