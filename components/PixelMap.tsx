@@ -80,12 +80,6 @@ export default function PixelMap(props: Props) {
     const parent = document.createElement("div");
     parent.style.cssText = "width:100%;height:100%;position:absolute;inset:0";
     host.current!.appendChild(parent);
-    const joystick = document.createElement("div");
-    joystick.className = "touch-joystick";
-    joystick.hidden = true;
-    joystick.setAttribute("aria-hidden", "true");
-    const thumb = joystick.appendChild(document.createElement("i"));
-    parent.appendChild(joystick);
     const bubbles = document.createElement("div");
     bubbles.className = "status-bubbles";
     parent.appendChild(bubbles);
@@ -209,7 +203,6 @@ export default function PixelMap(props: Props) {
           this.touch = undefined;
           this.localMovement.stop(live.current.send);
         }
-        joystick.hidden = true;
       }
       constructor() {
         super("office");
@@ -569,10 +562,6 @@ export default function PixelMap(props: Props) {
               dy: 0,
               dragged: false,
             };
-            joystick.style.left = `${pointer.x / density}px`;
-            joystick.style.top = `${pointer.y / density}px`;
-            thumb.style.transform = "translate(0px, 0px)";
-            joystick.hidden = false;
           },
         );
         this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
@@ -587,8 +576,6 @@ export default function PixelMap(props: Props) {
             distance < 10 || Math.abs(x) < threshold ? 0 : Math.sign(x);
           touch.dy =
             distance < 10 || Math.abs(y) < threshold ? 0 : Math.sign(y);
-          const scale = Math.min(1, 44 / (distance || 1));
-          thumb.style.transform = `translate(${x * scale}px, ${y * scale}px)`;
         });
         this.input.on(
           "pointerup",

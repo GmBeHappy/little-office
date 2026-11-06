@@ -28,7 +28,7 @@ struct OfficeView: View {
   @State private var panel = "People"
   @State private var panelOpen = true
   @State private var search = ""
-  @State private var movementVisible = false
+  @State private var accessibleStep: Task<Void, Never>?
   @State private var emojiDraft = ""
   @State private var interactionPrompt = ""
   @State private var interactionEnabled = true
@@ -51,7 +51,18 @@ struct OfficeView: View {
       ZStack {
         SpriteView(scene: scene)
           .ignoresSafeArea()
-          .accessibilityLabel("Office map. Use arrow keys, WASD, or the movement controls to walk.")
+          .accessibilityLabel("Office map")
+          #if os(iOS)
+            .accessibilityHint("Drag the map to walk. Release to stop.")
+          #else
+            .accessibilityHint("Use WASD or arrow keys to walk.")
+          #endif
+          .accessibilityActions {
+            Button("Move up") { step(0, -1) }
+            Button("Move left") { step(-1, 0) }
+            Button("Move down") { step(0, 1) }
+            Button("Move right") { step(1, 0) }
+          }
         if office.manifest == nil { ProgressView("Opening office…").padding().glassEffect() }
         VStack(spacing: 12) {
           header(compact: compact)
@@ -64,11 +75,6 @@ struct OfficeView: View {
               .font(.caption.weight(.medium)).padding(10).glassEffect()
               if !media.videos.isEmpty { MediaPanel(media: media, compact: compact) }
               Spacer(minLength: 0)
-              if movementVisible {
-                GlassEffectContainer(spacing: 12) {
-                  DirectionPad { office.move($0, $1) }
-                }.disabled(!office.connected)
-              }
             }
             Spacer(minLength: 0)
             if panelOpen && !compact {
@@ -100,9 +106,6 @@ struct OfficeView: View {
       }
       .onAppear {
         if compact { panelOpen = false }
-        #if os(iOS)
-          movementVisible = true
-        #endif
       }
     }
   }
@@ -142,7 +145,11 @@ struct OfficeView: View {
   private var configuredScene: some View {
     panels
       .onAppear {
-        scene.moveInput = { office.move($0, $1) }
+        scene.localFrame = { office.movementFrame(delta: $0, now: $1) }
+        scene.moveInput = { dx, dy in
+          accessibleStep?.cancel()
+          office.move(dx, dy)
+        }
         scene.action = { action in
           if action.hasPrefix("emote:") {
             office.send(["type": "emote", "emoji": String(action.dropFirst(6))])
@@ -169,7 +176,9 @@ struct OfficeView: View {
         render()
       }
       .onDisappear {
+        accessibleStep?.cancel()
         scene.stopInput()
+        scene.localFrame = nil
         scene.moveInput = nil
         scene.action = nil
         scene.interact = nil
@@ -204,6 +213,17 @@ struct OfficeView: View {
       && !mediaSettings && !media.choosingScreen && !searchFocused
       && scenePhase == .active
   }
+  private func step(_ dx: Int, _ dy: Int) {
+    guard office.connected, inputAllowed else { return }
+    accessibleStep?.cancel()
+    office.move(dx, dy)
+    accessibleStep = Task { @MainActor in
+      try? await Task.sleep(for: .milliseconds(200))
+      guard !Task.isCancelled else { return }
+      office.move(0, 0)
+    }
+  }
+
   private func updateInput() {
     scene.inputEnabled = inputAllowed
     if !scene.inputEnabled { office.move(0, 0) }
@@ -220,12 +240,17 @@ struct OfficeView: View {
       }
       Label(zoneName, systemImage: "leaf").font(.caption.weight(.semibold)).lineLimit(1)
       Spacer(minLength: 0)
-      if !compact {
-        Label(office.connected ? "Connected" : "Disconnected", systemImage: "circle.fill")
-          .font(.caption).foregroundStyle(office.connected ? .green : .secondary)
+      HStack(spacing: 5) {
+        Image(systemName: "circle.fill").imageScale(.small)
+        if !compact { Text(office.connected ? "Connected" : "Disconnected") }
+        if office.connected {
+          Text(verbatim: office.pingMilliseconds.map { "\($0) ms" } ?? "— ms").monospacedDigit()
+        }
       }
-      Button("Movement controls", systemImage: "gamecontroller") { movementVisible.toggle() }
-        .labelStyle(.iconOnly).help("Movement controls")
+      .font(.caption).foregroundStyle(office.connected ? Color.green : Color.secondary)
+      .fixedSize().accessibilityElement(children: .ignore)
+      .accessibilityLabel(office.connected ? Text("Connected") : Text("Disconnected"))
+      .accessibilityValue(Text(verbatim: office.pingMilliseconds.map { "\($0) ms" } ?? ""))
       Button {
         profile = true
       } label: {
@@ -404,93 +429,116 @@ private struct OfficeDock: View {
   @ObservedObject var media: OfficeMedia
   let compact: Bool
   var body: some View {
-    HStack(spacing: compact ? 6 : 18) {
-      HStack(spacing: 8) {
-        if !compact {
-          NativeAvatar(person: office.snapshot?.me, avatars: office.avatars)
-            .frame(width: 30, height: 36)
-        }
-        VStack(alignment: .leading, spacing: 3) {
-          Menu {
-            ForEach(["available", "busy", "dnd", "away"], id: \.self) { status in
-              Button(status.capitalized) {
-                office.send(["type": "status", "status": status, "text": "", "icon": ""])
-              }
-            }
-          } label: {
-            if compact {
-              Image(systemName: "person.crop.circle").font(.title2)
-            } else {
-              Text(office.snapshot?.me?.name ?? "You").font(.callout.weight(.semibold))
-            }
-          }.menuStyle(.borderlessButton).accessibilityLabel("Your status")
-          if !compact {
-            Text(office.snapshot?.me?.status.capitalized ?? "Available")
-              .font(.caption2).foregroundStyle(.secondary)
+    Group {
+      #if os(iOS)
+        VStack(spacing: 5) {
+          HStack(spacing: compact ? 6 : 18) { deviceControls }
+          Divider()
+          HStack(spacing: compact ? 14 : 18) {
+            dockButton("Jump", icon: "figure.jumprope", showLabel: true) { office.perform("jump") }
+            dockButton("Nudge", icon: "hand.point.right", showLabel: true) { office.perform("nudge") }
+            emoteMenu
           }
+          .disabled(!office.connected)
+        }
+      #else
+        HStack(spacing: compact ? 6 : 18) {
+          deviceControls
+          emoteMenu
+        }
+      #endif
+    }
+    .buttonStyle(.plain).padding(.horizontal, compact ? 10 : 20).padding(.vertical, 8)
+    .glassEffect(.regular, in: .rect(cornerRadius: 22)).fixedSize(horizontal: true, vertical: false)
+  }
+  @ViewBuilder private var deviceControls: some View {
+    HStack(spacing: 8) {
+      if !compact {
+        NativeAvatar(person: office.snapshot?.me, avatars: office.avatars)
+          .frame(width: 30, height: 36)
+      }
+      VStack(alignment: .leading, spacing: 3) {
+        Menu {
+          ForEach(["available", "busy", "dnd", "away"], id: \.self) { status in
+            Button(status.capitalized) {
+              office.send(["type": "status", "status": status, "text": "", "icon": ""])
+            }
+          }
+        } label: {
+          if compact {
+            Image(systemName: "person.crop.circle").font(.title2)
+          } else {
+            Text(office.snapshot?.me?.name ?? "You").font(.callout.weight(.semibold))
+          }
+        }.menuStyle(.borderlessButton).accessibilityLabel("Your status")
+        if !compact {
+          Text(office.snapshot?.me?.status.capitalized ?? "Available")
+            .font(.caption2).foregroundStyle(.secondary)
         }
       }
-      if !compact { Divider().frame(height: 32) }
-      dockButton(
-        media.microphone ? "Mute" : "Microphone", icon: media.microphone ? "mic.fill" : "mic.slash",
-        active: media.microphone
-      ) {
-        Task { await media.toggleMicrophone() }
-      }.disabled(!media.connected)
-      dockButton(
-        media.camera ? "Camera off" : "Camera", icon: media.camera ? "video.fill" : "video.slash",
-        active: media.camera
-      ) {
-        Task { await media.toggleCamera() }
-      }.disabled(!media.connected)
-      dockButton(
-        media.broadcastPending
-          ? "Cancel screen share" : media.sharing ? "Stop sharing" : "Share screen",
-        icon: "rectangle.on.rectangle",
-        active: media.sharing
-      ) {
-        media.requestScreenShare()
-      }.disabled(!media.connected)
-      dockButton("Whiteboard", icon: "pencil.and.scribble") { office.showingBoard = true }
-        .disabled(!office.connected || office.snapshot?.workspace.features?.whiteboard == false)
-      #if os(iOS)
-        dockButton("Jump", icon: "figure.jumprope") { office.perform("jump") }.disabled(
-          !office.connected)
-      #endif
-      Menu {
-        ForEach(["👋", "❤️", "😂", "🎉", "👍", "☕", "🔥", "💯"], id: \.self) { emoji in
-          Button(emoji) { office.send(["type": "emote", "emoji": emoji]) }
-        }
-        Button("More emoji…") { office.showingEmotePicker = true }
+    }
+    if !compact { Divider().frame(height: 32) }
+    dockButton(
+      media.microphone ? "Mute" : "Microphone", icon: media.microphone ? "mic.fill" : "mic.slash",
+      active: media.microphone
+    ) {
+      Task { await media.toggleMicrophone() }
+    }.disabled(!media.connected)
+    dockButton(
+      media.camera ? "Camera off" : "Camera", icon: media.camera ? "video.fill" : "video.slash",
+      active: media.camera
+    ) {
+      Task { await media.toggleCamera() }
+    }.disabled(!media.connected)
+    dockButton(
+      media.broadcastPending
+        ? "Cancel screen share" : media.sharing ? "Stop sharing" : "Share screen",
+      icon: "rectangle.on.rectangle",
+      active: media.sharing
+    ) {
+      media.requestScreenShare()
+    }.disabled(!media.connected)
+    dockButton("Whiteboard", icon: "pencil.and.scribble") { office.showingBoard = true }
+      .disabled(!office.connected || office.snapshot?.workspace.features?.whiteboard == false)
+  }
+  private var emoteMenu: some View {
+    Menu {
+      ForEach(["👋", "❤️", "😂", "🎉", "👍", "☕", "🔥", "💯"], id: \.self) { emoji in
+        Button(emoji) { office.send(["type": "emote", "emoji": emoji]) }
+      }
+      Button("More emoji…") { office.showingEmotePicker = true }
+      #if os(macOS)
         Button("Jump (Space)") { office.perform("jump") }
         Button("Nudge nearby (Z)") { office.perform("nudge") }
-        Menu("Pose") {
-          ForEach(["stand", "sit", "sleep", "fish"], id: \.self) { pose in
-            Button(pose.capitalized) { office.perform(pose) }
-          }
+      #endif
+      Menu("Pose") {
+        ForEach(["stand", "sit", "sleep", "fish"], id: \.self) { pose in
+          Button(pose.capitalized) { office.perform(pose) }
         }
-        Button("Leave conversation") { office.send(["type": "leave"]) }
-      } label: {
-        VStack(spacing: 5) {
-          Image(systemName: "face.smiling").font(.system(size: 20)).frame(width: 36, height: 30)
+      }
+      Button("Leave conversation") { office.send(["type": "leave"]) }
+    } label: {
+      VStack(spacing: 5) {
+        Image(systemName: "face.smiling").font(.system(size: 20)).frame(width: 36, height: 30)
+        #if os(iOS)
+          Text("Emote").font(.system(size: 9))
+        #else
           if !compact { Text("Emote").font(.system(size: 9)) }
-        }
-      }.menuStyle(.borderlessButton).accessibilityLabel("Emote and actions").disabled(
-        !office.connected)
-    }.buttonStyle(.plain).padding(.horizontal, compact ? 10 : 20).padding(.vertical, 12)
-      .glassEffect(.regular, in: .rect(cornerRadius: 22)).fixedSize(
-        horizontal: true, vertical: false)
+        #endif
+      }.frame(minWidth: 44, minHeight: 44)
+    }.menuStyle(.borderlessButton).accessibilityLabel("Emote and actions").disabled(
+      !office.connected)
   }
   private func dockButton(
-    _ title: String, icon: String, active: Bool = false,
+    _ title: String, icon: String, active: Bool = false, showLabel: Bool = false,
     action: @escaping () -> Void
   ) -> some View {
     Button(action: action) {
       VStack(spacing: 5) {
         Image(systemName: icon).font(.system(size: 20)).frame(width: 36, height: 30)
           .foregroundStyle(active ? Color.accentColor : .primary)
-        if !compact { Text(LocalizedStringKey(title)).font(.system(size: 9)) }
-      }.frame(minWidth: 40, minHeight: 44).contentShape(Rectangle())
+        if showLabel || !compact { Text(LocalizedStringKey(title)).font(.system(size: 9)) }
+      }.frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
     }.accessibilityLabel(title).help(title)
   }
 }
@@ -514,31 +562,5 @@ private struct NativeAvatar: View {
     } else {
       Image(systemName: "person.crop.circle").resizable().scaledToFit().accessibilityHidden(true)
     }
-  }
-}
-struct DirectionPad: View {
-  let move: (Int, Int) -> Void
-  var body: some View {
-    VStack(spacing: 12) {
-      direction("arrow.up", 0, -1)
-      HStack(spacing: 12) {
-        direction("arrow.left", -1, 0)
-        direction("arrow.down", 0, 1)
-        direction("arrow.right", 1, 0)
-      }
-    }
-  }
-  private func direction(_ icon: String, _ dx: Int, _ dy: Int) -> some View {
-    Image(systemName: icon).frame(width: 44, height: 44)
-      .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 14))
-      .gesture(
-        DragGesture(minimumDistance: 0).onChanged { _ in move(dx, dy) }.onEnded { _ in move(0, 0) }
-      )
-      .accessibilityLabel(icon.replacingOccurrences(of: "arrow.", with: "Move "))
-      .accessibilityAddTraits(.isButton)
-      .accessibilityAction {
-        move(dx, dy)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { move(0, 0) }
-      }
   }
 }

@@ -3,6 +3,7 @@ import SpriteKit
 
 @MainActor
 final class OfficeScene: SKScene {
+  var localFrame: ((Double, Double) -> WalkFrame?)?
   var moveInput: ((Int, Int) -> Void)?
   var action: ((String) -> Void)?
   var interact: ((Int, Int) -> Void)?
@@ -40,12 +41,13 @@ final class OfficeScene: SKScene {
     private var walkingTouch: UITouch?
     private var touchOrigin: CGPoint?
     private var dragged = false
-    private let stick = SKShapeNode(circleOfRadius: 44)
-    private let thumb = SKShapeNode(circleOfRadius: 14)
   #endif
 
   private final class Figure: SKNode {
     var motion = AvatarAnimation()
+    var remoteWalk = RemoteWalk()
+    var tagOpacity: Double?
+    var tagTalking: Bool?
     let body = SKSpriteNode()
     let shadow = SKShapeNode()
     let ring = SKShapeNode(ellipseOf: CGSize(width: 37, height: 17))
@@ -73,17 +75,18 @@ final class OfficeScene: SKScene {
       nameLabel.fontSize = 12
       nameLabel.fontColor = SKColor(red: 0.23, green: 0.28, blue: 0.22, alpha: 1)
       nameLabel.verticalAlignmentMode = .center
-      nameLabel.zPosition = 5
+      // Keep every name in front of the entire depth-sorted avatar layer.
+      nameLabel.zPosition = 2001
       plate.fillColor = SKColor(red: 0.98, green: 0.97, blue: 0.91, alpha: 1)
       plate.strokeColor = .clear
-      plate.zPosition = 4
+      plate.zPosition = 2000
       reaction.fontSize = 24
       reaction.verticalAlignmentMode = .bottom
-      reaction.zPosition = 6
+      reaction.zPosition = 2002
       statusLabel.fontSize = 12
       statusLabel.fontColor = .darkGray
-      statusLabel.zPosition = 6
-      pickup.zPosition = 7
+      statusLabel.zPosition = 2002
+      pickup.zPosition = 2003
       for node in [shadow, ring, nudge, body, plate, nameLabel, reaction, statusLabel, pickup] {
         addChild(node)
       }
@@ -107,16 +110,6 @@ final class OfficeScene: SKScene {
     addChild(labels)
     addChild(viewport)
     camera = viewport
-    #if os(iOS)
-      stick.strokeColor = .white.withAlphaComponent(0.6)
-      stick.fillColor = .black.withAlphaComponent(0.15)
-      thumb.fillColor = .white.withAlphaComponent(0.6)
-      thumb.strokeColor = .clear
-      stick.addChild(thumb)
-      stick.zPosition = 10000
-      stick.isHidden = true
-      addChild(stick)
-    #endif
   }
   required init?(coder: NSCoder) { fatalError("Use init(size:)") }
   func render(manifest: SceneManifest, snapshot: Snapshot?, avatars: [String: AvatarManifest]) {
@@ -189,14 +182,18 @@ final class OfficeScene: SKScene {
     let wallTime = Date().timeIntervalSince1970 * 1000
     for person in people {
       guard let figure = figures[person.id] else { continue }
-      let blend = min(1, delta / 65)
-      figure.position.x += (person.x - figure.position.x) * blend
-      figure.position.y += (worldSize.height - person.y - figure.position.y) * blend
-      figure.zPosition = 1000 + person.y
+      let local = person.id == selfId ? localFrame?(delta / 1000, time / 1000) : nil
+      let position = local?.position ?? figure.remoteWalk.position(
+        toward: WorldPoint(x: person.x, y: person.y), now: time / 1000)
+      figure.position = CGPoint(x: position.x, y: worldSize.height - position.y)
+      figure.zPosition = 1000 + position.y
+      let moving = local?.moving ?? person.moving
+      let direction = local?.direction ?? person.direction
+      let pose = moving ? "stand" : person.pose
       let frame = figure.motion.update(
-        time: time, delta: delta, moving: person.moving,
-        pose: person.pose, direction: person.direction, reducedMotion: reducedMotion)
-      let frameName = "\(person.direction)-\(person.pose)-\(frame.index)"
+        time: time, delta: delta, moving: moving,
+        pose: pose, direction: direction, reducedMotion: reducedMotion)
+      let frameName = "\(direction)-\(pose)-\(frame.index)"
       let key = "\(person.avatar):\(frameName)"
       if textures[key] == nil, let rects = avatars[person.avatar]?.frames[frameName] {
         textures[key] = texture(rects, width: 72, height: 80, offsetX: 36, offsetY: 52)
@@ -224,13 +221,18 @@ final class OfficeScene: SKScene {
       figure.nudge.alpha = frame.nudgeOpacity
       let name =
         person.name + (person.id == selfId ? " · you" : "") + (person.microphone ? " 🎙" : "")
-      figure.nameLabel.fontSize = min(16, max(8, nameTagSize))
+      let fontSize = min(16, max(8, nameTagSize))
       let talking = speaking.contains(person.id)
-      figure.nameLabel.fontColor =
-        talking ? (nameTagOpacity >= 50 ? .white : color(0x205e3e)) : color(0x3b4839)
-      figure.plate.fillColor = (talking ? color(0x28794f) : color(0xfaf7e9)).withAlphaComponent(
-        min(1, max(0, nameTagOpacity / 100)))
-      do {
+      if figure.tagTalking != talking || figure.tagOpacity != nameTagOpacity {
+        figure.tagTalking = talking
+        figure.tagOpacity = nameTagOpacity
+        figure.nameLabel.fontColor =
+          talking ? (nameTagOpacity >= 50 ? .white : color(0x205e3e)) : color(0x3b4839)
+        figure.plate.fillColor = (talking ? color(0x28794f) : color(0xfaf7e9)).withAlphaComponent(
+          min(1, max(0, nameTagOpacity / 100)))
+      }
+      if figure.nameLabel.text != name || figure.nameLabel.fontSize != fontSize {
+        figure.nameLabel.fontSize = fontSize
         figure.nameLabel.text = name
         figure.plate.path = CGPath(
           roundedRect: CGRect(
@@ -390,7 +392,6 @@ final class OfficeScene: SKScene {
     #if os(iOS)
       walkingTouch = nil
       touchOrigin = nil
-      stick.isHidden = true
     #endif
   }
   private func select(at point: CGPoint) {
@@ -476,9 +477,6 @@ final class OfficeScene: SKScene {
       walkingTouch = touch
       touchOrigin = touch.location(in: view)
       dragged = false
-      stick.position = touch.location(in: self)
-      thumb.position = .zero
-      stick.setScale(viewport.xScale)
     }
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
       guard inputEnabled, let touch = walkingTouch, touches.contains(touch),
@@ -489,9 +487,6 @@ final class OfficeScene: SKScene {
       let dy = point.y - origin.y
       let direction = AvatarAnimation.touchDirection(x: dx, y: dy)
       dragged = dragged || hypot(dx, dy) >= 10
-      stick.isHidden = !dragged
-      let scale = min(1, 44 / max(1, hypot(dx, dy)))
-      thumb.position = CGPoint(x: dx * scale, y: -dy * scale)
       moveInput?(direction.0, direction.1)
     }
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {

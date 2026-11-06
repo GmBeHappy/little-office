@@ -319,12 +319,16 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
                 TextButton(onClick = { model.leave() }) { OfficeText("‹ Offices") }
                 Column(Modifier.weight(1f)) {
                     OfficeText(office.workspace.name, fontWeight = FontWeight.Bold)
-                    OfficeText(
-                        if (office.connected)
-                            "${office.snapshot?.people?.size ?: 0} online · ${office.snapshot?.me?.zone.orEmpty()}"
-                        else "Disconnected",
-                        style = MaterialTheme.typography.labelSmall,
-                    )
+                    if (office.connected) {
+                        OfficeText(
+                            "${officeTranslation("Connected")} · ${office.pingMs ?: "—"} ms",
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                        OfficeText(
+                            "${office.snapshot?.people?.size ?: 0} online · ${office.snapshot?.me?.zone.orEmpty()}",
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    } else OfficeText("Disconnected", style = MaterialTheme.typography.labelSmall)
                 }
                 var menu by remember { mutableStateOf(false) }
                 Box {

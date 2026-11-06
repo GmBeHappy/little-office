@@ -126,6 +126,7 @@ public struct SceneManifest: Decodable {
   public struct Zone: Decodable, Identifiable {
     public let id: String
     public let name: String
+    public let x: Double, y: Double, w: Double, h: Double
   }
 }
 public struct AvatarManifest: Decodable {

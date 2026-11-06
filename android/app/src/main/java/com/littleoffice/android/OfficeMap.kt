@@ -105,8 +105,7 @@ fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Per
     val density = LocalDensity.current.density
     var scale by remember { mutableFloatStateOf(density) }
     var camera by remember { mutableStateOf(Offset.Zero) }
-    var joystick by remember { mutableStateOf<Offset?>(null) }
-    var thumb by remember { mutableStateOf(Offset.Zero) }
+    var dragStart by remember { mutableStateOf<Offset?>(null) }
     val focus = remember { FocusRequester() }
     val keys = remember { mutableSetOf<Key>() }
     val reduced = !ValueAnimator.areAnimatorsEnabled()
@@ -114,7 +113,7 @@ fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Per
     LaunchedEffect(office.connected) {
         if (office.connected) focus.requestFocus()
         else {
-            joystick = null
+            dragStart = null
             keys.clear()
         }
     }
@@ -144,7 +143,7 @@ fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Per
             .onFocusChanged {
                 if (!it.isFocused) {
                     keys.clear()
-                    joystick = null
+                    dragStart = null
                     office.move(0, 0)
                 }
             }
@@ -198,25 +197,23 @@ fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Per
                 detectDragGestures(
                     onDragStart = {
                         if (office.connected) {
-                            joystick = it
-                            thumb = it
+                            dragStart = it
                         }
                     },
                     onDragEnd = {
-                        joystick = null
+                        dragStart = null
                         office.move(0, 0)
                     },
                     onDragCancel = {
-                        joystick = null
+                        dragStart = null
                         office.move(0, 0)
                     },
                 ) { change, _ ->
-                    joystick?.let { origin ->
-                        thumb = change.position
+                    dragStart?.let { origin ->
                         val move =
                             AvatarAnimation.touchDirection(
-                                (thumb.x - origin.x) / density,
-                                (thumb.y - origin.y) / density,
+                                (change.position.x - origin.x) / density,
+                                (change.position.y - origin.y) / density,
                             )
                         office.move(move.first, move.second)
                         change.consume()
@@ -425,22 +422,6 @@ fun OfficeMap(office: OfficeSession, modifier: Modifier = Modifier, select: (Per
                         }
                     }
                 }
-        }
-        joystick?.let { origin ->
-            drawCircle(Color.Black.copy(alpha = 0.15f), 44 * density, origin)
-            drawCircle(
-                Color.White.copy(alpha = 0.7f),
-                44 * density,
-                origin,
-                style = Stroke(2 * density),
-            )
-            val vector = thumb - origin
-            val length = vector.getDistance()
-            drawCircle(
-                Color.White.copy(alpha = 0.8f),
-                14 * density,
-                origin + vector * min(1f, 34 * density / max(1f, length)),
-            )
         }
     }
 }
