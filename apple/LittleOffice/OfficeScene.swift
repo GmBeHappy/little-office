@@ -180,6 +180,7 @@ final class OfficeScene: SKScene {
     let delta = lastTime.map { max(0, time - $0) } ?? 0
     lastTime = time
     let wallTime = Date().timeIntervalSince1970 * 1000
+    var nameplates: [CGRect] = []
     for person in people {
       guard let figure = figures[person.id] else { continue }
       let local = person.id == selfId ? localFrame?(delta / 1000, time / 1000) : nil
@@ -242,7 +243,15 @@ final class OfficeScene: SKScene {
       }
       let fishingActive = person.fishing.map { $0.phase(at: wallTime) != "idle" } ?? false
       let fishingSpace = person.direction == "up" && fishingActive ? 28.0 : 0
-      figure.nameLabel.position.y = 57 + frame.height + fishingSpace
+      let base = 57 + frame.height + fishingSpace
+      var plate = (figure.plate.path?.boundingBoxOfPath ?? .zero)
+        .offsetBy(dx: figure.position.x, dy: figure.position.y + base)
+      // Teammates can stand at the same coordinates. Stack colliding nameplates.
+      while let occupied = nameplates.first(where: { $0.intersects(plate) }) {
+        plate.origin.y += occupied.maxY - plate.minY + 2
+      }
+      nameplates.append(plate)
+      figure.nameLabel.position.y = plate.midY - figure.position.y
       figure.plate.position.y = figure.nameLabel.position.y
       let icon = animation?.farm?.iconEmojis?[figure.motion.emote]
       if let icon, figure.motion.emoteUntil > time,
@@ -262,9 +271,10 @@ final class OfficeScene: SKScene {
         figure.pickup.isHidden = true
       }
       if icon != nil && figure.motion.emoteUntil > time { figure.pickup.isHidden = false }
-      figure.reaction.position.y = 88 + frame.height + fishingSpace
-      figure.statusLabel.text = "\(person.presence.icon) \(person.presence.text)"
-      figure.statusLabel.position.y = 70 + frame.height + fishingSpace
+      figure.reaction.position.y = figure.nameLabel.position.y + 31
+      let status = "\(person.presence.icon) \(person.presence.text)"
+      if figure.statusLabel.text != status { figure.statusLabel.text = status }
+      figure.statusLabel.position.y = figure.nameLabel.position.y + 13
       drawFishing(person, figure: figure, time: wallTime)
       if person.id == selfId { focus = figure.position }
     }
