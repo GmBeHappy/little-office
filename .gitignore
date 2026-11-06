@@ -17,3 +17,5 @@ deploy/generated/
 apple/**/.build/
 apple/**/xcuserdata/
 apple/**/*.xcuserstate
+
+/deploy/fcm/

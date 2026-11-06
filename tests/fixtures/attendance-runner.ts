@@ -12,6 +12,10 @@ const database = new PGLiteSocketServer({
 await database.start();
 const origin = "http://localhost:3000";
 Object.assign(process.env, {
+  FCM_PROJECT_ID: "fixture-fcm",
+  FCM_PLATFORMS: "android",
+  FCM_CLIENT_CONFIG_FILE: new URL("./fcm-public.json", import.meta.url)
+    .pathname,
   DATABASE_URL: `postgres://postgres:postgres@${database.getServerConn()}/postgres`,
   APP_URL: origin,
   WORKSPACE_BASE_DOMAIN: "",
@@ -222,6 +226,9 @@ try {
   );
   const { verifyInbox } = await import("./notification-check");
   await verifyInbox(office, workspaceId, other, owner, admin, request);
+  const { verifyPush } = await import("./verify-push");
+  await verifyPush(workspaceId, other, owner, admin, request);
+
   await pool.query(
     "DELETE FROM workspace_memberships WHERE workspace_id=$1 AND user_id=$2",
     [workspaceId, member.id],

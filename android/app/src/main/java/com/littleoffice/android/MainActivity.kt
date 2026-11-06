@@ -40,7 +40,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun consume(intent: Intent?) {
-        intent?.data?.let { model.callback(it.toString()) }
+        val route = PushRoute.from(intent)
+        if (route != null) {
+            model.openSystemNotification(route)
+        } else if (intent?.data?.scheme == "littleoffice" && intent.data?.host == "auth") {
+            model.callback(intent.data.toString())
+        }
     }
 
     override fun onStart() {
@@ -276,7 +281,6 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
     var settings by remember { mutableStateOf(false) }
     var rooms by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf("") }
-    var notifications by remember(office) { mutableStateOf(false) }
     var emotes by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf(false) }
     var shareOptions by remember { mutableStateOf(false) }
@@ -334,7 +338,7 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
                         )
                     } else OfficeText("Disconnected", style = MaterialTheme.typography.labelSmall)
                 }
-                NotificationBell(office.inbox, office.connected) { notifications = true }
+                NotificationBell(office.inbox) { office.showingInbox = true }
                 var menu by remember { mutableStateOf(false) }
                 Box {
                     TextButton(onClick = { menu = true }) { OfficeText("Menu") }
@@ -482,7 +486,11 @@ fun OfficeScreen(model: OfficeModel, office: OfficeSession) {
             }
         }
     }
-    if (notifications) NotificationCenter(office.inbox) { notifications = false }
+    if (office.showingInbox) {
+        NotificationCenter(office.inbox, { SystemPushControl(model, office) }) {
+            office.showingInbox = false
+        }
+    }
     if (people)
         AlertDialog(
             onDismissRequest = { people = false },

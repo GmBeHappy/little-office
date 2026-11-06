@@ -1,3 +1,5 @@
+import { pushConfig } from "./push-config";
+import { registerPush, unregisterPush } from "./push";
 import { notificationPage, markNotificationsRead } from "./notifications";
 import { attendanceReport } from "./attendance-report";
 import { serverLog, diagnosticRef, errorKind } from "./diagnostics";
@@ -56,6 +58,57 @@ export function officeRoutes(scoped: boolean): AnyElysia {
       : await workspaceSession(raw, workspaceId);
     return { identity, ...(await runtimeFor(workspaceId)) };
   });
+  const platform = t.Union([
+    t.Literal("web"),
+    t.Literal("android"),
+    t.Literal("ios"),
+    t.Literal("macos"),
+  ]);
+  const install = t.String({ format: "uuid" });
+  app
+    .get(
+      "/notifications/push-config",
+      ({ query, set, identity }) => {
+        requireSession(identity);
+        set.headers["cache-control"] = "private, no-store";
+        return pushConfig(query.platform);
+      },
+      { query: t.Object({ platform }) },
+    )
+    .put(
+      "/notifications/push-device",
+      async ({ identity, workspaceId, body }) => {
+        const s = requireSession(identity);
+        await registerPush(workspaceId, s.user.id, s.session.id, body);
+        return { ok: true };
+      },
+      {
+        body: t.Object({
+          installationId: install,
+          platform,
+          token: t.String({
+            minLength: 16,
+            maxLength: 4096,
+            pattern: "^[!-~]+$",
+          }),
+          locale: t.Union([t.Literal("en"), t.Literal("th")]),
+        }),
+      },
+    )
+    .delete(
+      "/notifications/push-device",
+      async ({ identity, workspaceId, body }) => {
+        const s = requireSession(identity);
+        await unregisterPush(
+          workspaceId,
+          s.user.id,
+          s.session.id,
+          body.installationId,
+        );
+        return { ok: true };
+      },
+      { body: t.Object({ installationId: install }) },
+    );
   app
     .get(
       "/notifications",

@@ -57,6 +57,13 @@
       "when": 1793994438851,
       "tag": "0007_notification_center",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793998343343,
+      "tag": "0008_fcm_system_notifications",
+      "breakpoints": true
     }
   ]
 }

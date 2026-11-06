@@ -15,3 +15,6 @@ android/
 **/gha-creds-*.json
 **/*.jks
 **/*.keystore
+
+# Runtime-only FCM identity; never send it to image builders.
+deploy/fcm

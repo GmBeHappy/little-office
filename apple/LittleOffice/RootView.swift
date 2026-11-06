@@ -18,7 +18,6 @@ struct OfficeView: View {
   @ObservedObject private var media: OfficeMedia
   let leave: () -> Void
   @State private var scene = OfficeScene(size: CGSize(width: 1120, height: 720))
-  @State private var showingInbox = false
   @State private var managing = false
   @State private var profile = false
   @State private var display = false
@@ -224,7 +223,7 @@ struct OfficeView: View {
   }
   private var inputAllowed: Bool {
     !office.showingBoard && !office.showingEmotePicker && !managing && !profile && !display
-      && !showingInbox && !mediaSettings && !media.choosingScreen && !searchFocused
+      && !office.showingInbox && !mediaSettings && !media.choosingScreen && !searchFocused
       && scenePhase == .active
   }
   private func step(_ dx: Int, _ dy: Int) {
@@ -265,8 +264,8 @@ struct OfficeView: View {
       .fixedSize().accessibilityElement(children: .ignore)
       .accessibilityLabel(office.connected ? Text("Connected") : Text("Disconnected"))
       .accessibilityValue(Text(verbatim: office.pingMilliseconds.map { "\($0) ms" } ?? ""))
-      InboxButton(inbox: office.inbox) { showingInbox = true }
-        .sheet(isPresented: $showingInbox) { InboxPanel(inbox: office.inbox) }
+      InboxButton(inbox: office.inbox) { office.showingInbox = true }
+        .sheet(isPresented: $office.showingInbox) { InboxPanel(inbox: office.inbox, workspace: office.workspace.id) }
       Button {
         profile = true
       } label: {

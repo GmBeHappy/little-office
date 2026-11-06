@@ -1,3 +1,4 @@
+import { startPushWorker } from "./push";
 import { serverLog, errorKind, requestRef } from "./diagnostics";
 import { workspaceDomainApi } from "./workspace-domain-api";
 import {
@@ -626,5 +627,6 @@ if (import.meta.main) {
     hostname: process.env.API_HOST || "127.0.0.1",
   });
   startRuntimeTimers();
+  startPushWorker();
   console.log(`Office API listening on ${config.port}`);
 }

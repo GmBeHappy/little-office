@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Public Firebase SDK identifiers for the registered Little Office Android app. -->
+<resources>
+    <string name="google_app_id" translatable="false">1:109956361163:android:a0788f390ba5358a79a44e</string>
+    <string name="gcm_defaultSenderId" translatable="false">109956361163</string>
+    <string name="project_id" translatable="false">little-office-15f4b</string>
+    <string name="google_api_key" translatable="false">AIzaSyCSZayoVwepxsUjjZxf2UNHlvxlmwuK6no</string>
+</resources>

@@ -1,1 +1,2 @@
-<resources><string name="app_name">Little Office</string></resources>
+<resources><string name="app_name">Little Office</string>    <string name="push_channel">Office notifications</string>
+</resources>

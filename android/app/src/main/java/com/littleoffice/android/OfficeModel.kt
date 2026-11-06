@@ -13,6 +13,7 @@ import org.json.JSONObject
 
 class OfficeModel(application: Application) : AndroidViewModel(application) {
     private val store = CredentialStore(application)
+    private var pendingInbox: PushRoute? = null
     var server by
         mutableStateOf(
             store.read("server")?.string("origin")
@@ -31,11 +32,15 @@ class OfficeModel(application: Application) : AndroidViewModel(application) {
 
     init {
         action {
-            val saved = store.read("session") ?: return@action
+            val saved = store.read("session") ?: run {
+                OfficePush.clear(getApplication())
+                return@action
+            }
             if (
                 Instant.parse(saved.getJSONObject("credential").getString("expiresAt"))
                     .isBefore(Instant.now())
             ) {
+                OfficePush.clear(getApplication())
                 store.save("session", null)
                 return@action
             }
@@ -73,6 +78,8 @@ class OfficeModel(application: Application) : AndroidViewModel(application) {
         workspaces = spaces
         maps = config.getJSONArray("maps").objects()
         allMaps = config.optJSONArray("allMaps")?.objects() ?: maps
+        OfficePush.reconcile(getApplication(), client, next.string("id"), spaces.map { it.id }.toSet())
+        openPendingInbox()
     }
 
     fun signIn(): Uri? =
@@ -121,6 +128,22 @@ class OfficeModel(application: Application) : AndroidViewModel(application) {
         load(OfficeAPI(origin, credential))
     }
 
+    internal fun openSystemNotification(route: PushRoute) {
+        if (!OfficePush.accepts(getApplication(), route)) return
+        pendingInbox = route
+        openPendingInbox()
+    }
+
+    private fun openPendingInbox() {
+        val route = pendingInbox ?: return
+        val current = account ?: return // Wait for authenticated account + workspace restore.
+        pendingInbox = null
+        if (current.string("id") != route.recipient || !OfficePush.accepts(getApplication(), route)) return
+        val space = workspaces.firstOrNull { it.id == route.workspace } ?: return
+        if (office?.workspace?.id != space.id) select(space)
+        office?.apply { board = false; showingInbox = true }
+    }
+
     fun select(workspace: Workspace) {
         leave()
         api?.let {
@@ -132,11 +155,13 @@ class OfficeModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun leave() {
-        office?.stop()
+        office?.leave()
         office = null
     }
 
     private fun clearSession() {
+        pendingInbox = null
+        OfficePush.clear(getApplication())
         leave()
         api?.close()
         api = null
@@ -150,6 +175,7 @@ class OfficeModel(application: Application) : AndroidViewModel(application) {
         val client = api
         leave()
         try {
+            if (client != null) withTimeoutOrNull(4000) { OfficePush.revoke(getApplication(), client) }
             client?.call("/api/auth/sign-out", "POST")
         } finally {
             clearSession()
@@ -168,7 +194,9 @@ class OfficeSession(
     val workspace: Workspace,
     private val parentScope: CoroutineScope,
 ) {
-    val inbox = WorkspaceInbox(api, workspace.id)
+    private val inboxScope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
+    val inbox = WorkspaceInbox(api, workspace.id).apply { connect(inboxScope) }
+    var showingInbox by mutableStateOf(false)
     var snapshot by mutableStateOf<Snapshot?>(null)
     var scene by mutableStateOf<Scene?>(null)
     val avatars = mutableStateMapOf<String, Avatar>()
@@ -380,7 +408,7 @@ class OfficeSession(
                     next.workspace.optJSONObject("features")?.optBoolean("whiteboard", true) ?: true
                 if (!boardEnabled) board = false
                 snapshot = next
-                if (!connected) scope?.let(inbox::connect)
+                if (!connected) inbox.refresh()
                 connected = true
                 reconnecting = false
                 reconnectAttempt = 0
@@ -521,6 +549,12 @@ class OfficeSession(
         } else send(json("type" to action))
     }
 
+    fun leave() {
+        inbox.clear()
+        inboxScope.cancel()
+        stop()
+    }
+
     fun stop() {
         retry?.cancel()
         retry = null
@@ -533,7 +567,6 @@ class OfficeSession(
         board = false
         socket?.close(1000, "Leaving office")
         socket = null
-        inbox.clear()
         scope?.cancel()
         scope = null
         media.stop()

@@ -90,11 +90,23 @@ struct InboxButton: View {
 
 struct InboxPanel: View {
   @ObservedObject var inbox: OfficeInbox
+  let workspace: String
+  @ObservedObject private var push = OfficePush.shared
   @Environment(\.dismiss) private var dismiss
 
   var body: some View {
     NavigationStack {
       List {
+        Section("On this device") {
+          if push.subscribedWorkspace == workspace {
+            Button("Turn off system notifications") { Task { await push.disable() } }
+              .disabled(push.busy)
+          } else {
+            Button("Enable system notifications") { Task { await push.enable(workspace) } }
+              .disabled(push.busy)
+          }
+          if let message = push.message { Text(message).officeFont(.caption).foregroundStyle(.secondary) }
+        }
         if !inbox.error.isEmpty {
           Text(verbatim: inbox.error)
           Button("Try again") { Task { await inbox.load() } }
