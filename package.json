@@ -68,5 +68,5 @@
   },
   "description": "A cozy pixel workspace for remote teams, with nearby voice, video, screen sharing, shared whiteboards, and multi-workspace collaboration.",
   "homepage": "https://www.littleoffice.app",
-  "license": "SEE LICENSE IN LICENSE"
+  "license": "AGPL-3.0-only"
 }

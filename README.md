@@ -198,8 +198,12 @@ The browser runner uses temporary accounts and synthetic media. Native checks li
 
 ## License
 
-**Source available for private and internal use. Third-party hosting and resale are not permitted without separate written permission.**
+Copyright (c) 2026 GmBeHappy and the respective contributors.
 
-The [Little Office Source-Available License 1.0](LICENSE) permits running and modifying the software for yourself or your organization's own internal team. It prohibits providing it as a hosted/managed service to third parties, selling access, reselling or commercially distributing the software, and using a modified or white-label version to do those things. Those restrictions apply to free third-party hosting too. Contact [GmBeHappy](https://github.com/GmBeHappy) for separate permission.
+Little Office is open-source software licensed under the [GNU Affero General Public License, version 3 only (AGPL-3.0-only)](LICENSE).
 
-This is a custom source-available license, **not an OSI-approved open-source license**. Existing third-party components retain their own licenses; see [third-party notices](public/licenses/) and the [IBM Plex Sans Thai font license](public/fonts/ibm-plex-sans-thai/OFL.txt). The new terms do not revoke rights already granted for earlier copies under another license. See the [Open Source Definition](https://opensource.org/osd) for why restrictions on resale make this source-available rather than open source.
+You may use, modify, redistribute, self-host, and offer paid hosting or sell copies, provided you comply with the AGPL. When distributing covered software, preserve the required notices and license and provide the corresponding source as required. If you modify Little Office and let users interact with that version over a network, you must prominently offer those users access to its corresponding source code at no charge under the AGPL.
+
+This replaces the custom license for this version; there is no separate ban on third-party hosting or resale. The [full license](LICENSE) governs; see [GNU's explanation of the AGPL](https://www.gnu.org/licenses/why-affero-gpl.html) for background.
+
+Third-party components and materials retain their own licenses; see [third-party notices](public/licenses/) and the [IBM Plex Sans Thai font license](public/fonts/ibm-plex-sans-thai/OFL.txt).

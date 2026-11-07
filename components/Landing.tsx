@@ -393,7 +393,7 @@ function LandingContent() {
             </h2>
             <p>
               {t(
-                "Your office, your choice. Use Little Office Cloud, or run the source-available app for your own internal team under the repository license.",
+                "Your office, your choice. Use Little Office Cloud, or self-host the open-source app under AGPL-3.0.",
               )}
             </p>
             <ul>
@@ -518,7 +518,7 @@ function LandingContent() {
               </a>
               <small>
                 {t(
-                  "Source available for internal use. No third-party hosting or resale.",
+                  "Open source under AGPL-3.0. Commercial use is permitted under the license terms.",
                 )}
               </small>
             </article>
@@ -608,7 +608,7 @@ function LandingContent() {
               ],
               [
                 "Can I host Little Office myself?",
-                "Yes, for your own personal or internal team use under the repository license. The source is available, but offering hosted services to third parties, selling access, and resale require separate written permission.",
+                "Yes. Little Office is open source under AGPL-3.0. You can self-host, modify, and offer paid services under its terms. If you modify the app and let users interact with it over a network, you must offer those users the corresponding source code at no charge.",
               ],
             ].map(([q, a]) => (
               <details key={q}>
