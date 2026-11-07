@@ -263,7 +263,7 @@ private fun WorkspaceOIDC(model: OfficeModel, workspace: Workspace) {
     }
     if (settings?.optBoolean("canConfigure") == true) {
         OfficeText(
-            "Changes require a personal sign-in from the last 10 minutes. If requested, sign out and sign in again using the canonical server https://app.littleoffice.app."
+            "Changes require a personal sign-in from the last 10 minutes. If requested, sign out and sign in again using the canonical server https://www.littleoffice.app."
         )
         OutlinedTextField(
             issuer,

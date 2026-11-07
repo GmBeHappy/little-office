@@ -185,7 +185,7 @@ fun ConnectionScreen(model: OfficeModel) {
                                 modifier = Modifier.fillMaxWidth(),
                             )
                             TextButton(
-                                onClick = { model.server = "https://app.littleoffice.app" }
+                                onClick = { model.server = "https://www.littleoffice.app" }
                             ) {
                                 OfficeText("Use Little Office")
                             }

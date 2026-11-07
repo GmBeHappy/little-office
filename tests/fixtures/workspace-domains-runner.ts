@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { createHash } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
-const portal = "https://app.littleoffice.app",
+const portal = "https://www.littleoffice.app",
   tenant = "https://gmtech.littleoffice.app",
   other = "https://second.littleoffice.app";
 const pg = new PGlite();
@@ -369,7 +369,7 @@ try {
       200,
     );
   for (const domain of [
-    "app.littleoffice.app",
+    "www.littleoffice.app",
     "unknown.littleoffice.app",
     "rtc.littleoffice.app",
     "evil.invalid",

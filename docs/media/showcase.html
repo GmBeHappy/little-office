@@ -1,0 +1,868 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Little Office — workspace feature showcase</title>
+    <style>
+      :root {
+        --ink: #243f37;
+        --muted: #6c7f72;
+        --green: #467258;
+        --line: #dbe3d7;
+        --paper: #fcfcf6;
+        --accent: #d9efba;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #edf1e7;
+        color: var(--ink);
+        font-family: Arial, Helvetica, sans-serif;
+        width: 1600px;
+        height: 900px;
+        overflow: hidden;
+      }
+      .canvas {
+        padding: 34px 72px;
+        background:
+          radial-gradient(ellipse at 93% 2%, #dcebd0, transparent 45%),
+          radial-gradient(ellipse at 0 100%, #e2e8d7, transparent 50%);
+        height: 100%;
+      }
+      .mast {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 36px;
+      }
+      .brand {
+        font-size: 25px;
+        font-weight: 800;
+        letter-spacing: -1px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .mark {
+        position: relative;
+        background: var(--green);
+        height: 27px;
+        width: 29px;
+        clip-path: polygon(0 28%, 50% 0, 100% 28%, 100% 100%, 0 100%);
+      }
+      .mark:after {
+        content: "";
+        position: absolute;
+        background: #eef3d9;
+        width: 8px;
+        height: 12px;
+        bottom: 0;
+        left: 10px;
+      }
+      .eyebrow {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 2.5px;
+        color: var(--muted);
+      }
+      h1 {
+        font-size: 57px;
+        line-height: 1.05;
+        letter-spacing: -2.8px;
+        margin: 26px 0 11px;
+        font-weight: 600;
+      }
+      .subtitle {
+        font-size: 19px;
+        line-height: 1.5;
+        color: #637969;
+        margin: 0;
+      }
+      .heading {
+        height: 152px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        border: 1px solid #d0ddc5;
+        border-radius: 30px;
+        padding: 8px 12px;
+        background: #f3f7e9;
+        color: #456447;
+      }
+      .dot {
+        height: 7px;
+        width: 7px;
+        border-radius: 50%;
+        background: #7ca769;
+        display: inline-block;
+      }
+      .window {
+        height: 578px;
+        border: 1px solid #ced9c9;
+        border-radius: 19px;
+        background: var(--paper);
+        overflow: hidden;
+        box-shadow:
+          0 20px 50px #28432919,
+          0 3px 5px #28432908;
+      }
+      .chrome {
+        height: 34px;
+        background: #e6ecdf;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 7px;
+        border-bottom: 1px solid #d5dfcf;
+      }
+      .chrome i {
+        height: 8px;
+        width: 8px;
+        border-radius: 50%;
+        background: #becbbb;
+      }
+      .chrome span {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 11px;
+        letter-spacing: 0.3px;
+        color: #75856e;
+      }
+      .appbar {
+        height: 60px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 23px;
+      }
+      .appname {
+        font-size: 16px;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        gap: 13px;
+      }
+      .mini-mark {
+        height: 28px;
+        width: 28px;
+        background: #e0ebd2;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        color: #537546;
+        font-size: 16px;
+      }
+      .breadcrumb {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .app-actions {
+        display: flex;
+        align-items: center;
+        gap: 17px;
+        font-size: 12px;
+      }
+      .appbody {
+        height: 484px;
+        display: flex;
+      }
+      .rail {
+        width: 65px;
+        flex-shrink: 0;
+        border-right: 1px solid var(--line);
+        padding: 17px 12px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-direction: column;
+        background: #f9faf2;
+      }
+      .rail div {
+        width: 39px;
+        height: 39px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        color: #788675;
+      }
+      .rail .active {
+        background: #e3ecd6;
+        color: #456a4e;
+      }
+      .icon {
+        width: 20px;
+        height: 20px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .map {
+        position: relative;
+        flex: 1;
+        overflow: hidden;
+        background: #8fa582;
+      }
+      .map-art {
+        height: 100%;
+        width: 100%;
+        object-fit: cover;
+        image-rendering: pixelated;
+      }
+      .map-chip {
+        position: absolute;
+        top: 16px;
+        left: 18px;
+        background: #fcfff1ec;
+        box-shadow: 0 3px 10px #193c2220;
+        border-radius: 12px;
+        padding: 10px 13px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 12px;
+        font-weight: bold;
+      }
+      .map-label {
+        position: absolute;
+        font-size: 10px;
+        letter-spacing: 1.4px;
+        color: #fcffed;
+        background: #324f3bbd;
+        border-radius: 5px;
+        padding: 5px 8px;
+      }
+      .person {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        flex-direction: column;
+        transform: translate(-50%, -50%);
+      }
+      .person img {
+        height: 72px;
+        width: 54px;
+        image-rendering: pixelated;
+        object-fit: contain;
+        filter: drop-shadow(0 5px 1px #24382442);
+      }
+      .name {
+        background: #fafff0f5;
+        padding: 5px 9px;
+        border-radius: 7px;
+        font-size: 11px;
+        font-weight: bold;
+        white-space: nowrap;
+        box-shadow: 0 2px 6px #15352020;
+      }
+      .talking .name {
+        border: 2px solid #80af56;
+        padding: 3px 7px;
+      }
+      .bubble {
+        background: #fffdf4;
+        padding: 8px 12px;
+        border-radius: 13px 13px 13px 2px;
+        font-size: 12px;
+        margin-bottom: 4px;
+        white-space: nowrap;
+        box-shadow: 0 2px 4px #28432912;
+      }
+      .toolbar {
+        position: absolute;
+        bottom: 19px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #fcfff5f5;
+        box-shadow: 0 7px 20px #2c472f28;
+        padding: 9px;
+        border: 1px solid #fff9;
+        border-radius: 17px;
+      }
+      .tool {
+        width: 46px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        border-radius: 11px;
+        background: #edf2e6;
+        color: #4b6650;
+      }
+      .tool.on {
+        background: #486f50;
+        color: white;
+      }
+      .tool.end {
+        background: #f7e3dd;
+        color: #ad6a59;
+      }
+      .separator {
+        height: 24px;
+        width: 1px;
+        background: #d7dfce;
+        margin: 0 3px;
+      }
+      .hint {
+        position: absolute;
+        bottom: 22px;
+        left: 18px;
+        font-size: 10px;
+        color: #34563e;
+        background: #ffffffb8;
+        border-radius: 6px;
+        padding: 6px;
+      }
+      .sidebar {
+        width: 257px;
+        flex-shrink: 0;
+        background: #fbfcf6;
+        padding: 22px 19px;
+      }
+      .sidebar h3 {
+        font-size: 14px;
+        margin: 0 0 19px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .sidebar h3 span {
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: normal;
+      }
+      .sectionlabel {
+        font-size: 9px;
+        letter-spacing: 1.7px;
+        color: #8a9682;
+        margin: 19px 0 9px;
+      }
+      .member {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 0;
+      }
+      .avatar {
+        height: 37px;
+        width: 37px;
+        background: #e5edda;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+      }
+      .avatar img {
+        width: 27px;
+        height: 37px;
+        image-rendering: pixelated;
+        object-fit: contain;
+      }
+      .member b {
+        font-size: 12px;
+        display: block;
+        margin-bottom: 3px;
+      }
+      .member small {
+        font-size: 10px;
+        color: #88947e;
+      }
+      .wave {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        color: #679a5a;
+      }
+      .wave i {
+        width: 3px;
+        background: currentColor;
+        border-radius: 2px;
+        height: 10px;
+      }
+      .wave i:nth-child(2) {
+        height: 18px;
+      }
+      .wave i:nth-child(3) {
+        height: 13px;
+      }
+      .room {
+        margin-top: 8px;
+        border: 1px solid #dde5d6;
+        padding: 11px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+      }
+      .room span {
+        font-size: 10px;
+        color: #8b9782;
+      }
+      .footer {
+        height: 59px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .chapters {
+        display: flex;
+        gap: 22px;
+        font-size: 11px;
+        color: #8a9984;
+      }
+      .chapters .selected {
+        color: #36573f;
+        font-weight: bold;
+      }
+      .chapters b {
+        font-size: 10px;
+        margin-right: 6px;
+      }
+      .website {
+        font-size: 15px;
+        font-weight: bold;
+        letter-spacing: -0.3px;
+      }
+      .caption {
+        position: absolute;
+        right: 77px;
+        top: 113px;
+        max-width: 290px;
+        text-align: right;
+      }
+      .caption .pill {
+        font-size: 11px;
+      }
+      .voice-card {
+        position: absolute;
+        right: 23px;
+        top: 75px;
+        width: 280px;
+        border: 1px solid #e1e8d6;
+        border-radius: 17px;
+        padding: 20px;
+        background: #fcfff3f5;
+        box-shadow: 0 8px 28px #243d3429;
+      }
+      .voice-card h2 {
+        font-size: 20px;
+        margin: 0 0 7px;
+        letter-spacing: -0.6px;
+      }
+      .voice-card p {
+        font-size: 12px;
+        line-height: 1.6;
+        color: #7c8b71;
+        margin: 0 0 10px;
+      }
+      .voice-card .member {
+        padding: 9px 0;
+      }
+      .voice-foot {
+        border-top: 1px solid #dbe4d2;
+        margin-top: 10px;
+        padding-top: 13px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 10px;
+        color: #66815d;
+      }
+      .voice-ring {
+        position: absolute;
+        border: 2px dashed #e4f1b8aa;
+        border-radius: 50%;
+        background: #e7f8bd20;
+        width: 270px;
+        height: 185px;
+        left: 135px;
+        top: 177px;
+      }
+      .screen-note {
+        position: absolute;
+        left: 23px;
+        top: 76px;
+        background: #f8fceb;
+        padding: 10px 13px;
+        border-radius: 10px;
+        font-size: 11px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .board {
+        position: relative;
+        flex: 1;
+        background-color: #fffef9;
+        background-image: radial-gradient(#dce2d4 0.85px, transparent 0.85px);
+        background-size: 19px 19px;
+        overflow: hidden;
+      }
+      .boardtop {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 19px 22px;
+        font-size: 12px;
+      }
+      .boardtools {
+        position: absolute;
+        top: 17px;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 1px solid #e5e6d8;
+        background: #fffef8;
+        border-radius: 12px;
+        padding: 9px 15px;
+        display: flex;
+        gap: 20px;
+        color: #6a7b61;
+        font-size: 18px;
+      }
+      .board-title {
+        position: absolute;
+        top: 91px;
+        left: 51px;
+        font-size: 24px;
+        letter-spacing: -0.8px;
+        font-weight: bold;
+      }
+      .board-sub {
+        position: absolute;
+        top: 124px;
+        left: 52px;
+        font-size: 12px;
+        color: #8a957f;
+      }
+      .sticky {
+        position: absolute;
+        width: 195px;
+        height: 133px;
+        padding: 21px 22px;
+        box-shadow: 0 6px 10px #28352112;
+        border-radius: 3px;
+        font-size: 20px;
+        line-height: 1.4;
+        letter-spacing: -0.5px;
+      }
+      .sticky small {
+        font-size: 10px;
+        display: block;
+        margin-bottom: 10px;
+        letter-spacing: 1px;
+      }
+      .arrow {
+        position: absolute;
+        top: 250px;
+        left: 279px;
+        font-size: 45px;
+        color: #a4af98;
+      }
+      .board-note {
+        position: absolute;
+        bottom: 55px;
+        left: 80px;
+        border: 2px solid #a3bd8e;
+        border-radius: 50%;
+        padding: 20px 40px;
+        transform: rotate(-4deg);
+        font-size: 17px;
+      }
+      .cursor {
+        position: absolute;
+        font-size: 23px;
+        color: #6485ad;
+      }
+      .cursor span {
+        font-size: 10px;
+        background: currentColor;
+        padding: 5px 8px;
+        border-radius: 5px;
+        display: inline-block;
+      }
+      .cursor span b {
+        color: white;
+      }
+      .maps-view {
+        padding: 26px 32px;
+        flex: 1;
+        background: #f3f5ed;
+      }
+      .maps-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+      }
+      .maps-heading h2 {
+        font-size: 23px;
+        letter-spacing: -0.7px;
+        margin: 0 0 6px;
+      }
+      .maps-heading p {
+        font-size: 12px;
+        color: #849078;
+        margin: 0;
+      }
+      .map-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 17px;
+      }
+      .map-card {
+        border: 1px solid #d8e1cf;
+        border-radius: 13px;
+        overflow: hidden;
+        background: #fffef8;
+      }
+      .map-card.chosen {
+        border: 2px solid #729354;
+      }
+      .map-card > img {
+        width: 100%;
+        height: 194px;
+        object-fit: cover;
+        image-rendering: pixelated;
+        display: block;
+      }
+      .map-card .detail {
+        padding: 16px;
+      }
+      .map-card h3 {
+        font-size: 15px;
+        margin: 0 0 7px;
+      }
+      .map-card p {
+        font-size: 11px;
+        color: #8a967e;
+        margin: 0;
+      }
+      .map-bottom {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-top: 24px;
+        background: #e6eedc;
+        border-radius: 12px;
+        padding: 17px 20px;
+        font-size: 12px;
+      }
+      .map-bottom span {
+        color: #7c8d70;
+      }
+      .map-bottom strong {
+        margin-right: auto;
+      }
+      .cta {
+        background: #466b4c;
+        color: #fff;
+        padding: 11px 17px;
+        border-radius: 9px;
+        font-size: 11px;
+      }
+      .map-card .check {
+        float: right;
+        color: #64844e;
+        font-size: 11px;
+      }
+      .scene {
+        display: none;
+      }
+      .scene.active {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="canvas">
+      <header class="mast">
+        <div class="brand">
+          <span class="mark"></span>little office<span
+            style="
+              font-weight: 400;
+              color: #9ca890;
+              margin-left: 9px;
+              font-size: 17px;
+            "
+            >/</span
+          ><span
+            style="
+              font-size: 12px;
+              font-weight: 500;
+              letter-spacing: 0;
+              color: #7c8c72;
+            "
+            >a place to work together</span
+          >
+        </div>
+        <div class="eyebrow">
+          WORKSPACE SHOWCASE
+          <span style="margin: 0 13px; color: #b4c0a9">/</span> DEMO CONTENT
+        </div>
+      </header>
+      <div class="heading">
+        <h1 id="headline"></h1>
+        <p class="subtitle" id="subtitle"></p>
+      </div>
+      <div class="caption"><span class="pill" id="badge"></span></div>
+      <main class="window">
+        <div class="chrome">
+          <i></i><i></i><i></i><span>www.littleoffice.app</span>
+        </div>
+        <div class="appbar">
+          <div class="appname">
+            <span class="mini-mark">✦</span> Fern &amp; Friends
+            <span class="breadcrumb"
+              >/ &nbsp; <span id="location">Sakura Garden</span></span
+            >
+          </div>
+          <div class="app-actions">
+            <span class="pill"><span class="dot"></span> 4 online</span
+            ><span>EN</span
+            ><span
+              class="avatar"
+              style="width: 29px; height: 29px; border-radius: 50%"
+              ><img src="../../public/landing/sage.svg" alt="Your avatar"
+            /></span>
+          </div>
+        </div>
+        <div class="appbody">
+          <nav class="rail" aria-label="Illustrative navigation">
+            <div class="active" data-icon="home"></div>
+            <div data-icon="people"></div>
+            <div data-icon="board"></div>
+            <div style="margin-top: auto" data-icon="settings"></div>
+          </nav>
+          <div id="content" style="display: flex; flex: 1; min-width: 0"></div>
+        </div>
+      </main>
+      <footer class="footer">
+        <div class="chapters">
+          <span data-chapter="0"><b>01</b> Your little world</span
+          ><span data-chapter="1"><b>02</b> Walk up &amp; talk</span
+          ><span data-chapter="2"><b>03</b> Think together</span
+          ><span data-chapter="3"><b>04</b> Make it yours</span>
+        </div>
+        <div class="website">
+          www.littleoffice.app <span style="margin-left: 10px">↗</span>
+        </div>
+      </footer>
+    </div>
+    <script>
+      const assets = "../../public/landing/";
+      const paths = {
+        home: "M3 10 10 4l7 6v8H3Z M8 18v-6h4v6",
+        people:
+          "M13 18v-2a4 4 0 0 0-8 0v2 M9 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6 M15 4a3 3 0 0 1 0 6 M16 13a4 4 0 0 1 3 4",
+        board: "M3 3h14v12H3Z M7 19l3-4 3 4 M6 7h8 M6 10h5",
+        settings:
+          "M10 3v3 M10 14v3 M3 10h3 M14 10h3 M5 5l2 2 M13 13l2 2 M5 15l2-2 M13 7l2-2 M10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6",
+        mic: "M7 4a3 3 0 0 1 6 0v6a3 3 0 0 1-6 0Z M4 9v1a6 6 0 0 0 12 0V9 M10 16v3 M7 19h6",
+        camera: "M2 5h10v11H2Z M12 9l6-4v11l-6-4",
+        screen: "M2 3h16v12H2Z M7 19h6 M10 15v4 M10 6v6 M7 9l3-3 3 3",
+        smile:
+          "M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16 M6 11q4 5 8 0 M7 7h.1 M13 7h.1",
+        phone: "M3 12q7-8 14 0l-2 3-4-2v-2H9v2l-4 2Z",
+      };
+      function icon(name) {
+        return `<svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="${paths[name] || paths.home}"/></svg>`;
+      }
+      document
+        .querySelectorAll("[data-icon]")
+        .forEach((el) => (el.innerHTML = icon(el.dataset.icon)));
+      function member(name, status, avatar = "sage", talk = false) {
+        return `<div class="member"><div class="avatar"><img src="${assets + avatar}.svg" alt=""></div><div><b>${name}</b><small>${status}</small></div>${talk ? '<div class="wave"><i></i><i></i><i></i><i></i></div>' : ""}</div>`;
+      }
+      function sidebar(room = "Commons") {
+        return `<aside class="sidebar"><h3>People <span>4 online</span></h3><div class="sectionlabel">${room.toUpperCase()} · 3</div>${member("Mina (you)", "Available")}${member("Noah", "In a conversation", "gold", true)}${member("June", "Thinking out loud", "sage", true)}<div class="sectionlabel">STUDIO · 1</div>${member("Ari", "Focusing", "gold")}<div class="sectionlabel">MEETING ROOMS</div><div class="room">Studio <span>1 person &nbsp; ↗</span></div><div class="room">Library <span>Open &nbsp; ↗</span></div></aside>`;
+      }
+      function toolbar() {
+        return `<div class="toolbar"><div class="tool on">${icon("mic")}</div><div class="tool">${icon("camera")}</div><div class="tool">${icon("screen")}</div><div class="separator"></div><div class="tool">${icon("board")}</div><div class="tool">${icon("smile")}</div><div class="tool end">${icon("phone")}</div></div>`;
+      }
+      function person(name, left, top, avatar, talk = false, bubble = "") {
+        return `<div class="person ${talk ? "talking" : ""}" style="left:${left}%;top:${top}%">${bubble ? `<div class="bubble">${bubble}</div>` : ""}<img src="${assets + avatar}.svg" alt=""><div class="name">${talk ? "● " : ""}${name}</div></div>`;
+      }
+      function map(voice = false) {
+        return `<section class="map"><img class="map-art" src="${assets}zen-small.svg" alt="Sakura Garden pixel map"><div class="map-chip"><span class="dot"></span>${voice ? "Nearby voice · 3 people" : "Sakura Garden"} </div><div class="map-label" style="top:66px;left:42%">LIBRARY</div>${voice ? '<div class="voice-ring"></div>' : ""}${person("Mina", voice ? 22 : 36, voice ? 55 : 62, "sage", true, voice ? "Got a minute?" : "Morning, team!")}${person("Noah", voice ? 37 : 51, voice ? 65 : 66, "gold", true)}${person("June", voice ? 28 : 59, voice ? 78 : 48, "sage", false)}${person("Ari", 80, 28, "gold")}${voice ? `<div class="voice-card"><h2>Just walk over.</h2><p>A little conversation, right where you are.</p>${member("Mina (you)", "Microphone on")}${member("Noah", "Speaking", "gold", true)}${member("June", "Listening", "sage")}<div class="voice-foot"><span class="dot"></span> Nearby voice connected</div></div>` : ""}${toolbar()}<div class="hint">W A S D &nbsp; to walk &nbsp; · &nbsp; Space to jump</div></section>${sidebar()}`;
+      }
+      function board() {
+        return `<section class="board"><div class="boardtop"><b>Studio / Whiteboard</b><span style="color:#6e8e59">✓ Saved</span></div><div class="boardtools">↖ &nbsp; □ &nbsp; ◇ &nbsp; ○ &nbsp; ↗ &nbsp; ╱ &nbsp; T</div><div class="board-title">What should we make next?</div><div class="board-sub">A tiny idea. A shared canvas. A team that builds together.</div><div class="sticky" style="left:65px;top:183px;background:#f5e8a9;transform:rotate(-3deg)"><small>01 / DISCOVER</small>Listen to<br>the team.</div><div class="arrow">→</div><div class="sticky" style="left:345px;top:183px;background:#daebcb;transform:rotate(2deg)"><small>02 / EXPLORE</small>Sketch a<br>little idea.</div><div class="arrow" style="left:560px">→</div><div class="sticky" style="left:625px;top:183px;background:#e6dff1;transform:rotate(-2deg)"><small>03 / CREATE</small>Make it<br>together.</div><div class="board-note">Less distance. More possibility.</div><div class="cursor" style="left:499px;top:308px">↖ <span><b>Noah</b></span></div><div class="cursor" style="left:799px;top:184px;color:#b7836b">↖ <span><b>June</b></span></div><div style="position:absolute;bottom:23px;right:26px;font-size:11px;color:#89947e">− &nbsp; 100% &nbsp; +</div></section><aside class="sidebar"><h3>Creating together <span>3 editors</span></h3>${member("Mina (you)", "Drawing")}${member("Noah", "Adding an idea", "gold")}${member("June", "Sketching", "sage")}<div class="sectionlabel">SAME ROOM. SAME CANVAS.</div><p style="font-size:12px;line-height:1.9;color:#7d8e73">Live cursors.<br>Persistent drawings.<br>Keep the conversation going.</p><div class="room">Export drawing <span>↗</span></div><div class="room">Save PNG to storage <span>↗</span></div><p style="font-size:9px;color:#9aa48f;margin-top:12px">PNG archive requires configured storage.</p></aside>`;
+      }
+      function maps() {
+        return `<section class="maps-view"><div class="maps-heading"><div><h2>A different kind of workspace.</h2><p>Choose a shared world for Fern &amp; Friends.</p></div><span class="pill">12 themed maps</span></div><div class="map-grid">${[
+          ["zen-small", "Sakura Garden", "Quiet corners. Fresh ideas."],
+          ["camping-small", "Pine Camp", "A little closer to nature."],
+          ["space-small", "Lunar Outpost", "Room for your next big idea."],
+          ["beach-small", "Summer Cove", "A brighter place to meet."],
+        ]
+          .map(
+            ([id, title, sub], i) =>
+              `<article class="map-card ${i === 0 ? "chosen" : ""}"><img src="${assets + id}.svg" alt="${title}"><div class="detail"><h3>${title}${i === 0 ? '<span class="check">✓ Selected</span>' : ""}</h3><p>${sub}</p></div></article>`,
+          )
+          .join(
+            "",
+          )}</div><div class="map-bottom"><span style="font-size:25px;color:#789563">✦</span><div><strong>A space that feels like your team.</strong><br><span style="display:inline-block;margin-top:5px">Custom avatars · shared activities · optional daily map rotation</span></div><div class="cta" style="margin-left:auto">Make yourself at home ↗</div></div></section>`;
+      }
+      const scenes = [
+        [
+          "Your team. A little closer.",
+          "A shared pixel world for the everyday moments between meetings.",
+          "MULTI-WORKSPACE · WEB + NATIVE",
+          () => map(false),
+        ],
+        [
+          "Good conversations start nearby.",
+          "Walk over, say hello, and let the conversation happen.",
+          "NEARBY VOICE · PRIVATE ROOMS",
+          () => map(true),
+        ],
+        [
+          "Small ideas. Shared possibilities.",
+          "Draw, discuss, and build on the same canvas.",
+          "LIVE CURSORS · SAVED DRAWINGS",
+          board,
+        ],
+        [
+          "Make room for a little wonder.",
+          "A garden, a campsite, a moon base. Find your team’s happy place.",
+          "12 MAPS · CUSTOM AVATARS",
+          maps,
+        ],
+      ];
+      const scene = Math.max(
+        0,
+        Math.min(
+          3,
+          Number(new URLSearchParams(location.search).get("scene")) || 0,
+        ),
+      );
+      const [title, subtitle, badge, render] = scenes[scene];
+      document.querySelector("#headline").textContent = title;
+      document.querySelector("#subtitle").textContent = subtitle;
+      document.querySelector("#badge").textContent = badge;
+      document.querySelector("#location").textContent =
+        scene === 2
+          ? "Studio"
+          : scene === 3
+            ? "Workspace settings"
+            : "Sakura Garden";
+      document.querySelector("#content").innerHTML = render();
+      document
+        .querySelector(`[data-chapter="${scene}"]`)
+        .classList.add("selected");
+    </script>
+  </body>
+</html>

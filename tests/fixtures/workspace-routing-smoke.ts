@@ -7,7 +7,7 @@ const api = Bun.serve({
     return request.headers.get("host") === "gmtech.littleoffice.app"
       ? Response.json({
           workspace: { id, slug: "gmtech" },
-          portal: "https://app.littleoffice.app",
+          portal: "https://www.littleoffice.app",
         })
       : new Response("Unknown", { status: 404 });
   },
@@ -33,7 +33,7 @@ const web = Bun.spawn(
   {
     env: {
       ...process.env,
-      APP_URL: "https://app.littleoffice.app",
+      APP_URL: "https://www.littleoffice.app",
       WORKSPACE_BASE_DOMAIN: "littleoffice.app",
       API_INTERNAL_URL: `http://127.0.0.1:${api.port}`,
     },
@@ -50,7 +50,7 @@ async function request(path: string, host = "gmtech.littleoffice.app") {
 try {
   for (let i = 0; i < 50; i++) {
     try {
-      await request("/", "app.littleoffice.app");
+      await request("/", "www.littleoffice.app");
       break;
     } catch {
       await Bun.sleep(100);
@@ -69,17 +69,17 @@ try {
   );
   assert.equal(
     (await request("/workspaces")).headers.get("location"),
-    "https://app.littleoffice.app/workspaces",
+    "https://www.littleoffice.app/workspaces",
   );
   assert.equal(
     (await request("/native/authorize?challenge=abc&state=def")).headers.get(
       "location",
     ),
-    "https://app.littleoffice.app/native/authorize?challenge=abc&state=def",
+    "https://www.littleoffice.app/native/authorize?challenge=abc&state=def",
   );
   assert.equal(
     (await request(`/profile?workspace=${id}`)).headers.get("location"),
-    `https://app.littleoffice.app/profile?workspace=${id}`,
+    `https://www.littleoffice.app/profile?workspace=${id}`,
   );
   assert.equal(
     (await request("/w/00000000-0000-4000-8000-000000000002/office")).status,

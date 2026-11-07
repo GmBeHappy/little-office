@@ -1,0 +1,80 @@
+Little Office Source-Available License 1.0
+
+Copyright (c) 2026 GmBeHappy and the respective contributors.
+
+1. Scope and definitions
+
+"Software" means the original Little Office code, documentation, and artwork
+made available under this license, including modifications and derivative works.
+"Licensor" means each copyright holder granting rights under this license.
+"You" means the individual or legal entity exercising those rights.
+"Internal Use" means use for your own personal purposes or solely for the
+internal operations of your organization by its employees and contractors
+acting on its behalf. It does not include providing a workspace or software
+service to customers, clients, unrelated organizations, or the general public.
+
+Third-party components and materials bearing a separate license are excluded
+from this license and remain governed by their respective licenses.
+
+2. Permission
+
+Subject to these terms, each Licensor grants you a worldwide, non-exclusive,
+royalty-free copyright license to inspect, use, copy, run, and modify the
+Software for Internal Use, including on infrastructure you own or rent for
+that purpose. Commercial organizations may use it for their own Internal Use.
+
+You may share unmodified or modified source copies without charge, provided
+that you include this license, preserve attribution and copyright notices,
+clearly identify your changes, and apply these same terms to your modifications.
+Recipients receive rights directly from the applicable Licensors under these
+terms; you may not offer broader rights in the Software.
+
+3. Restrictions
+
+Without separate written permission from the applicable Licensors, you may not:
+
+(a) Host, operate, offer, or make the Software or its substantial functionality
+    available as a service to third parties, whether paid or free, including
+    SaaS, managed hosting, service-bureau, or white-label offerings.
+(b) Sell, rent, lease, sublicense for a fee, resell, commercially distribute,
+    or otherwise charge for copies of, access to, or use of the Software.
+(c) Bundle the Software into a paid product or service, or use modifications,
+    rebranding, wrappers, or intermediaries to circumvent these restrictions.
+(d) Remove or obscure this license, copyright notices, attribution, or notices
+    of the restrictions in this license.
+
+Your Internal Use may run on rented infrastructure, but this does not grant
+an infrastructure provider permission to offer Little Office as a managed
+application service. No trademark or branding rights are granted, except to
+reproduce required attribution notices accurately.
+
+4. Reservation of rights
+
+All rights not expressly granted are reserved. Separate commercial or hosting
+permission must be obtained in writing from the applicable rights holders.
+Requests may be directed to the repository maintainer at
+https://github.com/GmBeHappy. The Licensors remain free to offer their own
+work under other terms. This license does not revoke permissions already
+granted for earlier copies under a different license.
+
+5. Termination
+
+Your rights under this license terminate automatically if you violate its
+terms. Upon termination, stop using, hosting, and distributing the Software
+and delete copies under your control, except copies you must retain by law.
+Reinstatement requires written permission from the applicable Licensors.
+Sections 3, 4, 6, and 7 survive termination.
+
+6. No warranty
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE SOFTWARE IS PROVIDED "AS IS",
+WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NONINFRINGEMENT.
+YOU BEAR THE RISK OF USING THE SOFTWARE.
+
+7. Limitation of liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, NO LICENSOR OR CONTRIBUTOR SHALL BE
+LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM OR RELATED TO
+THE SOFTWARE OR ITS USE, WHETHER IN CONTRACT, TORT, OR OTHERWISE, INCLUDING
+LOST PROFITS, LOST DATA, OR BUSINESS INTERRUPTION.

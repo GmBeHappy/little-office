@@ -1,7 +1,7 @@
 import Foundation
 
 public enum OfficeDestination {
-  public static let canonicalOrigin = URL(string: "https://app.littleoffice.app")!
+  public static let canonicalOrigin = URL(string: "https://www.littleoffice.app")!
   public static func workspaceSlug(_ input: String) throws -> String {
     var value = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     if value.hasPrefix("https://") { value = String(value.dropFirst(8)) }

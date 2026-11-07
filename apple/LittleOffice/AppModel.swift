@@ -5,7 +5,7 @@ import SwiftUI
 @MainActor
 final class AppModel: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
   @Published var serverAddress =
-    UserDefaults.standard.string(forKey: "serverAddress") ?? "https://app.littleoffice.app"
+    UserDefaults.standard.string(forKey: "serverAddress") ?? "https://www.littleoffice.app"
   @Published var workspaceSlug: String?
   @Published var workspaceName: String?
   @Published var account: Account?

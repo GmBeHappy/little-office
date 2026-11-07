@@ -15,7 +15,7 @@ final class ContractTests: XCTestCase {
     XCTAssertThrowsError(try OfficeDestination.workspaceSlug("https://gmtech.littleoffice.app//"))
     XCTAssertThrowsError(
       try OfficeDestination.workspaceSlug("https://gmtech.littleoffice.app/?token=secret"))
-    XCTAssertEqual(OfficeDestination.canonicalOrigin.host, "app.littleoffice.app")
+    XCTAssertEqual(OfficeDestination.canonicalOrigin.host, "www.littleoffice.app")
     XCTAssertEqual(try OfficeDestination.origin("http://localhost:3000").port, 3000)
     for input in [
       "", "../escape", "http://example.com", "https://user:password@example.com",

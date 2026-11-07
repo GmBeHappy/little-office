@@ -149,3 +149,45 @@ for (const extra of [
     expect(generate(extra).ok).toBe(false);
   });
 }
+
+test("www portal redirects the old app hostname over HTTP and HTTPS without changing tenant or media routing", () => {
+  const result = generate({
+    OFFICE_DOMAIN: "www.littleoffice.app",
+    APP_URL: "https://www.littleoffice.app",
+    WORKSPACE_BASE_DOMAIN: "littleoffice.app",
+    LEGACY_OFFICE_DOMAIN: "office.gmtech.dev",
+    LEGACY_WORKSPACE_SLUG: "gmtech",
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) throw new Error(result.error);
+  const { tls, http } = result.caddy.apps;
+  expect(tls.certificates.automate).toContain("www.littleoffice.app");
+  expect(tls.certificates.automate).toContain("app.littleoffice.app");
+  for (const server of [http.servers.https, http.servers.redirect]) {
+    const redirect = server.routes.find(
+      (r: any) => r.match?.[0]?.host?.[0] === "app.littleoffice.app",
+    );
+    expect(redirect).toEqual({
+      match: [{ host: ["app.littleoffice.app"] }],
+      handle: [
+        {
+          handler: "static_response",
+          status_code: 308,
+          headers: {
+            Location: ["https://www.littleoffice.app{http.request.uri}"],
+          },
+        },
+      ],
+      terminal: true,
+    });
+  }
+  const routes = http.servers.https.routes;
+  expect(
+    routes.find((r: any) => r.match?.[0]?.host?.[0] === env.RTC_DOMAIN)
+      .handle[0].upstreams,
+  ).toEqual([{ dial: "127.0.0.1:7880" }]);
+  expect(
+    routes.find((r: any) => r.match?.[0]?.path?.includes("/api/*")).match[0]
+      .host,
+  ).toEqual(["www.littleoffice.app", "*.littleoffice.app"]);
+});

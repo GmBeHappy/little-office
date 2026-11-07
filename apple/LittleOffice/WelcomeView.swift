@@ -147,7 +147,7 @@ struct WelcomeView: View {
         }
         .officeFont(.subheadline, weight: .medium)
       }.buttonStyle(.plain)
-      if model.serverAddress != "https://app.littleoffice.app" {
+      if model.serverAddress != "https://www.littleoffice.app" {
         Text(URL(string: model.serverAddress)?.host ?? model.serverAddress)
           .officeFont(.caption, design: .monospaced).foregroundStyle(.secondary).textSelection(.enabled)
       }
@@ -159,7 +159,7 @@ struct WelcomeView: View {
   private var connectionName: String {
     if let name = model.workspaceName { return name }
     let host = URL(string: model.serverAddress)?.host ?? ""
-    return host == "app.littleoffice.app" ? "Little Office" : host
+    return host == "www.littleoffice.app" ? "Little Office" : host
   }
   private var failure: some View {
     Group {
