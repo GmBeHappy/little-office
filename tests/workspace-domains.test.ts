@@ -17,13 +17,14 @@ test("workspace domains reject infrastructure names, multiple labels, ports and 
   ])
     expect(workspaceSlug(value)).toBe(false);
   const classify = (host: string) =>
-    classifyHost(host, "https://app.littleoffice.app", "littleoffice.app");
-  expect(classify("app.littleoffice.app")).toEqual({ kind: "portal" });
+    classifyHost(host, "https://www.littleoffice.app", "littleoffice.app");
+  expect(classify("www.littleoffice.app")).toEqual({ kind: "portal" });
   expect(classify("gmtech.littleoffice.app")).toEqual({
     kind: "workspace",
     slug: "gmtech",
   });
   for (const host of [
+    "app.littleoffice.app",
     "evil.app",
     "gmtech.littleoffice.app.evil.app",
     "gmtech.littleoffice.app:443",

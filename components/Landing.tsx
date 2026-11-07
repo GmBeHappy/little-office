@@ -393,7 +393,7 @@ function LandingContent() {
             </h2>
             <p>
               {t(
-                "Your office, your choice. Let us host it for you, or run the open-source app on your own server. The same core features, without feature paywalls.",
+                "Your office, your choice. Use Little Office Cloud, or run the source-available app for your own internal team under the repository license.",
               )}
             </p>
             <ul>
@@ -428,7 +428,7 @@ function LandingContent() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              {t("Explore the open-source core")} <ArrowUpRight size={16} />
+              {t("Explore the source code")} <ArrowUpRight size={16} />
             </a>
           </div>
         </section>
@@ -517,7 +517,9 @@ function LandingContent() {
                 <ArrowUpRight size={17} />
               </a>
               <small>
-                {t("Open-source core. Bring your own server and storage.")}
+                {t(
+                  "Source available for internal use. No third-party hosting or resale.",
+                )}
               </small>
             </article>
           </div>
@@ -605,8 +607,8 @@ function LandingContent() {
                 "Cloud is planned as a free, community-supported service with all core features included. Donations help cover infrastructure, not unlock features. The current preview has capacity limits shown in the comparison above.",
               ],
               [
-                "Is the Cloud version open source?",
-                "The web app and multi-workspace backend share the Little Office repository. You can use the hosted service or deploy the same core on your own server.",
+                "Can I host Little Office myself?",
+                "Yes, for your own personal or internal team use under the repository license. The source is available, but offering hosted services to third parties, selling access, and resale require separate written permission.",
               ],
             ].map(([q, a]) => (
               <details key={q}>

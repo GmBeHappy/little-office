@@ -2,7 +2,7 @@
 
 Native Kotlin + Jetpack Compose client, in the same repository as the web and Apple apps. Android 8.0 (API 26) minimum; compile/target SDK 36. The dashboard, workspace settings, map, avatars and controls are native. Only the shared Excalidraw whiteboard uses a WebView.
 
-**Beta:** the SaaS backend is deployed at `https://app.littleoffice.app`, the default connection. Legacy data is in the `gmtech` workspace; each workspace has its own web subdomain. Native accounts keep their configured API origin while switching workspaces—the workspace slug is display metadata, not a replacement API host. Development overrides remain under **Connection options**. Installing an APK does not migrate or upgrade a server.
+**Beta:** the SaaS backend is deployed at `https://www.littleoffice.app`, the default connection. Legacy data is in the `gmtech` workspace; each workspace has its own web subdomain. Native accounts keep their configured API origin while switching workspaces—the workspace slug is display metadata, not a replacement API host. Development overrides remain under **Connection options**. Installing an APK does not migrate or upgrade a server.
 
 ## Build and run
 

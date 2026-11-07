@@ -44,9 +44,12 @@ if (
   (!/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/.test(
     config.workspaceDomain,
   ) ||
-    new URL(config.origin).hostname !== `app.${config.workspaceDomain}` ||
+    ![
+      `app.${config.workspaceDomain}`,
+      `www.${config.workspaceDomain}`,
+    ].includes(new URL(config.origin).hostname) ||
     !config.origin.startsWith("https://"))
 )
   throw new Error(
-    "WORKSPACE_BASE_DOMAIN requires APP_URL=https://app.<base-domain>.",
+    "WORKSPACE_BASE_DOMAIN requires APP_URL=https://www.<base-domain> or https://app.<base-domain>.",
   );

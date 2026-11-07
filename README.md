@@ -1,408 +1,205 @@
 # Little Office
 
-This repository now includes **multi-workspace SaaS** and the backend APIs for native clients. See [workspace upgrade instructions](docs/workspace-rollout.md) and the [shared native API contract](docs/native-contract.md). The original single-office entry remains available at `/office`; new teams use `/workspaces`.
+**A little closer, wherever you work.**
 
-A pixel-art office built with **Next.js, Elysia on Bun, Drizzle ORM, PostgreSQL, Phaser, Better Auth, and LiveKit**. The interface uses **Tailwind CSS 4 + shadcn/ui**, with **React Hook Form + Zod** for forms.
+A cozy pixel workspace for remote teams. Walk over for a conversation, step into a meeting room, share your screen, and sketch an idea together. Give each team its own little world.
 
-Walk with WASD/arrows and press Space to jump (or click the Space control on the map). Nearby voice joins automatically; turn your microphone on to talk to people in range. The navbar shows your current location. A compact, horizontally scrolling strip shows nearby teammates with avatars, names, and speaking activity. Join the Studio or Library for a meeting, share your screen, wave, summon a teammate with their consent, or start an accepted direct call. Microphone and camera start off.
+[Website](https://www.littleoffice.app) · [Showcase video](docs/media/workspace-showcase.mp4) · [Run locally](#run-locally) · [Architecture](#architecture) · [License](LICENSE)
 
-The map fills the browser window. Navigation, people/rooms, and media controls float above it. Press Z to nudge the closest person in a 90-degree cone in front of your character, within 120 map pixels, or select someone you are facing and choose Nudge. Both people hear a short chime, their avatars react, and the recipient sees a notification; Do Not Disturb blocks nudges; there is no nudge cooldown. On mobile, touch and drag anywhere on the map to walk, then release to stop. Tap a room or person to interact. Close the people panel for more map space, reopen it from People or Rooms, or use the fullscreen button in the top navbar. The navbar also links to this GitHub repository.
+[![Little Office workspace mockup: Sakura Garden, nearby teammates, and shared office controls](docs/media/workspace-mockup.png)](docs/media/workspace-showcase.mp4)
 
-Switch between **English and Thai** using the language button in the navbar or on the login screen. Your choice stays saved in this browser and takes effect without disconnecting your call. Login, profiles, settings, map labels, and app notifications are translated. Thai uses bundled **IBM Plex Sans Thai** fonts (SIL Open Font License, included in `public/fonts/ibm-plex-sans-thai/OFL.txt`). Translation messages live in `lib/i18n/th.json`; English message keys provide the fallback.
+_Illustrative workspace mockup using the project's pixel artwork and fictional teammates. The [23-second showcase](docs/media/workspace-showcase.mp4) is a rendered feature presentation, not a live-session recording. [Preview source and regeneration](docs/media/README.md)._
 
-Use the grid button on a camera tile to open the expanded **Camera grid**. Use the expand button on a shared screen for a large presentation view with camera thumbnails. Switch between the two views, enter browser fullscreen, or choose **Back to map**. Microphone, camera, and call controls remain available, and changing views keeps the same audio connection. Both views adapt to mobile screens.
+## Make remote work feel a little more together
 
-Speaking activity appears as green highlights and animated sound bars on characters, the people list, and video tiles. Your microphone control also shows “Speaking” when it detects sound. Indicators follow your current conversation and nearby-audio range, and clear during silence, mute, or disconnection. Reduced-motion preferences keep the bars still.
+| Feature                        | What you can do                                                                                                                                                                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **A workspace for every team** | Create and switch workspaces, invite people by email, and manage owner/admin/member roles. Maps, membership, drawings, and activity belong to their workspace.                                                           |
+| **Walk up and talk**           | Move with WASD/arrows or a touch joystick. Nearby voice follows your position; private rooms and accepted direct calls give conversations their own space. Microphone and camera start off.                              |
+| **Meet and present**           | Use camera grids, an expanded screen presentation view, device pickers, and quality presets. Speaking indicators show who is talking.                                                                                    |
+| **Think on the same canvas**   | Collaborate in Excalidraw with live cursors and persistent boards for the commons and meeting areas. Export drawings; optionally archive PNG snapshots to private S3-compatible storage.                                 |
+| **Make it yours**              | Customize avatars, set availability and status messages, wave, send emoji, nudge a teammate, or invite them over with a consent-based summon.                                                                            |
+| **Change the scenery**         | Choose from 12 themed maps, including Sakura Garden, Pine Camp, Lunar Outpost, and Summer Cove. Optional daily rotation, roaming wildlife, and shared activities bring the web office to life.                           |
+| **Bring your identity**        | Administrator-provisioned passwords, optional Google sign-in, and workspace OIDC with DNS domain verification. Workspace SSO sessions stay scoped to their organization.                                                 |
+| **English and Thai**           | Switch the web interface's language without leaving the conversation.                                                                                                                                                    |
+| **Catch up on your team**      | A persistent workspace inbox records waves, nudges, summons, and calls. Optional Firebase Cloud Messaging delivers system notifications to opted-in devices; delivery depends on platform credentials and configuration. |
+| **See office attendance**      | Review recorded visits, connected/active/idle time, and CSV exports. Members see their own records; owners/admins see the workspace. This measures app activity, not productivity or work in other programs.             |
 
-Choose your microphone, speakers/headphones, and camera in **Settings → Devices**, before or during a call. Choices are remembered per account on this browser and apply when changing rooms. Use **Allow microphone access & refresh devices** to reveal device names; the permission check stops its capture immediately and does not unmute your call. Browsers with an output-device picker also offer **Choose another speaker**. Where output switching is unsupported, use your system sound settings. Disconnected devices fall back to the system default when available.
+The web app is the most complete client. **macOS/iOS and Android development clients** share the same accounts, workspaces, office state, and media service; their feature coverage and release requirements are documented below.
 
-## UI and forms
+## Architecture
 
-The existing cream-and-sage theme, DM Sans / Manrope and IBM Plex Sans Thai fonts, pixel maps, and avatar animations are preserved. Theme tokens and Tailwind component styles live in `app/globals.css`; scene illustrations and animations retain their custom CSS and Phaser rendering.
+One workspace-aware application backend serves all clients. Next.js serves the web UI; Elysia on Bun owns authentication, membership, office rules, whiteboard synchronization, and media permissions. LiveKit carries audio, video, and screen tracks separately from application messages.
 
-Reusable shadcn/ui components live in `components/ui`: buttons, inputs, labels, fields, dialogs, tabs, switches, and selects. They use Radix primitives for keyboard navigation, focus management, and accessible semantics. `components.json` configures the shadcn CLI, and `lib/utils.ts` provides `cn()` for combining Tailwind classes. Keep new UI on these shared components rather than adding separate control styles. The upstream MIT license is included in `public/licenses/shadcn-ui.txt`.
+```mermaid
+flowchart TB
+    WEB["Web · Next.js / React / Phaser"]
+    APPLE["macOS + iOS · SwiftUI / SpriteKit"]
+    ANDROID["Android · Kotlin / Jetpack Compose"]
+    EDGE["Caddy · HTTPS / WSS"]
+    NEXT["Next.js · pages and assets"]
+    API["Elysia on Bun · one API process"]
+    RUNTIME["Workspace UUID → Office + Whiteboards"]
+    DB[("PostgreSQL · Drizzle ORM")]
+    MEDIA["LiveKit · WebRTC / TURN"]
+    S3[("Optional private S3 storage")]
+    IDP["Optional Google / OIDC"]
+    PUSH["Optional FCM · system notifications"]
+    WEB --> EDGE
+    APPLE --> EDGE
+    ANDROID --> EDGE
+    EDGE --> NEXT
+    EDGE -->|"HTTP + WebSocket API"| API
+    EDGE -->|"Media signaling"| MEDIA
+    API --> RUNTIME
+    API --> DB
+    RUNTIME --> DB
+    API -->|"Grants and room permissions"| MEDIA
+    API --> S3
+    API --> IDP
+    API --> PUSH
+    WEB <-->|"WebRTC media"| MEDIA
+    APPLE <-->|"WebRTC media"| MEDIA
+    ANDROID <-->|"WebRTC media"| MEDIA
+```
 
-Login, temporary-password replacement, profile editing, member creation/password reset, and workspace settings use React Hook Form with Zod schemas in `shared/forms.ts`. `FormInput` connects labels, descriptions, and translated inline errors to each field. Invalid forms stay on screen, failed saves retain edits, and submitting buttons prevent duplicate requests. Controlled avatar/status inputs use `Controller`; immediate device and feature switches keep their existing actions. API validation and owner authorization remain enforced on the server.
+| Layer           | Implementation                                                                                       |
+| --------------- | ---------------------------------------------------------------------------------------------------- |
+| Web             | Next.js 16, React 19, Phaser 4; Tailwind CSS 4, shadcn/ui and Radix; React Hook Form + Zod           |
+| Application API | Elysia on Bun; Better Auth; HTTP and authenticated WebSockets                                        |
+| Data            | PostgreSQL + Drizzle migrations; optional S3-compatible snapshot storage                             |
+| Media           | LiveKit SDKs and server, with TURN for networks that need a relay                                    |
+| Shared canvas   | Excalidraw; server-validated changes persisted in PostgreSQL                                         |
+| Apple           | SwiftUI, SpriteKit, URLSession, Keychain, LiveKit Swift; WKWebView for the whiteboard                |
+| Android         | Kotlin, Jetpack Compose, native map rendering, Android Keystore, LiveKit; WebView for the whiteboard |
+| Deployment      | Docker Compose, GHCR images, Caddy HTTPS/WSS ingress                                                 |
 
-Open **Your profile** to choose a quick status or combine availability, a status icon, and a message of up to 80 characters. Busy, Do not disturb, and Away show a compact bubble above your avatar; hover, focus, or tap it to read the full message. Available hides the bubble. Icons and messages persist across sign-ins and update for everyone in the office. Existing Do not disturb behavior is unchanged; status expiration is not included. Run `bun db:migrate` when upgrading to add the status icon column.
+### How the pieces fit
+
+1. **Sign in once.** Clients use the same identity database. Native apps use system-browser sign-in and a short-lived, single-use PKCE handoff. Workspace membership is checked separately from authentication.
+2. **Enter a workspace.** `server/workspace-runtime.ts` creates an `Office` and `Whiteboards` instance per workspace UUID. The backend validates movement and room changes, then broadcasts authoritative snapshots.
+3. **Join a conversation.** The API grants access to the server-selected LiveKit room. Room names include a deployment namespace and workspace UUID. Voice/video never travel through the office WebSocket.
+4. **Keep the important things.** Accounts, sessions, memberships, invitations, settings, drawings, audit events, attendance intervals, notification inboxes, and push jobs persist in PostgreSQL. Presence and pending interactions live in memory. Optional PNG archives live in S3; the database stores their metadata.
+
+**Deployment boundary:** run **one API process**. Multiple workspaces are supported inside it; multiple API replicas require workspace ownership/routing and state coordination that are not implemented. Nearby voice uses selective subscriptions on a shared floor and is **not a confidentiality boundary** against modified clients. Private meetings and direct calls use isolated media rooms.
+
+With `WORKSPACE_BASE_DOMAIN` configured, each team also gets `https://<slug>.<base-domain>`. The Next.js proxy routes tenant pages, while the API checks the Host and workspace on every scoped request. The portal uses `https://www.littleoffice.app`; workspace cookies remain host-scoped. Optional FCM delivery uses database-backed jobs and per-device opt-in. See [workspace rollout](docs/workspace-rollout.md), [attendance](https://github.com/GmBeHappy/little-office/blob/main/docs/attendance.md), and [connection diagnostics](https://github.com/GmBeHappy/little-office/blob/main/docs/connection-diagnostics.md).
+
+### Repository map
+
+```text
+app/              Landing, login, workspaces, office, native handoff routes
+components/       Office UI, Phaser scene, media, dashboard, settings, whiteboard
+server/           Auth, workspace APIs/runtimes, office rules, media, persistence
+shared/           Protocols, map geometry/art, avatars, validation, workspace types
+lib/              Web API clients, localization, utilities
+drizzle/          Reviewed SQL migrations and schema snapshots
+apple/            macOS/iOS app and shared Swift package
+android/          Native Android app, tests, and distribution tooling
+scripts/          Development, migration, assets, fixtures, showcase generation
+deploy/           Production configuration templates and Caddy image
+tests/ + e2e/     Backend/protocol tests and browser scenarios
+docs/             Rollout, native contract, operations, and showcase assets
+```
+
+### Routes
+
+| Route                            | Purpose                                                      |
+| -------------------------------- | ------------------------------------------------------------ |
+| `/`                              | Public landing page                                          |
+| `/login`                         | Password/Google sign-in and workspace SSO entry              |
+| `/workspaces`                    | Workspace creation, invitations, memberships, and settings   |
+| `/w/:workspaceId/office`         | One workspace's live office                                  |
+| `/office`                        | Compatibility entry for the migrated default workspace       |
+| `/native/authorize`              | Browser-to-native sign-in handoff                            |
+| `/api/workspaces/:workspaceId/*` | Scoped office, media, scene, whiteboard, and management APIs |
 
 ## Run locally
 
-Install Bun 1.4.2+ and Node.js 24+. From the repository:
+Install **Bun 1.4.2+**, **Node.js 24+**, and Docker with Compose.
 
 ```sh
 bun install --frozen-lockfile
 cp .env.example .env
-```
-
-Set a randomly generated `BETTER_AUTH_SECRET` in `.env`:
-
-```sh
 bun -e 'console.log(require("crypto").randomBytes(32).toString("hex"))'
 ```
 
-With Docker, start the development database and media server:
+Put the generated value in `.env` as `BETTER_AUTH_SECRET`, then start the local services:
 
 ```sh
 docker compose -f compose.dev.yaml up -d
-bun db:migrate
-bun user:create owner "Your name" --owner
+bun run db:migrate
+bun run user:create owner "Your name" --owner
+```
+
+The account command prompts for a password and prints the user ID. Add that ID to `OFFICE_OPERATOR_IDS` in `.env` if this account should administer platform-wide accounts, authentication, and storage. Workspace ownership alone does not grant these privileges.
+
+```sh
 bun dev
 ```
 
-The user command asks for a password without echoing it and prints the account ID. Add that ID to `OFFICE_OPERATOR_IDS` before starting the API if this account should manage platform accounts. Open **http://localhost:3000/login** and sign in; `/workspaces` manages workspaces and invitations, while allowlisted operators can create accounts in `/office` → **Settings → Members**. Temporary passwords must be changed on first login. Google and workspace OIDC can provision accounts when configured; there is no public password signup.
+Open [localhost:3000/login](http://localhost:3000/login), sign in, and visit `/workspaces` to create a team. The provisioned account also has access to the compatibility `/office` workspace. There are no default app credentials or public password-signup endpoints. Email-bound invitations require a verified matching email; local provisioned accounts use `@local.invalid` addresses.
 
-The development LiveKit key `devkey` / secret `secret` is only for localhost. Use random credentials for production.
+**Without Docker:** run `bun run dev:db` in another terminal and set `DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5433/postgres`. Run `livekit-server --dev --bind 127.0.0.1` separately for calls, then follow the migration/account/app steps above. The map and presence work without LiveKit; calls require it.
 
-### Without Docker
+Local LiveKit credentials are development-only. Use [the operations guide](docs/operations.md) for private production deployments, HTTPS, TURN, backups, and image updates.
 
-Run the included development-only PostgreSQL-compatible runtime in a separate terminal:
+## Configuration and upgrades
 
-```sh
-bun dev:db
-```
+Start with [.env.example](.env.example) or [the production template](deploy/production.env.example).
 
-Set `DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5433/postgres`, then run the migration, account creation, and app commands above. Data lives in `.data/postgres`. Use real PostgreSQL on the VM.
+| Setting                                    | Purpose                                                                                      |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `APP_URL`                                  | Exact browser origin. For the public Little Office site, use `https://www.littleoffice.app`. |
+| `DATABASE_URL`, `BETTER_AUTH_SECRET`       | Database connection and stable authentication/encryption secret                              |
+| `LIVEKIT_*`                                | Public/internal media URLs and server credentials                                            |
+| `OFFICE_MEDIA_NAMESPACE`                   | Stable, unique namespace for deployments sharing LiveKit                                     |
+| `WORKSPACE_BASE_DOMAIN`                    | Optional workspace subdomain routing and host-scoped sessions                                |
+| `FCM_*`                                    | Optional system notification delivery; configure only supported/verified platforms           |
+| `OFFICE_OPERATOR_IDS`                      | Explicit allowlist for platform-wide administration                                          |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Google login; callback is `${APP_URL}/api/auth/callback/google`                     |
+| `OIDC_*`                                   | Optional deployment-level legacy SSO; workspace OIDC is configured through the dashboard     |
+| `OFFICE_S3_*`                              | Optional private external bucket for whiteboard PNG archives                                 |
 
-Run the official LiveKit server separately:
+In subdomain mode, set `WORKSPACE_BASE_DOMAIN=littleoffice.app`. The updated deployment generator redirects `app.littleoffice.app` to `www.littleoffice.app`, preserving the path and query. Existing native installations saved against the old portal should select the new server and sign in again; custom server choices are preserved.
 
-```sh
-livekit-server --dev --bind 127.0.0.1
-```
+For the public domain, configure `OFFICE_DOMAIN=www.littleoffice.app` alongside `APP_URL`, and register provider callbacks on that same origin. DNS, certificates, and provider callback changes must be applied to the deployment separately; repository documentation does not change them.
 
-The map, presence, waves, summons, and authentication work without LiveKit. Calls need a reachable LiveKit server; failures appear in the UI. Opening this localhost setup from another computer requires correct public media addresses and HTTPS; use the production setup below for that.
+**Upgrading an existing office?** Read [workspace rollout](docs/workspace-rollout.md) first. Migrations `0003`–`0005` add workspaces, native handoffs, and workspace OIDC while retaining existing identities and data. Back up the database and bucket, preserve `BETTER_AUTH_SECRET`, drain old writers/media rooms, migrate, and start one updated API instance. Do not run old and new writers together.
 
-Press **Space** to jump, **1** to sit, and **2** to sleep, or use the map buttons. Press the same key again, walk, or jump to stand up. Sitting has a settling animation; sleeping shows a resting pose with gentle breathing and Zzz. Poses synchronize to everyone without changing availability or microphone state. Each avatar's name bar shows a microphone icon with a slash while muted; room changes reset it until microphone publication resumes.
+## Client and release status
 
-## Database and migrations
+| Client      | Current scope                                                                                                                          | Setup and release notes                                                               |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Web         | Fullest feature set; keyboard/touch office, media, whiteboards, customization, workspace management, English/Thai                      | [Operations](docs/operations.md)                                                      |
+| macOS / iOS | Native development client; shared workspaces, map/presence, movement, media, and embedded whiteboard. Minimum macOS 26 / iOS 26.       | [Apple README](apple/README.md) · [Release setup](apple/RELEASE.md)                   |
+| Android     | Native development client; workspace management, map/presence, movement, media, and embedded whiteboard. Android 8.0 / API 26 minimum. | [Android README](android/README.md) · [Distribution setup](android/fastlane/SETUP.md) |
 
-The backend uses **Drizzle ORM** with the existing `pg` PostgreSQL connection pool. Typed table definitions live in `server/schema.ts`; HTTP endpoints, whiteboard saves, account provisioning, and Better Auth use Drizzle. Transactions retain the row locks used for concurrent whiteboard edits and owner changes. SQL remains in reviewed migration files, small SQL expressions, and independent database assertions in tests.
+This README describes repository features; platform credentials and the deployed version determine what is available at the public website. Native clients require the compatible workspace/native backend. Native feature parity, signed distribution, real-device media/TURN, OAuth, and storage acceptance still have outstanding work; see each platform's notes and the [native API contract](docs/native-contract.md).
 
-`drizzle/` contains versioned SQL migrations and schema snapshots. `bun db:migrate` applies them and tracks applied versions in `drizzle.__drizzle_migrations`. The first migration can create a fresh database or adopt the existing Little Office schema without replacing tables, resetting settings, or rewriting credentials. Existing sessions, OIDC links/tokens, whiteboards, audit entries and S3 metadata are retained. Back up PostgreSQL, run the migration once before starting the updated API, and keep `BETTER_AUTH_SECRET` unchanged so existing sessions and encrypted OAuth tokens remain usable.
+Current workspace limits are **5 owned workspaces per account** and **50 members per workspace**. The selectable maps are designed for **4–8 people**; the membership cap is not a tested concurrent-call capacity claim. Recording, persistent text chat, a map editor, and horizontal API scaling are not implemented.
 
-For future schema changes:
-
-```sh
-# Edit server/schema.ts, then generate and review the SQL.
-bun db:generate --name=describe_change
-bun db:check
-bun db:migrate
-```
-
-Commit the schema and generated `drizzle/` files together. The migration command resolves files relative to the app, so it works in the container and from other working directories. Better Auth now uses its Drizzle adapter; schema changes for authentication must be reflected in `server/schema.ts` and Drizzle migrations instead of running Better Auth's former automatic migration command. Production updates use the same `db:migrate` step shown below; do not use schema push against production.
-
-## Video quality
-
-Under **Settings → Devices → Video & screen quality**, choose Maximum (up to 3840×2160 at 60 fps, the default), High (up to 1920×1080 at 60 fps), or Balanced (up to 1280×720 at 30 fps). The preference stays saved per account in this browser. Turn the camera off/on or restart sharing to apply a change; microphone audio and the room connection stay active.
-
-Maximum allows camera encoding up to 20 Mbps and screen encoding up to 30 Mbps, with lower limits for High and Balanced. These are encoder ceilings, not guaranteed rates. Capture uses preferred dimensions rather than requiring a particular camera capability. Simulcast and adaptive subscriptions remain enabled, account for display pixel density, and select suitable streams for small tiles or expanded views. Screen sharing prioritizes readable detail. Safari/iOS 17 retains the SDK's native-resolution workaround.
-
-Actual resolution and frame rate depend on the capture source, browser, CPU/GPU, available uplink/downlink, and receiver display size. Static screens may send fewer frames. Use Balanced if a device overheats or video stutters; expanding a camera or screen lets adaptive streaming request a larger layer. No VM can recover detail that the camera or sharing source never captured.
-
-## Workspace maps
-
-Workspace owners can change the name and shared map under **Settings → Workspace**. The selection persists in PostgreSQL and updates all connected users.
-
-The picker includes 12 maps for 4–8 people: Fern Grove, Pine Camp, Lunar Outpost, Sakura Garden, Siam Courtyard, Summer Cove, Sunny Acres, Cloudpeak Lodge, Mangrove Hideaway, Rainforest Canopy, Misty Lakeside, and Glasshouse Garden. Older 10–12-person maps remain compatible with saved workspaces but are no longer offered in the picker. Sunny Acres has farming activities instead of desks; the other selectable maps have eight work seats.
-
-Owners can enable **Randomize map daily** on the Maps tab, then save. It is off by default. The server checks every minute after midnight in **Asia/Bangkok**, waits until the office is empty, and chooses from the 12 selectable maps excluding the current one. Enabling it or manually saving a map keeps that choice for the rest of the day. The choice and date persist in PostgreSQL, including across restarts; missed days produce one new choice on the next startup. Turning it off keeps the current map. Apply database migrations before starting the updated API.
-
-Every map also has roaming pixel wildlife (a rover on Lunar Outpost) and a themed shared activity station. Approach an animal or station and press **E**, or tap the nearby action button on mobile. Stations advance through three steps, show the same progress to everyone, and reset after a minute of inactivity. Animal interactions show a brief heart reaction. These new activities are temporary: changing maps or restarting the API resets them. Existing Sunny Acres farming progress remains local to each player.
-
-Owners can toggle **Roaming wildlife** and **Interactive activities** in the Features tab. The wildlife switch hides the new animals and Sunny Acres animals; the activities switch disables animal/station interactions and Sunny Acres farming actions. Fishing retains its existing controls. Wildlife follows dry, obstacle-checked walking routes independently of the ambient water/tree effects switch. All wildlife uses the farm livestock’s two-frame footsteps, one-pixel body bob, and idle/graze poses. Reduced-motion preferences suppress station effects while this small walking animation remains visible. Activities make no sound.
-
-Sakura Garden has a distinct layout: two tea-house meeting rooms across the north, four work areas around a raked sand garden and koi pond, a walkable wooden bridge, pink sakura trees, and stone lanterns. Choose **Sakura Garden** to select it.
-
-Siam Courtyard places a golden hall north of an open chedi courtyard and a garden sala to the southwest. Summer Cove connects a surf club, beach workstations, and a pier lounge around turquoise water. Both have eight work seats and their own room entrances and paths.
-
-Every map has two private meeting areas. Sizes describe the seating layout, rather than admission limits. Applying a different map ends calls and screen sharing, clears invitations and room locks, and moves everyone to a safe entrance with nearby voice reconnected automatically. Changing only the workspace name keeps conversations active.
-
-After updating an existing installation, run `bun db:migrate` before restarting the API (production Compose runs migrations automatically).
-
-## Authentication
-
-- **Username/password:** administrator-provisioned usernames; Argon2id hashes; login throttling; revocable HttpOnly sessions.
-- **OIDC SSO:** discovery, Authorization Code + PKCE, ID-token verification, and explicit linking to an existing user through **Settings → Devices → Link your SSO account**.
-- **Settings → Authentication:** owner-only switches for password login and SSO. The backend enforces the switches and ends sessions authenticated through a disabled method. Disabling both methods is rejected. An owner must successfully sign in through the current SSO provider before passwords can be disabled.
-- New SSO users await owner approval under **Settings → Members**. Matching email addresses never automatically link accounts.
-- Each account has one active office tab. Opening a new tab or signing in on another device replaces the old office connection and ends its calls. The old tab shows an “Opened elsewhere” notice and does not automatically reconnect; reload it to take over again. Authentication cookies are retained, so replacing a tab does not sign out other tabs sharing the same browser session.
-
-Set these when your SSO provider is ready:
-
-```dotenv
-OIDC_ISSUER=https://your-provider.example/your-realm
-OIDC_CLIENT_ID=your-client-id
-OIDC_CLIENT_SECRET=your-server-side-secret
-```
-
-Restart the API and obtain the configured provider ID from `/api/config`. Register the callback:
-
-```text
-https://office.example.com/api/auth/callback/<provider-id>
-```
-
-The provider ID includes a hash of the issuer, so changing issuer cannot accidentally reuse another provider's identities. Enable SSO in settings, link your owner account while recently authenticated, then sign out and sign in with SSO to verify it. Password login remains under your control.
-
-SSO sign-in needs the provider's `openid`, `profile`, and `email` claims. Provider groups, SCIM provisioning, and back-channel logout are not implemented in this release. Provider disablement is not immediate application-session revocation; owner account disablement in this app revokes access. Sessions expire after eight hours. A separately authorized local password can still log in while that method is enabled.
-
-## Activity history and member roles
-
-Owners can open **Settings → Activity** to see office joins and leaves, screen-sharing starts and stops, nudges (including the recipient), and role changes. Events are stored in PostgreSQL with timestamps and names, and survive member deletion. The panel shows local time with seconds, supports action filters, and loads 50 records at a time. Use **Refresh** for new events. Both the panel and API require owner access.
-
-In **Settings → Members**, choose **Change role**, select **member** or **owner**, and save. Owners manage members, authentication, workspace settings and activity history; members use the office without administration access. Approve pending members first. You cannot change your own role. Changes require a login within the last 10 minutes and take effect for connected users without reloading.
-
-Apply `bun run db:migrate` before starting the updated API. This adds activity columns and an index to the existing audit table; it preserves existing records. New presence and sharing history starts after this update. Sharing starts are recorded after the client publishes a screen track, not when the screen picker opens; room changes and disconnects record the corresponding stop. Unexpected disconnects are detected by the existing connection timeout. This history records actions, not audio, video or screen contents.
-
-## Container images and GitHub Actions
-
-[Publish container images](.github/workflows/publish-images.yml) builds and publishes two images for **Linux AMD64 and ARM64**:
-
-| Image                                   | Used by                                                       |
-| --------------------------------------- | ------------------------------------------------------------- |
-| `ghcr.io/gmbehappy/little-office`       | Next.js web, Elysia API, migrations, and account provisioning |
-| `ghcr.io/gmbehappy/little-office-caddy` | Caddy with the layer-4 module for HTTPS and TURN/TLS          |
-
-The workflow runs on pushes to `main`, tags matching `v*`, and **Actions → Publish container images → Run workflow**. Backend tests run on a native runner before either image is published; each app image also runs a production Next.js build. Buildx caches layers between runs. A newer run on the same branch cancels an older unfinished run.
-
-| Tag                     | Published when             |
-| ----------------------- | -------------------------- |
-| `latest`                | A build of `main` succeeds |
-| `sha-<full-commit-SHA>` | Every successful build     |
-| `v1.0.0` (example)      | That Git tag is pushed     |
-
-Both images use the same tagging scheme. Wait for **both jobs** to finish successfully before deploying. Use a matching commit tag for reproducible deployments; `latest` moves as new commits build.
-
-The workflow uses GitHub's automatic `GITHUB_TOKEN` with `contents: read` and `packages: write`; no Docker Hub account or repository secret is needed. If organization policy restricts Actions or package creation, an administrator must allow the workflow and these permissions. See [GitHub's container publishing guide](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images).
-
-New GHCR packages are private by default. Either keep them private and log in on the VM with a personal access token (classic) granting `read:packages`, or change **each package's** visibility to public for anonymous pulls. Package visibility is separate from repository visibility. See [GitHub's Container Registry documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
-
-## Deploy to the Linux VM
-
-### 1. Prepare the VM and DNS
-
-Install Git, OpenSSL, Docker Engine, and the Docker Compose plugin on a Linux AMD64 or ARM64 VM. Bun and Node.js are included in the image. The production Compose file uses Linux host networking.
-
-Point three DNS A records at the VM's public IP:
-
-- `office.example.com` — app
-- `rtc.example.com` — LiveKit signaling
-- `turn.example.com` — TURN/TLS
-
-Use DNS-only records for RTC/TURN when your DNS provider also offers an HTTP proxy. Configure the firewall listed below before starting the containers. The VM must allow WebRTC traffic directly.
-
-### 2. Download the configuration and images
-
-Wait for the repository's **Publish container images** workflow to succeed, then run on the VM:
+## Development checks
 
 ```sh
-git clone https://github.com/GmBeHappy/little-office.git
-cd little-office
-cp deploy/production.env.example .env
-chmod 600 .env
-```
-
-For private packages, log in before pulling. Enter your personal access token at the password prompt:
-
-```sh
-docker login ghcr.io -u YOUR_GITHUB_USERNAME
-```
-
-Edit `.env` with your domains and secrets. Run `openssl rand -hex 32` separately for `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, and `LIVEKIT_API_SECRET`; use `openssl rand -hex 16` for `LIVEKIT_API_KEY`. Put the same PostgreSQL password into `DATABASE_URL`. Set `APP_URL=https://<office-domain>` and `LIVEKIT_URL=wss://<rtc-domain>`. Leave OIDC fields blank until you configure your provider.
-
-`OFFICE_IMAGE` and `CADDY_IMAGE` default to `latest`, and their pull policies default to `always`. Every `docker compose up` checks GHCR and uses a newer successful `main` build without editing `.env`. To pin a build, set both images to the corresponding `sha-<full-commit-SHA>` tag from Actions, or their individual image digests. Keep the repository checkout and image version from the same commit/release when upgrading deployment configuration.
-
-```sh
-docker compose pull
-```
-
-If pulling reports `denied`, check package access and your GHCR login. If it reports `manifest unknown`, check that both publish jobs succeeded and that the configured tag exists.
-
-### 3. Generate proxy and media configuration
-
-Run the configuration generator inside the published app image:
-
-```sh
-mkdir -p deploy/generated
-chmod 700 deploy/generated
-docker compose run --rm --no-deps --user "$(id -u):$(id -g)" \
-  --volume "$PWD/deploy/generated:/app/deploy/generated" \
-  api bun scripts/configure-deploy.ts
-docker compose run --rm --no-deps caddy \
-  caddy validate --config /etc/caddy/caddy.json
-```
-
-This generates secret-containing files under ignored `deploy/generated/` with restrictive permissions and validates domains and secrets. Caddy includes its layer-4 module to share TCP 443 between HTTPS and TURN/TLS, obtaining trusted certificates automatically. PROXY protocol preserves client IPs between the layer-4 router and HTTPS listener.
-
-### 4. Start the app and create the owner
-
-```sh
-docker compose up -d --no-build
-docker compose ps -a
-docker compose exec api bun scripts/create-user.ts owner "Your name" --owner
-```
-
-Compose waits for PostgreSQL, runs migrations, then starts the API and web app. The one-shot `migrate` container should show `Exited (0)`. The owner command prompts for a password. Open your configured `https://office...` URL, sign in, and add teammates under **Settings → Members**. Configure OIDC under **Authentication** when your provider is ready.
-
-If startup fails, inspect `docker compose logs --tail=100 migrate api web caddy livekit`. If the API is still starting, wait until it is healthy before creating the owner.
-
-### Firewall and media checks
-
-Use the following firewall policy on both the VM and its cloud security group:
-
-| Public port     | Purpose                                 |
-| --------------- | --------------------------------------- |
-| TCP 80          | Certificate issuance and HTTPS redirect |
-| TCP 443         | App, signaling, and TURN/TLS            |
-| TCP 7881        | Direct WebRTC TCP fallback              |
-| UDP 3478        | TURN/UDP                                |
-| UDP 50000–60000 | Direct WebRTC media                     |
-
-Restrict SSH to your administrator address. Block public access to 3000, 3001, 5432, 5349, 7880, 8443, and Caddy's admin port 2019. Application and database listeners use loopback; LiveKit's internal listeners additionally rely on this firewall. **Do not use the development Compose file on a public VM.**
-
-Validate a call from separate networks and force TURN relay before treating deployment as ready. Production TLS, TURN traversal, and VM capacity must be verified on the actual host. The VM's specs, DNS, and access have not been supplied yet.
-
-Caddy and its layer-4 module are version-pinned; the PostgreSQL major tag receives patch updates. Retest media connections when upgrading images.
-
-### Update an existing VM
-
-Schedule a short interruption for active calls. Back up the database first, then update the checkout and pull the moving `latest` tags:
-
-```sh
-docker compose exec -T postgres pg_dump -U office office > office-backup.sql
-git pull --ff-only
-docker compose pull
-docker compose stop web api
-docker compose up --no-deps --force-recreate --exit-code-from migrate migrate
-# Continue only if migrations exited successfully (exit code 0).
-docker compose up -d --no-build
-docker compose ps -a
-```
-
-Repeat the configuration-generation and validation commands before startup if domains, LiveKit keys, or proxy/media configuration changed. The `postgres`, `caddy_data`, and `caddy_config` volumes retain data across container updates. Do not use `docker compose down -v` unless you intend to delete that data. Rolling back images does not roll back database migrations; restore a compatible backup if a migration requires it.
-
-### Build on the VM instead (optional)
-
-The same Compose file retains local build definitions. Use local tags to avoid confusion with downloaded images:
-
-```sh
-# Set these in .env:
-# OFFICE_IMAGE=little-office:local
-# CADDY_IMAGE=little-office-caddy:local
-# OFFICE_PULL_POLICY=build
-# CADDY_PULL_POLICY=build
-docker compose build
-```
-
-Then follow configuration generation, validation, and startup above; skip `docker compose pull` for these local tags. The published-image path is the default.
-
-### Operations
-
-```sh
-docker compose ps
-docker compose logs --tail=100 api livekit caddy
-docker compose exec -T postgres pg_dump -U office office > office-backup.sql
-```
-
-Back up database dumps and production secrets securely off the VM. Test restoration into a separate database. Never commit `.env`, generated config, dumps, or development credentials. A host restart interrupts calls; application presence and pending invitations are intentionally transient.
-
-## Verification
-
-```sh
-bun typecheck
+bun run typecheck
 bun test
-bun build
+bun run build
 ```
 
-The test suite covers password authentication, access controls, disabled methods, room admission, movement validation, summon consent/expiry, duplicate tabs, and media room generation changes. Authentication tests use a separate ephemeral database on an available localhost port selected by the operating system.
-
-For the two-browser test, start the app, database, and LiveKit first:
+For browser scenarios, start the app/database/LiveKit, then run:
 
 ```sh
 bunx playwright install chromium
 bun scripts/e2e.ts
 ```
 
-The runner creates isolated temporary accounts, uses synthetic audio/video sources, and removes those accounts afterward. It verifies waves, accepted summons, meeting-room video, screen sharing, leaving a conversation, and the narrow-screen layout. Screenshots are written to `test-results/`. Optionally set `CHROME_PATH` to a local Chrome executable.
+The browser runner uses temporary accounts and synthetic media. Native checks live in the platform READMEs. Shared protocol/scene fixtures are generated with `bun scripts/native-fixtures.ts`.
 
-## Implementation notes
+## License
 
-- `app/`, `components/`: Next.js interface, Phaser office, and LiveKit media controls.
-- `server/`: Elysia HTTP/WebSocket endpoints, Better Auth, office rules, Drizzle/PostgreSQL access, and LiveKit grants.
-- `shared/`: authored map geometry, collision checks, message schemas, and shared types.
-- `scripts/`, `deploy/`: migrations, account provisioning, tests, and VM configuration.
+**Source available for private and internal use. Third-party hosting and resale are not permitted without separate written permission.**
 
-This release targets one private office and a small team. It has one authoritative Elysia process and one map. Moving to multiple API processes requires shared office ownership/state coordination.
+The [Little Office Source-Available License 1.0](LICENSE) permits running and modifying the software for yourself or your organization's own internal team. It prohibits providing it as a hosted/managed service to third parties, selling access, reselling or commercially distributing the software, and using a modified or white-label version to do those things. Those restrictions apply to free third-party hosting too. Contact [GmBeHappy](https://github.com/GmBeHappy) for separate permission.
 
-Nearby voice uses selective subscriptions within a public floor room. Distance is a user-experience rule, not a confidentiality boundary against modified clients. Private meetings/direct calls use isolated LiveKit rooms. Leaving a media group rotates its room generation and disconnects the retired room, so old tokens cannot reach the continuing conversation. Remaining members reconnect briefly; busy offices may need a more advanced admission system to reduce that churn.
-
-The map uses original geometric pixel art and requires no downloaded sprite assets. Desktop browsers are the primary target; the compact layout and room navigation work on smaller screens, but touch movement is not included. Screen/system audio support varies by browser and capture source. Recording, a map editor, persistent chat, and multiple organizations are outside this release.
-
-Owners can delete members or reset local (non-SSO) passwords in **Settings → Members**. Deletion requires confirmation, removes sessions and account records, and disconnects the member; owner accounts cannot be deleted. SSO identities remain at the identity provider and need office approval if they sign in again. Password resets revoke sessions and require changing the temporary password on next login. These actions require an owner sign-in within the last 10 minutes.
-
-Movement follows physical WASD keys, including **ไ / ฟ / ห / ก** on a Thai keyboard, as well as arrow keys. Typing in forms does not move your character.
-
-The control bar has an **Emote** picker (emoji-picker-react, with English/Thai search) that broadcasts a three-second emoji above your avatar. Microphone and camera arrows open device menus; microphone settings also include speakers/headphones. Devices can still be changed under Settings. All selectors use styled, keyboard-accessible Radix Select menus. Status remains available in your profile.
-
-Customize your avatar under **Your profile**: five skin tones, five hairstyles, five outfits, and five headwear options plus no hat. Rotate the live preview, mix the pieces, then save. Existing presets remain available as starting points. The chosen appearance persists with your account and synchronizes across the map, portraits, and animation poses.
-
-### Shared whiteboards
-
-Open **Whiteboard** in the bottom control bar to draw with teammates using the embedded Excalidraw editor. Each map has separate boards for the commons, Studio, and Library. Everyone currently in the same area can open and edit its board; the commons board is shared by the whole commons, including people outside nearby voice range. Direct calls do not create private boards. Audio and camera connections continue while the board is open.
-
-Draw shapes, arrows, freehand strokes, and English/Thai text; see other editors' cursors; export PNG or download an editable `.excalidraw` copy. Changes merge by element version and nonce and show **Saved** only after PostgreSQL commits them. Reopening a board or restarting the app preserves its contents. Reconnecting retries pending edits while the editor stays open. If access ends or changes cannot be saved, download a copy before closing; a warning protects unsaved work. Images, web embeds, file imports and link navigation are not enabled in this version.
-
-Boards use the authenticated `/api/whiteboard` WebSocket through the existing HTTPS proxy, with no additional public port or Excalidraw account. Access follows active office membership and location; changing areas, logging out, or losing membership ends access to the old board. Drawing data is stored in `office_whiteboards` and included in normal PostgreSQL backups. Run `bun db:migrate` when upgrading. Each board is limited to 1,500 elements (including deletion records) and 2 MB; export before reaching these limits. Removing shapes keeps deletion records to prevent stale clients from restoring them.
-
-`bun build`, `bun dev`, and `bun dev:web` prepare self-hosted Excalidraw fonts. The editor loads only when opened. Upstream editor/font notices are in `public/licenses/excalidraw.txt`.
-
-### Workspace feature controls and external S3 files
-
-Owners can open **Settings → Workspace → Maps / Features / File storage**. The Features tab enables or disables Whiteboard for the entire workspace. Disabling it hides the control and closes active whiteboard access while retaining drawings. Feature changes persist and do not move users or interrupt voice rooms.
-
-File storage uses an external S3-compatible bucket, including Garage. Set these server-only variables in `.env` and restart the API:
-
-```dotenv
-OFFICE_S3_ENDPOINT=https://s3.example.com
-OFFICE_S3_REGION=garage
-OFFICE_S3_BUCKET=little-office
-OFFICE_S3_ACCESS_KEY_ID=replace-with-your-access-key
-OFFICE_S3_SECRET_ACCESS_KEY=replace-with-your-secret-key
-```
-
-For AWS S3, use its actual region and leave the endpoint blank; for R2 use its account endpoint and region `auto`. The File storage tab shows connection details without exposing keys. **Test storage connection** verifies writing, reading and deleting a uniquely named temporary object.
-
-With storage configured, the whiteboard has **Save snapshot to storage**. PNG snapshots (up to 5 MB) are held briefly in memory and written to the private S3 bucket; there is no VM file-storage fallback. The whiteboard menu lists the latest 20 **Saved snapshots** for the current area. Downloads check active membership, feature access and current area before issuing a 60-second signed S3 download URL. Editable board elements remain in PostgreSQL, while `office_files` holds only file metadata. Back up both PostgreSQL and the external bucket; disabling a feature does not delete either.
-
-Keep the bucket private. The server key needs read/write/delete object permissions for `whiteboards/` and `checks/`. Browser downloads use a signed URL, not the storage credentials. Configure CORS with one rule per origin for Garage; combining origins in one rule can produce an invalid comma-separated response header:
-
-```json
-{
-  "CORSRules": [
-    {
-      "ID": "little-office-production",
-      "AllowedOrigins": ["https://office.example.com"],
-      "AllowedMethods": ["GET", "HEAD", "PUT"],
-      "AllowedHeaders": ["*"],
-      "ExposeHeaders": ["ETag"],
-      "MaxAgeSeconds": 3600
-    },
-    {
-      "ID": "little-office-local",
-      "AllowedOrigins": ["http://localhost:3000"],
-      "AllowedMethods": ["GET", "HEAD", "PUT"],
-      "AllowedHeaders": ["*"],
-      "ExposeHeaders": ["ETag"],
-      "MaxAgeSeconds": 3600
-    }
-  ]
-}
-```
-
-Save this as `cors.json`, replace the production origin, then use AWS CLI with your credentials in environment variables or a local AWS profile:
-
-```sh
-aws --endpoint-url https://s3.example.com --region garage s3api put-bucket-cors --bucket little-office --cors-configuration file://cors.json
-aws --endpoint-url https://s3.example.com --region garage s3api get-bucket-cors --bucket little-office
-```
-
-Check any existing bucket rules before replacing them. Uploaded snapshots and connection checks use only the configured bucket. Runtime feature flags are stored in `workspaces.features`; add an explicit validated flag, UI control and server access check when introducing another feature.
+This is a custom source-available license, **not an OSI-approved open-source license**. Existing third-party components retain their own licenses; see [third-party notices](public/licenses/) and the [IBM Plex Sans Thai font license](public/fonts/ibm-plex-sans-thai/OFL.txt). The new terms do not revoke rights already granted for earlier copies under another license. See the [Open Source Definition](https://opensource.org/osd) for why restrictions on resale make this source-available rather than open source.

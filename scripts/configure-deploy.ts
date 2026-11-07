@@ -23,7 +23,15 @@ for (const domain of [office, rtc, turn, base, legacy].filter(Boolean))
     throw new Error(
       "Use lowercase DNS hostnames without ports or URL schemes.",
     );
-const staticDomains = [office, rtc, turn, ...(legacy ? [legacy] : [])];
+// Keep old portal links working when the canonical portal moves to www.
+const previousPortal = base && office === `www.${base}` ? `app.${base}` : "";
+const staticDomains = [
+  office,
+  rtc,
+  turn,
+  ...(legacy ? [legacy] : []),
+  ...(previousPortal ? [previousPortal] : []),
+];
 if (new Set(staticDomains).size !== staticDomains.length)
   throw new Error(
     "Use distinct DNS names for office, RTC, TURN, and legacy redirect.",
@@ -52,6 +60,21 @@ if (rtcStart > rtcEnd)
     "LIVEKIT_RTC_PORT_RANGE_START must not exceed LIVEKIT_RTC_PORT_RANGE_END.",
   );
 const officeHosts = [office, ...(base ? [`*.${base}`] : [])];
+const portalRedirect = previousPortal
+  ? [
+      {
+        match: [{ host: [previousPortal] }],
+        handle: [
+          {
+            handler: "static_response",
+            status_code: 308,
+            headers: { Location: [`https://${office}{http.request.uri}`] },
+          },
+        ],
+        terminal: true,
+      },
+    ]
+  : [];
 const legacyRedirect = legacy
   ? [
       {
@@ -156,6 +179,7 @@ const caddy = {
               handle: [{ handler: "static_response", status_code: 404 }],
               terminal: true,
             },
+            ...portalRedirect,
             ...legacyRedirect,
             { match: [{ host: [rtc] }], handle: [proxy("127.0.0.1:7880")] },
             {
@@ -172,6 +196,7 @@ const caddy = {
         redirect: {
           listen: [":80"],
           routes: [
+            ...portalRedirect,
             ...legacyRedirect,
             {
               match: [{ host: [...officeHosts, rtc, turn] }],

@@ -18,7 +18,7 @@ class OfficeModel(application: Application) : AndroidViewModel(application) {
         mutableStateOf(
             store.read("server")?.string("origin")
                 ?: store.read("session")?.string("origin")
-                ?: "https://app.littleoffice.app"
+                ?: "https://www.littleoffice.app"
         )
     var account by mutableStateOf<JSONObject?>(null)
     var workspaces by mutableStateOf(emptyList<Workspace>())
