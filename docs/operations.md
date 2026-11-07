@@ -1,6 +1,6 @@
 # Operating Little Office
 
-For private/internal deployments permitted by the [license](../LICENSE). Start with the [README](../README.md). For upgrades to the workspace-aware backend, follow [workspace rollout](workspace-rollout.md) before these service-management steps. Run one API process.
+For self-hosted deployments under [AGPL-3.0](../LICENSE), including commercial hosting that complies with its terms. Start with the [README](../README.md). For upgrades to the workspace-aware backend, follow [workspace rollout](workspace-rollout.md) before these service-management steps. Run one API process.
 
 ## Database and migrations
 
